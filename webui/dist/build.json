@@ -1,6 +1,6 @@
 {
-  "hash": "c53853121340ade3d6dbe9b138d4d343eb5e1d30babc8a5a62b6b07bb59566b3",
-  "builtAt": "2026-11-01T10:36:05.260Z",
+  "hash": "3b25bb00d74870b47fa74e3dbf2a4929318c70fbf492c4bb80dc7ca0d8e7ab23",
+  "builtAt": "2026-11-01T10:54:55.684Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "cd33487ea7f366ab85a6a36aabe85eb17f8f6434bb8a19de3e24668f0d3712b3"
+      "sha256": "c54ad447170ad2b9577558905977e084a3368c5170017daa8f94e251d829da0d"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -52,11 +52,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "49dc167539492d0d886bfbbb12c78518ea64127af67031cb520301b071deae97"
+      "sha256": "7a765eb3c02bddd64652cb05b7a54b7f976e04af4f12c67f94b7d35f63592654"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "8f18c5a21d9f02da68da4685cecf698ced274c475b477de686a0ccba646e36e6"
+      "sha256": "88f34aa9f450a53046f46cb0860fbf9387aa5e4dfa289f98ccdb5dbbbc7fcd21"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -164,7 +164,7 @@
     },
     {
       "path": "webui/src/app/sessionList.ts",
-      "sha256": "3839922d06eb85ba6ac8577519a641530184dc08ecd0ecc0160d095a77b8212d"
+      "sha256": "4d9157494116e28321027d1f4412f834c348761264e1268a4f230da8147e265d"
     },
     {
       "path": "webui/src/app/sound.ts",
@@ -432,7 +432,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "55e7eab4fdbe31d9f5b76cf43c5998d3466f69abd7b2cbca5909893f3fd25233"
+      "sha256": "0244fe22a3815ec1a566ece344516370fee62a7b85217a7db5c900e800ef27e5"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -584,7 +584,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/DetailSections.tsx",
-      "sha256": "840b8056b1320397145378c9bee347bf25ebe55b30f55e3b7ee5df1f39c8d9d1"
+      "sha256": "81df9a60d8226d5b007f0f3635372f0c7307da9fe903832b684317d6a36175d8"
     },
     {
       "path": "webui/src/tabs/tasks/OpenInSession.tsx",

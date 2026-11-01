@@ -272,8 +272,11 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     plan: tab === "plan" && Boolean(viewPlan),
     knowledge: tab === "knowledge" && !asking,
   }
-  const bar = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan || bubbles.knowledge)
+  const barWanted = !menuOpen && panel === null && !ask && visible && !blocked && (bubbles.answer || bubbles.plan || bubbles.knowledge)
   const blur = menuOpen || ask || (panel !== null && visible && !blocked)
+  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, blur)
+  // Folded to its pill, the box is one clean shape: the pill bar over it waits until it unfolds.
+  const bar = barWanted && !shrunk
   const open = blur || bar
   // The pill bar over the box (Answer questions, View plan, Ask the knowledge) is part of what pages must scroll clear of.
   useEffect(() => {
@@ -281,7 +284,6 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     root.style.setProperty("--dock-bar", bar ? "44px" : "0px")
     return () => root.style.setProperty("--dock-bar", "0px")
   }, [bar])
-  const { shrunk, expand } = useShrinkOnScroll(card, visible && !blocked, route, open && !bar)
 
   // Folding to the pill and back eases slowly; the rest of the time the box follows its text quickly.
   const [morphing, setMorphing] = useState(false)
@@ -604,7 +606,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const project = status.data?.workspace.name ?? "bot-lobby"
   const branch = status.data?.branch ?? status.data?.workspace.branch
   const steering = busy && target.id === "oracle"
-  const placeholder = shrunk ? "Write a message…"
+  const placeholder = shrunk ? (bubbles.knowledge ? "Write a message or ask the knowledge…" : "Write a message…")
     : ask ? (drawer.step?.typed ? drawer.step.placeholder : "Pick an answer above")
       : steering ? "The oracle is working. Enter steers it…" : target.placeholder
   const pickFiles = (input: RefObject<HTMLInputElement | null>) => {

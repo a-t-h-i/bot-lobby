@@ -31,9 +31,9 @@ function backgroundState(session: BackgroundSessionInfo): SessionState {
   return session.status === "starting" ? "starting" : "idle"
 }
 
-export function sessionEntries(status: Pick<StatusInfo, "sessionId" | "sessionName" | "busy"> | undefined, list: { background: BackgroundSessionInfo[]; live: LiveSession[]; saved?: SavedSession[] } | undefined): SessionEntry[] {
+export function sessionEntries(status: (Pick<StatusInfo, "sessionId" | "sessionName" | "busy"> & { workspace?: { name: string } }) | undefined, list: { background: BackgroundSessionInfo[]; live: LiveSession[]; saved?: SavedSession[] } | undefined): SessionEntry[] {
   const own = status?.sessionId
-  const here: SessionEntry = { id: "here", name: status?.sessionName?.trim() || "This window", where: "here", state: status?.busy ? "working" : "idle", waiting: 0, ...(own ? { sessionId: own } : {}) }
+  const here: SessionEntry = { id: "here", name: status?.sessionName?.trim() || status?.workspace?.name || "This window", where: "here", state: status?.busy ? "working" : "idle", waiting: 0, ...(own ? { sessionId: own } : {}) }
   const background = (list?.background ?? [])
     .filter((session) => !own || session.sessionId !== own)
     .map((session): SessionEntry => ({
