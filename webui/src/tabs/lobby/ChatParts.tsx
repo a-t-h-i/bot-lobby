@@ -31,7 +31,7 @@ export function AgentMessage({ source, name, time, head, live, children, aside, 
     <div className="chat-agent group/msg" data-live={live || undefined} style={live ? ({ "--orb": sourceTone(source) } as CSSProperties) : undefined}>
       {named || aside ? (
         <p className="chat-speaker">
-          {named ? <b className="chat-name" title={time}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
+          {named ? <b className="chat-name" title={time} style={{ "--who": sourceTone(source) } as CSSProperties}>{waiting ? <ShimmerWord text={name} /> : name}</b> : null}
           {aside ? <span className="flex items-center gap-1.5 text-xs text-muted-foreground">{aside}</span> : null}
         </p>
       ) : null}
