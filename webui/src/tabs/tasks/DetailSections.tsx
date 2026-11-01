@@ -178,11 +178,11 @@ function StepsSection({ steps, stopped, skip }: { steps: TaskDetailData["steps"]
 }
 
 /** The rest of the plan (its detail) under the steps, folded away until asked for. */
-function FullPlan({ text }: { text: string }) {
+function FullPlan({ text, title = "Full plan", label = "Read the details of each step" }: { text: string; title?: string; label?: string }) {
   const [open, setOpen] = useState(false)
   const body = useId()
   return (
-    <Section title="Full plan">
+    <Section title={title}>
       <button
         type="button"
         aria-expanded={open}
@@ -191,7 +191,7 @@ function FullPlan({ text }: { text: string }) {
         className="cs-fold w-fit"
       >
         <ChevronRight aria-hidden="true" className="size-4" />
-        {open ? "Hide the details" : "Read the details of each step"}
+        {open ? "Hide the details" : label}
       </button>
       {open ? (
         <div id={body} className="cs-fpb">
@@ -281,16 +281,30 @@ function Runs({ runs }: { runs: string[] }) {
   )
 }
 
+/** Where a planned task's request moves on to the agreed plan (mirrors AGREED_PLAN in src/state/backlog.ts). */
+const AGREED_PLAN = "\n\nAgreed plan (from the planning session):\n"
+
+/** The request; a planned task's agreed plan (the steps again, in full) folds away under it so it is not read twice. */
+function RequestSection({ request }: { request: string }) {
+  const at = request.indexOf(AGREED_PLAN)
+  const head = at >= 0 ? request.slice(0, at) : request
+  const plan = at >= 0 ? request.slice(at + AGREED_PLAN.length).trim() : ""
+  return (
+    <>
+      <Section title="Request">
+        <Markdown text={head} />
+      </Section>
+      {plan ? <FullPlan text={plan} title="Agreed plan" label="Show the agreed plan" /> : null}
+    </>
+  )
+}
+
 /** Steps first, to skim; then the request and the plan in full — the sections above Comments. */
 export function PlanSections({ detail, finished, skip }: { detail: TaskDetailData; finished: boolean; skip?: SkipProps }) {
   return (
     <>
       {detail.steps.length > 0 ? <StepsSection steps={detail.steps} stopped={finished} skip={skip} /> : null}
-      {detail.request ? (
-        <Section title="Request">
-          <Markdown text={detail.request} />
-        </Section>
-      ) : null}
+      {detail.request ? <RequestSection request={detail.request} /> : null}
       <PlanSection detail={detail} finished={finished} />
     </>
   )

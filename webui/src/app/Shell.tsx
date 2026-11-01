@@ -213,7 +213,7 @@ export function Shell() {
   )
   return (
     // The page lies flat over the whole window; the sidebar, the tabs and the tools are bays on its edges.
-    <div ref={rootRef} className="cs-frame" data-sb={sidebar.open ? "open" : "closed"} data-tb="open">
+    <div ref={rootRef} className="cs-frame" data-sb={sidebar.open ? "open" : "closed"} data-sbpin={sidebar.pinned || undefined} data-tb="open">
       <ShellFilters />
       <div className="cs-body">
         <Banner connection={connection} onRetry={retry} />

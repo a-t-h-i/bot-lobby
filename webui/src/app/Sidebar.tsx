@@ -112,7 +112,7 @@ function RowStatus({ entry }: { entry: SessionEntry }) {
   return <span className="sr-only">{entry.where === "elsewhere" ? "Other terminal" : entry.state === "exited" ? "Ended" : "Idle"}</span>
 }
 
-const WHERE = { here: "This window", background: "Background", elsewhere: "Other terminal", saved: "Recent" }
+const WHERE = { here: "Current", background: "Background", elsewhere: "Other terminal", saved: "Recent" }
 
 /** Put an ended session away, with Undo on the notice. */
 function archive(entry: SessionEntry): Promise<unknown> {
@@ -320,7 +320,7 @@ function Sessions({ query }: { query: string }) {
       {shown.length === 0 ? <p className="px-2.5 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p> : null}
       {here.length > 0 ? (
         <>
-          <p className="cs-sh" style={{ "--i": hereAt } as CSSProperties}>This window</p>
+          <p className="cs-sh" style={{ "--i": hereAt } as CSSProperties}>Current</p>
           <ul className="flex flex-col">{here.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={hereAt + 1 + index} />)}</ul>
         </>
       ) : null}
@@ -374,6 +374,7 @@ export function useSidebar(props: SidebarProps) {
   const newSession = useCallback(() => setStarting(true), [])
   return {
     open,
+    pinned,
     ghost: <BayGhost className="cs-gl" style={vars} />,
     bay: (
       <div className="cs-sbwrap" style={vars} {...bay.handlers}>
