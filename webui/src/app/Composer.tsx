@@ -210,7 +210,7 @@ function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>, wide?: n
     const el = ref.current
     if (!el) return
     const measure = () => {
-      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth) + 8, h: 38 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
+      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth), h: 38 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
       setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
     }
     measure()

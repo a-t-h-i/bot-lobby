@@ -206,7 +206,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   useLayoutEffect(() => {
     const measure = () => {
       const tabsIn = strip.current ? [...strip.current.querySelectorAll<HTMLElement>("[role='tab']")] : []
-      const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 8 : 346
+      const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 6 : 346
       setWidth(open)
     }
     measure()
