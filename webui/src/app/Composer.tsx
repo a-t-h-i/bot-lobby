@@ -199,7 +199,7 @@ function useShrinkOnScroll(dock: RefObject<HTMLDivElement | null>, active: boole
 
 /** A key cap in the tools row's hints. */
 function Kbd({ children }: { children: string }) {
-  return <kbd className="bubble-kbd">{children}</kbd>
+  return <kbd className="bubble-kbd" data-glyph={/^[^A-Za-z0-9]$/.test(children) || undefined}>{children}</kbd>
 }
 
 /** A pane that sizes its bubble from its own content: its width (bar) or its height (drawer), measured after each render. */
