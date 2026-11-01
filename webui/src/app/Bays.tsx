@@ -61,31 +61,6 @@ export function ShellFilters() {
             <feMergeNode in="es" />
           </feMerge>
         </filter>
-        <filter id="cs-tabdent" x="-10%" y="-45%" width="120%" height="190%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="b" />
-          <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
-          <feOffset in="shape" dx="0" dy="1.5" result="dn" />
-          <feComposite in="shape" in2="dn" operator="out" result="sA" />
-          <feGaussianBlur in="sA" stdDeviation="1.5" result="sB" />
-          <feComposite in="sB" in2="shape" operator="in" result="sC" />
-          <feFlood style={{ floodColor: "var(--tdsh)" }} result="shc" />
-          <feComposite in="shc" in2="sC" operator="in" result="sh" />
-          <feOffset in="shape" dx="0" dy="-1" result="up" />
-          <feComposite in="shape" in2="up" operator="out" result="hA" />
-          <feGaussianBlur in="hA" stdDeviation="1" result="hB" />
-          <feComposite in="hB" in2="shape" operator="in" result="hC" />
-          <feFlood style={{ floodColor: "var(--tdhl)" }} result="hlc" />
-          <feComposite in="hlc" in2="hC" operator="in" result="hl" />
-          <feMerge>
-            <feMergeNode in="shape" />
-            <feMergeNode in="sh" />
-            <feMergeNode in="hl" />
-          </feMerge>
-        </filter>
-        <filter id="cs-indgoo" x="-20%" y="-80%" width="140%" height="260%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur stdDeviation="1.6" />
-          <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" />
-        </filter>
       </defs>
     </svg>
   )
@@ -179,17 +154,10 @@ export function TabGlyph({ id }: { id: string }) {
   return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" /></svg>
 }
 
-const LEAD = "cubic-bezier(0.3,1.2,0.5,1)"
-const TRAIL = "cubic-bezier(0.22,1,0.36,1)"
-/** The liquid's timings: the leading edge, the trailing edge (and its small lag), and the squash. Kept quick. */
-const LEAD_MS = 190
-const TRAIL_MS = 290
-const TRAIL_LAG = 14
-const SQUASH_MS = 300
-
 /**
- * The tab navigator: every tab, always showing, with the active one pressed into the bay (a light inset bevel). Moving between tabs, the indicator's leading edge springs ahead and its trailing
- * edge follows, and it squashes as it goes. Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex.
+ * The tab navigator: every tab, always showing, with the active one pressed into the bay (a light inset bevel).
+ * Changing tabs is a quick "poof": the old highlight shrinks and fades away while the new one grows in on the
+ * chosen tab, both at once (CSS, `.cs-tab::before`). Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex.
  */
 export function useTabNavigator({ tabs, activeId, onSelect }: {
   tabs: TabInfo[]
@@ -199,7 +167,6 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   const strip = useRef<HTMLDivElement>(null)
   const cells = useRef<Record<string, HTMLAnchorElement | null>>({})
   const [width, setWidth] = useState(346)
-  const last = useRef<{ left?: number; placed: boolean }>({ placed: false })
   const labels = tabs.map((tab) => tab.label).join("|")
 
   // The bay's width comes from its content: every tab.
@@ -212,41 +179,6 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
     measure()
     void document.fonts?.ready.then(measure)
   }, [labels])
-
-  // The indicator: placed under the active tab, its edges sprung as it moves.
-  const place = useCallback(() => {
-    const track = strip.current
-    if (!track) return
-    const active = activeId ? cells.current[activeId] : undefined
-    if (!active) return
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    const first = !last.current.placed
-    const left = active.offsetLeft
-    const right = track.offsetWidth - left - active.offsetWidth
-    const goingRight = last.current.left === undefined ? true : left > last.current.left
-    for (const layer of track.querySelectorAll<HTMLElement>(".cs-tabind")) {
-      const el = layer.firstElementChild as HTMLElement | null
-      if (!el) continue
-      if (first || reduce || track.offsetWidth === 0) {
-        el.style.transition = "none"
-        el.style.left = `${left}px`
-        el.style.right = `${right}px`
-        continue
-      }
-      if (left === last.current.left) continue
-      el.style.transition = goingRight
-        ? `left ${TRAIL_MS}ms ${TRAIL} ${TRAIL_LAG}ms, right ${LEAD_MS}ms ${LEAD}`
-        : `left ${LEAD_MS}ms ${LEAD}, right ${TRAIL_MS}ms ${TRAIL} ${TRAIL_LAG}ms`
-      el.style.left = `${left}px`
-      el.style.right = `${right}px`
-      layer.animate?.([{ transform: "scaleY(1)" }, { transform: "scaleY(0.84)", offset: 0.35 }, { transform: "scaleY(1.05)", offset: 0.75 }, { transform: "scaleY(1)" }], { duration: SQUASH_MS, easing: "ease-in-out" })
-    }
-    if (track.offsetWidth > 0) last.current = { left, placed: true }
-  }, [activeId])
-  useLayoutEffect(() => {
-    const frame = requestAnimationFrame(() => requestAnimationFrame(place))
-    return () => cancelAnimationFrame(frame)
-  }, [place, width])
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowDown" && !event.altKey) {
@@ -275,9 +207,6 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
       <div className="cs-tbx">
         <div className="cs-tbo" data-none={activeId ? undefined : ""}>
         <div ref={strip} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="cs-track">
-          <span className="cs-tabind cs-dent" aria-hidden="true"><i /></span>
-          <span className="cs-tabind cs-tint" aria-hidden="true"><i /></span>
-          <span className="cs-tabind cs-bevel" aria-hidden="true"><i /></span>
           {tabs.map((tab, index) => (
             <a
               key={tab.id}
@@ -295,7 +224,8 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
               style={{ "--i": index } as CSSProperties}
             >
               <span className="cs-ti"><TabGlyph id={tab.id} /></span>
-              {tab.label}
+              {/* The bold copy holds the width, so the bar never shifts when the chosen tab's label turns bolder. */}
+              <span className="cs-tl" data-t={tab.label}>{tab.label}</span>
             </a>
           ))}
         </div>
