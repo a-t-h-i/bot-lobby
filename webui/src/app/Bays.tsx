@@ -38,10 +38,10 @@ export function ShellFilters() {
   return (
     <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
       <defs>
-        {lit("cs-baylit", 3)}
+        {lit("cs-baylit", 3.5)}
         {lit("cs-worklit", 3.2)}
         <filter id="cs-bayedge" x="-20%" y="-35%" width="140%" height="170%" colorInterpolationFilters="sRGB">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
           <feComposite in="shape" in2="dn" operator="out" result="tS0" />
@@ -206,7 +206,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   useLayoutEffect(() => {
     const measure = () => {
       const tabsIn = strip.current ? [...strip.current.querySelectorAll<HTMLElement>("[role='tab']")] : []
-      const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 20 : 346
+      const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 8 : 346
       setWidth(open)
     }
     measure()
