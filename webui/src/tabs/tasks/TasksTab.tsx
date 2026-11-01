@@ -18,7 +18,7 @@ import { SlideOver } from "@/ui/SlideOver"
 import { ListSkeleton } from "@/ui/SplitPane"
 import { TaskActions, TaskDetail } from "./TaskDetail"
 import { TaskList } from "./TaskList"
-import { EMPTY_ARCHIVE, EMPTY_LIST, listCount } from "./words"
+import { EMPTY_ARCHIVE, EMPTY_LIST } from "./words"
 import type { TaskRow } from "@protocol"
 
 const close = () => go(tabHash("tasks"))
@@ -75,7 +75,7 @@ export function TasksTab({ id }: { id?: string }) {
   const props = selected ? { row: selected, onGone: close, onChanged: tasks.reload } : undefined
   return (
     <>
-      <Page title="Tasks" sub={listCount(rows)} className="cs-ts" aside={<Shown archived={showArchived} current={current.length} old={old.length} onChange={setShowArchived} />}>
+      <Page title="Tasks" className="cs-ts" aside={<Shown archived={showArchived} current={current.length} old={old.length} onChange={setShowArchived} />}>
         {!(showArchived ? archived : tasks).data ? <ListSkeleton /> : rows.length === 0 ? <p className="cs-tnone">{showArchived ? EMPTY_ARCHIVE : EMPTY_LIST}</p> : <TaskList rows={rows} selectedId={id} onSelect={select} />}
       </Page>
       <SlideOver open={Boolean(id)} onClose={close} label={selected?.title ?? "Task"} className="cs-tdw" head={props ? <TaskActions key={props.row.id} {...props} /> : null}>
