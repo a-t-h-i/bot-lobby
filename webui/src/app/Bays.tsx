@@ -157,7 +157,9 @@ export function TabGlyph({ id }: { id: string }) {
 }
 
 /**
- * The tab navigator: every tab, always showing, with the active one pressed into the bay (a light inset bevel).
+ * The tab navigator: every page as its icon, and the open one grown into its icon and name on a wash of the accent,
+ * the bay narrowing or widening with it. The bay's width is read from a hidden copy of the bar laid out as it will be
+ * once the change settles (`.cs-tsizer`), since the real tabs are still mid-animation when it is measured.
  * Changing tabs is a quick "poof": the old highlight shrinks and fades away while the new one grows in on the
  * chosen tab, both at once (CSS, `.cs-tab::before`). Each hidden pill waits shifted toward the chosen tab (`data-side`),
  * so the old one drifts toward the new tab as it goes and the new one arrives from the old tab's side: the highlight
@@ -170,6 +172,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   onSelect: (id: string) => void
 }) {
   const strip = useRef<HTMLDivElement>(null)
+  const sizer = useRef<HTMLDivElement>(null)
   const cells = useRef<Record<string, HTMLAnchorElement | null>>({})
   const [width, setWidth] = useState(346)
   const labels = tabs.map((tab) => tab.label).join("|")
@@ -184,16 +187,12 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
     setPlays((now) => ({ ...now, [activeId]: (now[activeId] ?? 0) + 1 }))
   }, [activeId])
 
-  // The bay's width comes from its content: every tab.
+  // The bay's width comes from its content as it will settle: every icon, and the open page's name.
   useLayoutEffect(() => {
-    const measure = () => {
-      const tabsIn = strip.current ? [...strip.current.querySelectorAll<HTMLElement>("[role='tab']")] : []
-      const open = tabsIn.length ? Math.ceil(tabsIn.reduce((sum, tab) => sum + tab.offsetWidth, 0) + (tabsIn.length - 1) * 2) + 6 : 346
-      setWidth(open)
-    }
+    const measure = () => setWidth(sizer.current ? Math.ceil(sizer.current.getBoundingClientRect().width) : 346)
     measure()
     void document.fonts?.ready.then(measure)
-  }, [labels])
+  }, [labels, activeId])
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "ArrowDown" && !event.altKey) {
@@ -219,6 +218,14 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   const vars = { "--wT": `${width}px`, "--hT": rem(40) } as CSSProperties
   return { vars, ghost: <BayGhost className="cs-gt" style={vars} />, bay: (
     <div className="cs-tbwrap" style={vars}>
+      <div ref={sizer} className="cs-track cs-tsizer" aria-hidden="true">
+        {tabs.map((tab) => (
+          <span key={tab.id} className="cs-tab" data-chosen={tab.id === activeId ? "" : undefined}>
+            <span className="cs-ti" />
+            <span className="cs-tl"><span>{tab.label}</span></span>
+          </span>
+        ))}
+      </div>
       <div className="cs-tbx">
         <div className="cs-tbo" data-none={activeId ? undefined : ""}>
         <div ref={strip} role="tablist" aria-label="Lobby tabs" onKeyDown={onKeyDown} className="cs-track">
@@ -241,9 +248,9 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
               data-side={activeIndex < 0 || index === activeIndex ? undefined : index < activeIndex ? "l" : "r"}
               style={{ "--i": index } as CSSProperties}
             >
-              <span className="cs-ti"><TabIcon id={tab.id} play={plays[tab.id] ?? 0} className="size-[15px]" /></span>
-              {/* The bold copy holds the width, so the bar never shifts while the chosen tab's label eases bolder. */}
-              <span className="cs-tl" data-t={tab.label}>{tab.label}</span>
+              <span className="cs-ti"><TabIcon id={tab.id} play={plays[tab.id] ?? 0} className="size-4" /></span>
+              {/* Only the open page shows its name; the others keep it folded to nothing (the tooltip names them). */}
+              <span className="cs-tl"><span>{tab.label}</span></span>
             </a>
           ))}
         </div>

@@ -1,6 +1,6 @@
 {
-  "hash": "b28da90ec8721cb43fb521fe401d3176c6b182720bda16df300ae87a79af5238",
-  "builtAt": "2026-11-02T19:39:07.691Z",
+  "hash": "da79bb8234a3c37f3c413d1906234c485d850a4f07a5a594dc149b9153eeee9b",
+  "builtAt": "2026-11-02T19:51:58.680Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "191e065434efc7084dfe98541ed3e410f5c387913c1c2dfa3c8d700559f97082"
+      "sha256": "a510cd51c515ca73228931ac382adc73234c51f80dac91c1dd1079b73c7d505d"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "af6a6df8a90dce22ac99f3f56d6c1ffc4362f35f867c9e26b902c43bfb2f4272"
+      "sha256": "1c58adab76da819d7d03d8daa4908ed0d9897dd9d4b77246417dc115d292ef55"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -756,7 +756,7 @@
     },
     {
       "path": "webui/vite.config.ts",
-      "sha256": "d91b3fd165f7a0cc85dd15dc9b22dfa142fdacbb9944debdcaaf4fa4ad634069"
+      "sha256": "49cb36978a6c52fa343b3142864bf7e92a6f259cef1094e1aecb9f2df038e892"
     }
   ]
 }

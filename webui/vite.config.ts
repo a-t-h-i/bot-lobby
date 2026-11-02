@@ -14,6 +14,9 @@ const src = resolve(root, "src")
  * Hairlines (2px and under) stay px so they keep crisp. Media query
  * thresholds are not declarations and stay px. Rules for touch screens
  * (pointer: coarse) keep their px: they guard tap and input sizes.
+ * Registered properties (@property) keep theirs too: a browser drops the
+ * whole rule if its initial-value is in rem, and the property then jumps
+ * instead of animating (the bays' --wL/--wT widths did).
  */
 const PX_BASE = 15
 const pxToRem = () => ({
@@ -24,6 +27,7 @@ const pxToRem = () => ({
     if (!file.startsWith(src)) return
     for (let node = decl.parent as { type?: string; name?: string; params?: string; parent?: unknown } | undefined; node; node = node.parent as typeof node) {
       if (node.type === "atrule" && node.name === "media" && /pointer:\s*coarse/.test(node.params ?? "")) return
+      if (node.type === "atrule" && node.name === "property") return
     }
     // Inline images (url(...)) keep their own units.
     decl.value = decl.value.split(/(url\([^)]*\))/).map((part) => part.startsWith("url(") ? part : part.replace(/(^|[^\w.-])(-?\d*\.?\d+)px\b/g, (match, lead: string, num: string) => {
