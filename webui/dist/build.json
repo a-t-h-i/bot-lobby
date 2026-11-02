@@ -1,6 +1,6 @@
 {
-  "hash": "4a5c9b9281bcc3ae55a5b3e7b8fc447bd65ee3c1991af218496fb8599edf456f",
-  "builtAt": "2026-11-02T08:43:54.137Z",
+  "hash": "1a16f7230cb47abeea5c097135cded6fc68efeefdeccd33218691a4bea8d52fa",
+  "builtAt": "2026-11-02T08:54:56.144Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -68,7 +68,7 @@
     },
     {
       "path": "webui/src/app/TabIcons.tsx",
-      "sha256": "1bca7973a29d89fb2f12fdb2ccefc434eb5c14d432a6ab333c52068ed7e1ee4c"
+      "sha256": "198b9c10b59b56f83e5200975d9ca2a541f1ab994dfabbafce80d644a15476fd"
     },
     {
       "path": "webui/src/app/TerminalDrawer.tsx",
