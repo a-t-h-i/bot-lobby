@@ -35,7 +35,8 @@ import { stripStartFlags } from "../pi/start-flags.ts";
 import { checkThinking, modelRef, resolveChatProfile, resolveLobbyProfile, resolvePanelProfile, supportedThinking } from "../pi/model-support.ts";
 import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
-import { deliverComments, setAuto } from "../pi/owner.ts";
+import { deliverComments, pauseOwner, setAuto } from "../pi/owner.ts";
+import { switchLanded, switchPending } from "../pi/switch-pending.ts";
 import { CHAT_MARK, chatFromEntries, chatMarkContent, CLEARED_NOTE, lobbyFeed, type ChatEntry, type ChatMarkDetails } from "./feed.ts";
 import { CHAT_AGENT_SOURCES, parseLobbyCommand, parseMention, type LobbyCommand } from "./prompts.ts";
 import type { ChatJob, ChatWorker } from "./chat-agents.ts";
@@ -795,6 +796,12 @@ function sendToSession(state: Runtime, sessionId: string, text: string): string 
  * runs with a command context (the only one that may replace the session).
  * A background session is stopped first, so one process writes its file; a
  * task no session owns is claimed instead.
+ *
+ * Nothing here waits for this window to go quiet: a turn at work, or a task
+ * this session drives, is handed to the background (see `handOffFor`), and
+ * pi's switch itself stops the turn and saves it before it opens the next
+ * session. The reply comes back at once; the stop and the switch run after it,
+ * the window's turn and a background target winding down side by side.
  */
 async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
   if (target.claimTaskId) {
@@ -802,50 +809,80 @@ async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
     state.pi.sendUserMessage(`/bot-lobby claim ${target.claimTaskId}`, { expandPromptTemplates: true });
     return `taking ${target.claimTaskId} over in this window`;
   }
-  // A window at work hands its session to the background (it carries on there) and then switches.
-  const leaving = state.ctx.isIdle() ? undefined : await stepAside(state);
+  if (switching) return "a switch is already under way — wait a moment";
+  const leaving = handOffFor(state);
   if (typeof leaving === "string") return leaving;
-  let file = target.background?.sessionFile;
-  if (target.background) {
-    target.background.stop();
-    await target.background.whenExited();
-  }
-  file ??= target.sessionId ? await chats.locate(target.sessionId) : undefined;
-  if (!file) {
-    if (leaving) handOff = undefined;
-    return `could not find ${target.name}'s session file — /resume lists every saved session`;
-  }
-  state.pi.sendUserMessage(`/bot-lobby switch ${file}`, { expandPromptTemplates: true });
+  switching = true;
+  const resumeOwner = pauseOwner();
+  // Start winding this window's turn down now, alongside the background target; pi's switch waits for it to settle.
+  if (!state.ctx.isIdle()) state.ctx.abort();
+  void runSwitch(state, target, resumeOwner).finally(() => {
+    switching = false;
+  });
   return leaving ? `${leaving.name} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`;
 }
 
-/** The session this window was working in when it switched away, started in the background once the switch lands. */
-let handOff: { file: string; name: string; message: string } | undefined;
+/** A switch is under way (between the reply and pi opening the next session). */
+let switching = false;
 
-/** How long a stopped turn gets to wind down before the switch gives up. */
-const STEP_ASIDE_MS = 10_000;
-
-/** Stop this window's turn and keep its session to carry on in the background; the hand-off, or why not. */
-async function stepAside(state: Runtime): Promise<{ name: string } | string> {
-  const file = state.ctx.sessionManager.getSessionFile?.();
-  if (!file) return "this window's session is not saved yet — stop the oracle, then switch";
-  const name = state.pi.getSessionName() ?? "this window's session";
-  const task = ownedTask(state.root, state.configDir, state.ctx.sessionManager.getSessionId());
-  state.ctx.abort();
-  const deadline = Date.now() + STEP_ASIDE_MS;
-  while (!state.ctx.isIdle()) {
-    if (Date.now() > deadline) return "the oracle did not stop in time — try the switch again";
-    await new Promise((resolve) => setTimeout(resolve, 50));
+async function runSwitch(state: Runtime, target: SwitchTarget, resumeOwner: () => void): Promise<void> {
+  const failed = (why: string) => {
+    handOff = undefined;
+    resumeOwner();
+    lobbyFeed.log("LOBBY", why, "warning");
+    lobbyNotify(state, why, "warning");
+  };
+  try {
+    let file = target.background?.sessionFile;
+    if (target.background) {
+      // Stop its turn first so the process ends quickly instead of running out its grace period.
+      target.background.abort();
+      target.background.stop();
+      await target.background.whenExited();
+    }
+    file ??= target.sessionId ? await chats.locate(target.sessionId) : undefined;
+    if (!file) return failed(`could not find ${target.name}'s session file — /resume lists every saved session`);
+    // `/bot-lobby switch` undoes the hold and the hand-off itself should pi not switch after all.
+    switchPending(() => {
+      handOff = undefined;
+      resumeOwner();
+    });
+    state.pi.sendUserMessage(`/bot-lobby switch ${file}`, { expandPromptTemplates: true });
+  } catch (error) {
+    failed(`could not switch to ${target.name} — ${(error as Error).message}`);
   }
-  const message = task && !TERMINAL_STATES.includes(task.state) && !task.paused
-    ? `bot-lobby: you were moved to the background while you worked on ${task.id}; your last turn was cut off. Read where the task stands with the orchestrate tool (action=status), run again any step that was cut off, and carry on.`
-    : "bot-lobby: you were moved to the background while you worked, and your last turn was cut off. Carry on where you left off.";
-  handOff = { file, name, message };
+}
+
+/** The session this window was working in when it switched away, started in the background once the switch lands. */
+let handOff: { file: string; name: string; message?: string; taskId?: string } | undefined;
+
+/**
+ * Whether this window's session carries on in the background after the
+ * switch: when its oracle is at work (its cut-off turn is picked back up) or
+ * it drives a task that is not finished (auto mode, messages and questions
+ * keep reaching it there). Returns the hand-off, nothing to hand off, or why
+ * the switch cannot happen.
+ */
+function handOffFor(state: Runtime): { name: string } | string | undefined {
+  const working = !state.ctx.isIdle();
+  const task = ownedTask(state.root, state.configDir, state.ctx.sessionManager.getSessionId());
+  const driving = Boolean(task && !TERMINAL_STATES.includes(task.state));
+  if (!working && !driving) return undefined;
+  const file = state.ctx.sessionManager.getSessionFile?.();
+  if (!file) return working ? "this window's session is not saved yet — stop the oracle, then switch" : undefined;
+  const name = state.pi.getSessionName() ?? (task ? task.title : "this window's session");
+  const message = !working
+    ? undefined
+    : task && driving && !task.paused
+      ? `bot-lobby: you were moved to the background while you worked on ${task.id}; your last turn was cut off. Read where the task stands with the orchestrate tool (action=status), run again any step that was cut off, and carry on.`
+      : "bot-lobby: you were moved to the background while you worked, and your last turn was cut off. Carry on where you left off.";
+  handOff = { file, name, ...(message ? { message } : {}), ...(task && driving ? { taskId: task.id } : {}) };
   return { name };
 }
 
-/** Once this window runs its new session, carry the one it left on in the background (see `stepAside`). */
+/** Once this window runs its new session, carry the one it left on in the background (see `handOffFor`). */
 export function carryHandOff(state: Runtime): void {
+  switchLanded();
   const pending = handOff;
   handOff = undefined;
   if (!pending) return;
@@ -854,7 +891,7 @@ export function carryHandOff(state: Runtime): void {
     return;
   }
   try {
-    sessionRegistry().start(state.ctx.cwd, { name: pending.name, projectRoot: state.root, onDialog: dialogTracker(state), ask: askForSession, sessionFile: pending.file, message: pending.message });
+    sessionRegistry().start(state.ctx.cwd, { name: pending.name, projectRoot: state.root, onDialog: dialogTracker(state), ask: askForSession, sessionFile: pending.file, ...(pending.message ? { message: pending.message } : {}), ...(pending.taskId ? { taskId: pending.taskId } : {}) });
     lobbyFeed.log("LOBBY", `${pending.name} carries on in the background`, "success");
   } catch (error) {
     lobbyFeed.log("LOBBY", `could not carry ${pending.name} on in the background — ${(error as Error).message}; /resume finds it`, "warning");

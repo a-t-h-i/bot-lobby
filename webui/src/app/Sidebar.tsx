@@ -7,13 +7,14 @@
  * ones it started, then those in other terminals and the ended ones in groups that fold away), and at its foot
  * Settings and the app's switches. Switching to a session is a click on its row.
  */
-import { useCallback, useId, useRef, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react"
 import { Archive, ChevronDown, CircleDashed, Pencil, Trash2 } from "lucide-react"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
 import { tip } from "@/ui/TipLayer"
 import { act } from "@/lib/act"
+import { endSwitch, pendingNow, sawSession, startSwitch, usePendingSwitch } from "@/lib/pendingSwitch"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
@@ -45,8 +46,19 @@ const TOOL = "cs-iconbtn cs-sm"
 function useSessions(): SessionEntry[] {
   const status = useTopic<StatusInfo>("status").data
   const list = useApiRead("sessions.list", {}, ["sessions"])
-  return sessionEntries(status, list.data)
+  const pending = usePendingSwitch()
+  useEffect(() => {
+    ownSession = status?.sessionId
+    sawSession(status?.sessionId)
+  }, [status?.sessionId])
+  const entries = sessionEntries(status, list.data)
+  if (!pending) return entries
+  // The session being switched to shows as starting from the click on, until this window runs it.
+  return entries.map((entry) => (entry.id === pending.id ? { ...entry, state: "starting", switching: true } : entry))
 }
+
+/** This window's session id as the status topic last said, for the switch to tell when it has landed. */
+let ownSession: string | undefined
 
 /**
  * Go to a session: this window's own is the Lobby; a background one is moved
@@ -56,7 +68,13 @@ function useSessions(): SessionEntry[] {
 async function switchTo(entry: SessionEntry): Promise<void> {
   if (entry.where === "here") return go("#/lobby")
   if (entry.where === "elsewhere") return void toast.info(`${entry.name} runs in another terminal. Switch to that terminal to work in it.`)
-  if (await act("sessions.switch", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! })) go("#/lobby")
+  if (pendingNow()) return void toast.info("Still switching. One moment.")
+  // Answer the click at once: the row shows the switch and the Lobby opens while the server swaps the sessions.
+  startSwitch({ id: entry.id, ...(entry.sessionId ? { sessionId: entry.sessionId } : {}), ...(ownSession ? { from: ownSession } : {}) })
+  go("#/lobby")
+  const result = await act("sessions.switch", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! })
+  // The server says why when it did not start the switch: it answers with no "switching" notice.
+  if (!result || !/switching this window/.test(result.notice)) endSwitch()
 }
 
 function useSwitch(): (entry: SessionEntry) => Promise<void> {
@@ -171,6 +189,8 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
           data-where={entry.where}
           data-state={entry.state}
           data-dim={quiet || undefined}
+          data-active={entry.switching || undefined}
+          aria-busy={entry.switching || undefined}
           onClick={() => void pick(entry)}
           onDoubleClick={(event) => {
             if (!canRename) return

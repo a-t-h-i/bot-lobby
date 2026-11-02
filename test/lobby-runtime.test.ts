@@ -383,6 +383,50 @@ test("a window that starts after another stopped unexpectedly carries its planni
   }
 });
 
+test("switching while this window's task runs between turns carries the session on in the background without a nudge", async () => {
+  const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
+  setSessionLauncher((args) => {
+    const proc = new FakeSessionProcess();
+    launched.push({ args, proc });
+    return proc;
+  });
+  setMinimized(false);
+  const root = project(true);
+  const fake = fakePi();
+  const ui = fakeUi();
+  let aborted = 0;
+  let file = "/sessions/window.jsonl";
+  const ctx = {
+    ...(context(root, ui.ui).ctx as object),
+    sessionManager: { getSessionId: () => "session-1", getSessionFile: () => file, getSessionDir: () => join(root, "sessions"), getBranch: () => [] },
+    isIdle: () => true,
+    abort: () => {
+      aborted += 1;
+    },
+  } as unknown as ExtensionContext;
+  registerLobbyEvents(fake.pi, ".pi");
+  await fake.emit("session_start", { type: "session_start" }, ctx);
+  try {
+    const service = currentLobbyService()!;
+    service.startSession({ request: "add a footer" });
+    launched[0]!.proc.emit({ type: "response", command: "get_state", success: true, data: { sessionId: "child-1", sessionFile: "/sessions/child-1.jsonl" } });
+    const background = backgroundSessions().find((session) => session.sessionId === "child-1")!;
+    const notice = await service.switchTo({ name: background.name, sessionId: "child-1", background });
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(aborted, 0, "an idle oracle has no turn to stop");
+    assert.match(notice, /carries on in the background; switching this window to/);
+    assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby switch /sessions/child-1.jsonl", options: { expandPromptTemplates: true } });
+
+    file = "/sessions/child-1.jsonl";
+    await fake.emit("session_start", { type: "session_start" }, ctx);
+    assert.equal(launched.length, 2, "the task's session keeps running in the background");
+    assert.equal(launched[1]!.proc.commands("prompt").length, 0, "nothing was cut off, so it is not nudged");
+  } finally {
+    await stop(fake, ctx);
+    setSessionLauncher(undefined);
+  }
+});
+
 test("switching this window to a session without a task keeps bot-lobby on, so the page follows; pi starting afresh decides again", async () => {
   setMinimized(false);
   const root = project(false);
