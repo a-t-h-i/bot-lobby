@@ -152,11 +152,12 @@ integration are removed; external boards and locally saved room links are not de
 
 ## Sidebar and terminal
 
-The sidebar lists the running sessions as cards: this window's first, then the background sessions
-it started, with sessions in other terminals and ended ones on shelves at its foot. Click a card to
-bring that session into this window; **New session** starts one in the background from what you
-type, and the search filters the list. `Alt+B` folds the sidebar off the page (the button at the
-start of the bar brings it back), and dragging its edge resizes it.
+The sidebar lists the running sessions as thin rows: this window's first, then the background
+sessions it started, with recent ones and sessions in other terminals on shelves below. Click a row
+to bring that session into this window. **New session** (`Alt+N`) opens a fresh, empty session in
+this window at once and asks nothing; your first prompt names it. A session at work carries on in
+the background, an idle one waits under Recent. The search filters the list, and `Alt+B` pins the
+sidebar open.
 
 `` Ctrl+` `` (or the bar's **Terminal** button) opens a terminal drawer under the composer: a real
 shell in the project's folder, as many as eight, listed down its right side when there is more than

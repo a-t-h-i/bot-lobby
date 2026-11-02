@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dateStamp, nameWords, shortTitle, taskName } from "../src/text.ts";
+import { dateStamp, nameWords, sessionTitle, shortTitle, taskName } from "../src/text.ts";
 
 test("shortTitle keeps the first three content words", () => {
   assert.equal(shortTitle("let's create a landing page for our website"), "create landing page");
@@ -55,4 +55,12 @@ test("a task's friendly name is its first content words, capitalised, then the d
   assert.equal(nameWords("implementation internationalization infrastructure rearchitecture"), "Implementation-Internationalization", "cut between words, not in one");
   assert.equal(nameWords("!!! ???"), "");
   assert.equal(taskName("???", day), "Task-Untitled-27-09-2026");
+});
+
+test("sessionTitle names a session from its first prompt like a chat title", () => {
+  assert.equal(sessionTitle("can you please fix the flaky login test on safari and also the router"), "Fix the flaky login test on safari");
+  assert.equal(sessionTitle("what does this repo do?"), "What does this repo do");
+  assert.equal(sessionTitle("@Design does the chat read well at 1024px wide?"), "Does the chat read well at 1024px");
+  assert.equal(sessionTitle("## Objective\nadd dark mode"), "Add dark mode");
+  assert.equal(sessionTitle("   "), "");
 });

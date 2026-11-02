@@ -822,6 +822,28 @@ async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
   return leaving ? `${leaving.name} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`;
 }
 
+/**
+ * Open a fresh, empty session in this window through `/bot-lobby new` (only a
+ * command context may replace the session). New session asks nothing: the
+ * first prompt names the session (see registerLobbyEvents). As with a switch,
+ * a turn at work or a task this session drives carries on in the background.
+ */
+function newSession(state: Runtime): { opened: boolean; notice?: string } {
+  if (switching) return { opened: false, notice: "a switch is already under way — wait a moment" };
+  // An empty session is already new: nothing to open, and nothing worth a notice.
+  if (!state.ctx.sessionManager.getBranch().some((entry) => entry.type === "message")) return { opened: false };
+  const leaving = handOffFor(state);
+  if (typeof leaving === "string") return { opened: false, notice: leaving };
+  const resumeOwner = pauseOwner();
+  if (!state.ctx.isIdle()) state.ctx.abort();
+  switchPending(() => {
+    handOff = undefined;
+    resumeOwner();
+  });
+  state.pi.sendUserMessage("/bot-lobby new", { expandPromptTemplates: true });
+  return leaving ? { opened: true, notice: `${leaving.name} carries on in the background` } : { opened: true };
+}
+
 /** A switch is under way (between the reply and pi opening the next session). */
 let switching = false;
 
@@ -1267,6 +1289,7 @@ export function createLobbyService(state: Runtime): LobbyService {
     sendToSession: (sessionId, text) => sendToSession(state, sessionId, text),
     liveSessions: () => liveSessions(state),
     switchTo: (target) => switchTo(state, target),
+    newSession: () => newSession(state),
     archivedTasks: () => listArchivedTasks(state.root, state.configDir),
     archiveTask: (taskId) => archiveTask(state, taskId),
     restoreTask: (taskId) => restoreTask(state, taskId),

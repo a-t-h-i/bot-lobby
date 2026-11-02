@@ -89,6 +89,12 @@ export function sessionsMessage(body: { key?: string; sessionId?: string; text: 
   return { notice: ctx.service.sendToSession(body.sessionId!, text) };
 }
 
+/** Open a fresh, empty session in this window; it is named after its first prompt. */
+export function sessionsNew(ctx: ApiContext): { opened: boolean; notice?: string } {
+  if (!ctx.service.newSession) fail(501, "unsupported", "this lobby cannot open a new session");
+  return ctx.service.newSession!();
+}
+
 /** Run a session in this window (stopping its background process first); a window at work carries its own session on in the background. */
 export async function sessionsSwitch(body: { key?: string; sessionId?: string; claimTaskId?: string }, ctx: ApiContext): Promise<{ notice: string }> {
   if (!body.key && !body.sessionId && !body.claimTaskId) fail(400, "bad_request", "a session key, id or task is required");

@@ -19,7 +19,7 @@ import { AltH } from "./AltH.tsx"
 import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
 import { Composer } from "./Composer.tsx"
 import { ProjectNotice, useProjects } from "./ProjectSwitcher.tsx"
-import { cycleSession, toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
+import { cycleSession, openNewSession, toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
 import { RightBay, ShellFilters, useTabNavigator } from "./Bays.tsx"
 import { TerminalDrawer, TerminalToggle } from "./TerminalDrawer.tsx"
 import { toggleTerminal } from "./terminalStore.ts"
@@ -54,6 +54,7 @@ function handleAction(action: string, route: Route, toggleHelp: () => void, cycl
     if (route.kind === "tab" && route.tab === "lobby") toggleCollapsed("lobby.thinking")
     else go(tabHash("lobby"))
   } else if (action === "nextSession" || action === "prevSession") void cycleSession(action === "nextSession" ? 1 : -1)
+  else if (action === "newSession") void openNewSession()
   else if (action === "sidebar") toggleSidebar()
   else if (action === "terminal") toggleTerminal()
   else if (action === "code") toggleCode()

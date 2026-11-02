@@ -486,6 +486,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     planningRounds: () => 5,
     sessionChat: () => [],
     hasOlderChat: () => false,
+    newSession: () => (fixture.status.busy ? { opened: true, notice: `${sessionName ?? "this window's session"} carries on in the background` } : { opened: true }),
     switchTo: async (target: { name: string }) => (fixture.status.busy ? `${sessionName ?? "this window's session"} carries on in the background; switching this window to ${target.name}…` : `switching this window to ${target.name}…`),
   } as unknown as LobbyService;
   seedPrompts(service, fixture);

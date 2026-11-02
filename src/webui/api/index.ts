@@ -17,7 +17,7 @@ import { plannerAnswer, plannerCommentLine, plannerGet, plannerNew, plannerRetry
 import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, tasksDelete, tasksEditComment, tasksGet, tasksList, tasksMessage, tasksRestore, tasksOpen, tasksResume, tasksDeliveryReview, tasksDeliveryDefer, tasksDeliver, tasksAccept, tasksSkipStep, tasksForceClose, tasksResolveApproval } from "./tasks.ts";
 import { knowledgeAccept, knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeDismiss, knowledgeEdit, knowledgeFiles, knowledgeLedger, knowledgeMove, knowledgeOpen, knowledgePin, knowledgeRemove, knowledgeReplaceFile, knowledgeRestore, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
-import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsDelete, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
+import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsDelete, sessionsList, sessionsMessage, sessionsNew, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
 import { settingsGet, settingsGrants, settingsHarnesses, settingsLintCreate, settingsLinters, settingsLintRule, settingsLintSetup, settingsSet } from "./settings.ts";
 import { lobbyRetention, lobbySetRetention } from "./retention.ts";
 import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
@@ -224,6 +224,7 @@ function buildRoutes(): Record<string, Route> {
     schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), text: NoticeText, attachments: Attachments }, { additionalProperties: false }),
     run: (body, ctx) => sessionsMessage(body as { key?: string; sessionId?: string; text: string; attachments?: string[] }, ctx),
   };
+  routes["sessions.new"] = { schema: Empty, run: (_body, ctx) => sessionsNew(ctx) };
   routes["sessions.switch"] = {
     schema: Type.Object({ key: Type.Optional(TaskId), sessionId: Type.Optional(TaskId), claimTaskId: Type.Optional(TaskId) }, { additionalProperties: false }),
     run: (body, ctx) => sessionsSwitch(body as { key?: string; sessionId?: string; claimTaskId?: string }, ctx),

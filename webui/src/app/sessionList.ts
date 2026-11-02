@@ -24,6 +24,8 @@ export interface SessionEntry {
   at?: number
   /** This window is switching to it (the sidebar marks it until the switch lands). */
   switching?: boolean
+  /** A new session takes this row: it grows in under its new name. */
+  fresh?: boolean
 }
 
 function backgroundState(session: BackgroundSessionInfo): SessionState {
@@ -35,7 +37,7 @@ function backgroundState(session: BackgroundSessionInfo): SessionState {
 
 export function sessionEntries(status: (Pick<StatusInfo, "sessionId" | "sessionName" | "busy"> & { workspace?: { name: string } }) | undefined, list: { background: BackgroundSessionInfo[]; live: LiveSession[]; saved?: SavedSession[] } | undefined): SessionEntry[] {
   const own = status?.sessionId
-  const here: SessionEntry = { id: "here", name: status?.sessionName?.trim() || status?.workspace?.name || "This window", where: "here", state: status?.busy ? "working" : "idle", waiting: 0, ...(own ? { sessionId: own } : {}) }
+  const here: SessionEntry = { id: "here", name: status?.sessionName?.trim() || "New session", where: "here", state: status?.busy ? "working" : "idle", waiting: 0, ...(own ? { sessionId: own } : {}) }
   const background = (list?.background ?? [])
     .filter((session) => !own || session.sessionId !== own)
     .map((session): SessionEntry => ({

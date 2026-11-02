@@ -513,6 +513,7 @@ export interface Api {
   "sessions.start": { request: { request?: string; planId?: string; auto?: boolean; attachments?: string[] }; result: { notice: string; key?: string } };
   "sessions.stop": { request: { key: string }; result: { notice: string } };
   "sessions.message": { request: { key?: string; sessionId?: string; text: string; attachments?: string[] }; result: { notice?: string } };
+  "sessions.new": { request: Record<string, never>; result: { opened: boolean; notice?: string } };
   "sessions.switch": { request: { key?: string; sessionId?: string; claimTaskId?: string }; result: { notice: string } };
   "sessions.answer": { request: { key: string; dialogId: string; answer: DialogAnswer }; result: { notice: string } };
   "sessions.rename": { request: { key?: string; name: string }; result: { notice: string } };

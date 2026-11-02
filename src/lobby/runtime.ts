@@ -24,6 +24,7 @@ import { KnowledgeBook } from "./knowledge.ts";
 import type { LobbyService } from "./host.ts";
 import { backgroundSessions, carryHandOff, chatProfile, chatReplied, chatHistoryLines, createLobbyService, lobbyNotify, lobbyProfile, plannerDeps, resumeSession, seatProfile, setServiceState, savePlan as serviceSavePlan, answerPanel as serviceAnswerPanel } from "./service.ts";
 import { lobbyTopics } from "./topics.ts";
+import { sessionTitle } from "../text.ts";
 export { backgroundSessions, setSessionLauncher } from "./service.ts";
 import { deliverComments, onOwnerEvent } from "../pi/owner.ts";
 import { pushNotice } from "../webui/notices.ts";
@@ -279,6 +280,17 @@ export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
   });
   pi.on("ui_prompt_end", () => {
     lobbyTopics.bump("status");
+  });
+  // A session starts unnamed (New session asks nothing): the first prompt names it, as a chat app titles a chat.
+  pi.on("before_agent_start", (event) => {
+    if (isMinimized() || event.messageType !== "user" || pi.getSessionName()) return;
+    const prompt = event.prompt.trim();
+    if (!prompt || prompt.startsWith("/") || prompt.startsWith("bot-lobby:")) return;
+    const name = sessionTitle(prompt);
+    if (!name) return;
+    pi.setSessionName(name);
+    lobbyTopics.bump("status");
+    lobbyTopics.bump("sessions");
   });
   pi.on("agent_start", (_event, ctx) => {
     track(ctx);

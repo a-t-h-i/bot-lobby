@@ -9,6 +9,7 @@ export const LOBBY_ACTIONS = {
   help: { key: "alt+h", help: "show or hide this list" },
   settings: { key: "alt+s", help: "settings: each agent's model and effort" },
   savePlan: { key: "ctrl+s", help: "save the plan from the Plan tab" },
+  newSession: { key: "alt+n", help: "open a new session in this window" },
   sidebar: { key: "alt+b", help: "fold or open the sidebar (on a phone, open it)" },
   activity: { key: "alt+a", help: "open or fold every step in the Lobby conversation" },
   thinking: { key: "alt+t", help: "show or hide Thinking on the Lobby" },

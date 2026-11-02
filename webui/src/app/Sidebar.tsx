@@ -2,10 +2,11 @@
 /**
  * The sidebar, after the user's design (docs/web-ui/composer-surface): a mini rail on the window's left edge
  * (sessions, new session, settings) that grows into the full sidebar while the pointer is on it, or stays open
- * when pinned (the rail's sessions button or the sidebar key). The full sidebar holds a search over the sessions
- * with the New session button, the sessions as thin rows under small labels (this window's, then the background
- * ones it started, then those in other terminals and the ended ones in groups that fold away), and at its foot
- * Settings and the app's switches. Switching to a session is a click on its row.
+ * when pinned (the rail's sessions button or the sidebar key). The full sidebar leads with New session, which
+ * opens a fresh session in this window at once (it asks nothing; the first prompt names it), then a search over
+ * the sessions, the sessions as thin rows (this window's on top, then the background ones it started, then the
+ * recent and other terminals' ones in groups that fold away), and at its foot Settings and the app's switches.
+ * Switching to a session is a click on its row.
  */
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react"
 import { Archive, ChevronDown, CircleDashed, Pencil, Trash2 } from "lucide-react"
@@ -14,6 +15,7 @@ import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
 import { tip } from "@/ui/TipLayer"
 import { act } from "@/lib/act"
+import { call } from "@/lib/api"
 import { endSwitch, pendingNow, sawSession, startSwitch, usePendingSwitch } from "@/lib/pendingSwitch"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
@@ -21,7 +23,6 @@ import { rem } from "@/lib/uiScale"
 import { cn } from "@/lib/utils"
 import { FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
 import { useTopic } from "./hooks.ts"
-import { NewSessionDialog } from "./NewSessionDialog.tsx"
 import { BayGhost, TabGlyph, useHoverBay } from "./Bays.tsx"
 import { go, type Route } from "./router.ts"
 import { sessionEntries, type SessionEntry } from "./sessionList.ts"
@@ -54,8 +55,36 @@ function useSessions(): SessionEntry[] {
   }, [status?.sessionId])
   const entries = sessionEntries(status, list.data)
   if (!pending) return entries
+  // A new session takes this window's row at once, under its new name, until this window runs it.
+  if (pending.id === NEW) return entries.map((entry) => (entry.where === "here" ? { ...entry, name: "New session", state: "idle", switching: true, fresh: true } : entry))
   // The session being switched to shows as starting from the click on, until this window runs it.
   return entries.map((entry) => (entry.id === pending.id ? { ...entry, state: "starting", switching: true } : entry))
+}
+
+/** The pending switch's id while a new session opens. */
+const NEW = "new"
+
+const focusComposer = () => requestAnimationFrame(() => document.getElementById("composer-text")?.focus())
+
+/**
+ * New session: a fresh, empty session in this window, at once. Nothing is asked; the first prompt names it.
+ * The Lobby opens with the composer ready while the server swaps the sessions (a session at work carries on in
+ * the background, an idle one waits under Recent).
+ */
+export async function openNewSession(): Promise<void> {
+  go("#/lobby")
+  if (pendingNow()) return void toast.info("Still switching. One moment.")
+  startSwitch({ id: NEW, ...(ownSession ? { from: ownSession } : {}) })
+  focusComposer()
+  try {
+    // The server shows any notice itself (what carries on in the background, or why nothing opened).
+    const { opened } = await call("sessions.new", {})
+    // Nothing opened (this window's session is already empty, or a switch is under way): the composer is ready anyway.
+    if (!opened) endSwitch()
+  } catch (failure) {
+    endSwitch()
+    toast.error(failure instanceof Error ? failure.message : "Could not open a new session. Try again.")
+  }
 }
 
 /** This window's session id as the status topic last said, for the switch to tell when it has landed. */
@@ -175,7 +204,7 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const hasActions = canRename || canArchive || canDelete
   const style = { "--i": index } as CSSProperties
   return (
-    <li className="cs-srow session-item">
+    <li className="cs-srow session-item" data-fresh={entry.fresh || undefined}>
       {renaming ? (
         <div className="cs-sr" data-active={entry.where === "here" || undefined} style={style}>
           <RenameField entry={entry} onDone={() => setRenaming(false)} />
@@ -248,7 +277,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
   return (
     <section aria-label={label} className="group/shelf flex flex-col">
       <div className="cs-sh" style={{ "--i": start } as CSSProperties}>
-        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="cs-shb flex flex-1 items-center gap-1.5 text-left">
+        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="cs-shf flex flex-1 items-center gap-1.5 text-left">
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
           <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100", folded && "-rotate-90 opacity-100")} />
@@ -257,7 +286,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) await act("sessions.archive", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! }) })()}
-            className="cs-shb shrink-0"
+            className="cs-shf shrink-0"
           >
             Archive all
           </button>
@@ -278,10 +307,23 @@ function matches(entry: SessionEntry, query: string): boolean {
   return words.every((word) => text.includes(word))
 }
 
-/** The search field with the New session button at its end, sunk into the sidebar. */
-function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: string) => void; onNew: () => void }) {
+const PENCIL = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+
+/** New session, the sidebar's first row: one click, nothing asked. */
+function NewRow({ hint }: { hint: string }) {
   return (
-    <label className="cs-sr cs-search" style={{ "--i": 0 } as CSSProperties}>
+    <button type="button" onClick={() => void openNewSession()} aria-keyshortcuts={hint} className="cs-sr cs-snew" style={{ "--i": 0 } as CSSProperties}>
+      {PENCIL}
+      <span className="cs-grow">New session</span>
+      <Keys chord={hint} className="cs-kbd-quiet" />
+    </button>
+  )
+}
+
+/** The search over the sessions, sunk into the sidebar. */
+function SearchRow({ query, onQuery }: { query: string; onQuery: (query: string) => void }) {
+  return (
+    <label className="cs-sr cs-search" style={{ "--i": 1 } as CSSProperties}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
       <input
         type="search"
@@ -297,49 +339,42 @@ function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: 
           }
         }}
       />
-      <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={onNew} className="cs-snew" {...tip("New session", { side: "bottom" })}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
-      </button>
     </label>
   )
 }
 
-/** The sessions: this window's under its label, then the background ones, then other terminals and ended ones. */
+/**
+ * The sessions: the running ones in one list (this window's on top, marked; the background ones under it, each
+ * with its state at the end), then the recent ones and other terminals' in groups that fold away.
+ */
 function Sessions({ query }: { query: string }) {
   const entries = useSessions()
   const shown = entries.filter((entry) => matches(entry, query))
-  const here = shown.filter((entry) => entry.where === "here" && entry.state !== "exited")
-  const background = shown.filter((entry) => entry.where === "background" && entry.state !== "exited")
+  const running = [
+    ...shown.filter((entry) => entry.where === "here" && entry.state !== "exited"),
+    ...shown.filter((entry) => entry.where === "background" && entry.state !== "exited"),
+  ]
   const elsewhere = shown.filter((entry) => entry.where === "elsewhere")
   // Ended background sessions first, then the project's saved ones, newest first: they stay until archived or deleted.
   const ended = shown.filter((entry) => entry.where !== "elsewhere" && entry.state === "exited")
-  let i = 1
+  let i = 2
   const at = (count: number) => {
     const start = i
     i += count + 1
     return start
   }
-  const hereAt = at(here.length)
-  const backAt = at(background.length)
+  const runAt = at(running.length)
   return (
     <nav aria-label="Sessions list" className="cs-sblist">
       {shown.length === 0 ? <p className="px-2.5 py-1.5 text-xs text-muted-foreground">No sessions match “{query.trim()}”.</p> : null}
-      {here.length > 0 ? (
+      {running.length > 0 ? (
         <>
-          <p className="cs-sh" style={{ "--i": hereAt } as CSSProperties}>Current</p>
-          <ul className="flex flex-col">{here.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={hereAt + 1 + index} />)}</ul>
+          <p className="cs-sh" style={{ "--i": runAt } as CSSProperties}>Sessions</p>
+          <ul className="flex flex-col">{running.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={runAt + 1 + index} />)}</ul>
         </>
       ) : null}
-      {background.length > 0 ? (
-        <>
-          <p className="cs-sh" style={{ "--i": backAt } as CSSProperties}>Background</p>
-          <ul className="flex flex-col">{background.map((entry, index) => <SessionRow key={entry.id} entry={entry} index={backAt + 1 + index} />)}</ul>
-        </>
-      ) : !query.trim() && entries.length === 1 ? (
-        <p className="cs-sh" style={{ "--i": backAt } as CSSProperties}>No other sessions are running.</p>
-      ) : null}
-      <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} start={at(elsewhere.length)} />
       <Shelf id="ended" label="Recent" entries={ended} start={at(ended.length)} archivable />
+      <Shelf id="elsewhere" label="Other terminals" entries={elsewhere} start={at(elsewhere.length)} />
     </nav>
   )
 }
@@ -374,10 +409,8 @@ export function useSidebar(props: SidebarProps) {
   listed.entries = useSessions()
   listed.flash = bay.flash
   const [query, setQuery] = useState("")
-  const [starting, setStarting] = useState(false)
-  const open = pinned || bay.open || starting
+  const open = pinned || bay.open
   const vars = { "--wL": rem(open ? OPEN.w : 122), "--hL": open ? OPEN.h : rem(40), "--sb-open-h": OPEN.h } as CSSProperties
-  const newSession = useCallback(() => setStarting(true), [])
   return {
     open,
     pinned,
@@ -389,7 +422,7 @@ export function useSidebar(props: SidebarProps) {
             <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn" {...tip(pinned ? "Unpin sidebar" : "Pin sidebar", { keys: props.keys.sidebar, side: "bottom", keep: true })}>
               <TabGlyph id="lobby" />
             </button>
-            <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn" {...tip("New session", { side: "bottom" })}>
+            <button type="button" aria-label="New session" aria-keyshortcuts={props.keys.newSession} onClick={() => void openNewSession()} className="cs-iconbtn" {...tip("New session", { keys: props.keys.newSession ?? "Alt+N", side: "bottom" })}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
             </button>
             <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn" {...tip("Settings", { keys: props.keys.settings ?? "Alt+S", side: "bottom" })}>
@@ -397,12 +430,12 @@ export function useSidebar(props: SidebarProps) {
             </a>
           </div>
           <div className="cs-sbfull" inert={!open}>
-            <SearchRow query={query} onQuery={setQuery} onNew={newSession} />
+            <NewRow hint={props.keys.newSession ?? "Alt+N"} />
+            <SearchRow query={query} onQuery={setQuery} />
             <Sessions query={query} />
             <Foot {...props} />
           </div>
         </aside>
-        <NewSessionDialog open={starting} onOpenChange={setStarting} />
       </div>
     ),
   }
