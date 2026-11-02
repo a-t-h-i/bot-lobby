@@ -248,7 +248,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
   return (
     <section aria-label={label} className="group/shelf flex flex-col">
       <div className="cs-sh" style={{ "--i": start } as CSSProperties}>
-        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="cs-shb flex flex-1 items-center gap-1.5 text-left">
+        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="cs-shlb flex flex-1 items-center gap-1.5 text-left">
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
           <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100", folded && "-rotate-90 opacity-100")} />
@@ -257,7 +257,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) await act("sessions.archive", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! }) })()}
-            className="cs-shb shrink-0"
+            className="cs-shlb shrink-0"
           >
             Archive all
           </button>

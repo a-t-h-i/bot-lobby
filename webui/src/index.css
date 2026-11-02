@@ -48,7 +48,8 @@
   --primary-foreground: #ffffff;
   --accent: #f0eee6;
   --accent-foreground: #141413;
-  --ring: var(--primary);
+  /* Focus: a soft accent halo rather than a hard orange line. */
+  --ring: color-mix(in srgb, var(--primary) 55%, transparent);
   --typing: var(--primary);
   --tab-active: #f0eee6;
   /* The chosen tab's fill and the colour that flows between tabs, both from the accent so themes follow. */
@@ -69,7 +70,6 @@
   /* Your message: a soft filled block, as in the harnesses. */
   /* Clearly set off from the page (the user found the old fill hard to see), still muted. */
   --bubble: #ebe8df;
-  --bubble-line: color-mix(in srgb, var(--foreground) 14%, var(--bubble));
   --bubble-foreground: var(--foreground);
 
   /* Meaning */
@@ -182,7 +182,6 @@
   --input: #3e3e38;
   --you: #1f1e1d;
   --bubble: #3a3936;
-  --bubble-line: color-mix(in srgb, var(--foreground) 16%, var(--bubble));
 
   --destructive: #f87171;
   /* Dark mode's red is a light tint, under white too pale: its muted Stop mixes from the deeper red. */
@@ -243,8 +242,9 @@
     40%, 100% { opacity: 0; scale: 2; }
   }
   /* A theme from tweakcn may name its own fonts (--app-font-*); with none, these. */
-  --font-sans: var(--pick-font-sans, var(--app-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif));
-  --font-mono: var(--pick-font-mono, var(--app-font-mono, ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace));
+  /* San Francisco on Apple devices; elsewhere the bundled Inter (its closest open cousin), never Roboto or Segoe by default. */
+  --font-sans: var(--pick-font-sans, var(--app-font-sans, -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif));
+  --font-mono: var(--pick-font-mono, var(--app-font-mono, "SF Mono", "SFMono-Regular", Menlo, "JetBrains Mono Variable", ui-monospace, Consolas, "Liberation Mono", monospace));
   /* Two steps under text-xs for dense UI: metadata, counters, key hints. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: calc(1 / 0.6875);
@@ -1120,22 +1120,22 @@
  */
 .bubble {
   --bubble-fill: var(--card);
-  --bubble-edge: color-mix(in srgb, var(--foreground) 20%, var(--card));
+  --bubble-edge: color-mix(in srgb, var(--foreground) 12%, var(--card));
   --bubble-ink: var(--foreground);
   --bubble-muted: var(--muted-foreground);
-  --bubble-faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
+  --bubble-faint: color-mix(in srgb, var(--muted-foreground) 78%, var(--background));
   --bubble-hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
   --bubble-well: color-mix(in srgb, var(--foreground) 11%, var(--card));
   --bubble-accent: var(--primary);
   --bubble-ehl: rgb(255 255 255 / 0.8);
-  --bubble-esh: rgb(40 40 70 / 0.26);
+  --bubble-esh: rgb(60 45 30 / 0.14);
   --bubble-hl: rgb(255 255 255 / 0.95);
   --bubble-sh: rgb(40 40 70 / 0.07);
   --bubble-press: inset 0 1.5px 2.5px -0.5px rgb(40 40 70 / 0.14), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   --bubble-press-deep: inset 0 2px 3.5px -0.5px rgb(40 40 70 / 0.2), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(40 40 70 / 0.07);
   --bubble-inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   --bubble-drop1: 0 1px 2px rgb(0 0 0 / 0.05);
-  --bubble-drop2: 0 4px 12px rgb(0 0 0 / 0.035);
+  --bubble-drop2: 0 12px 32px -12px rgb(60 45 30 / 0.16);
   --bubble-row-hl: rgb(255 255 255);
   --bubble-row-sh: rgb(40 40 70 / 0.09);
   /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px corners; 44px tall with 12px corners folded. */
@@ -1155,13 +1155,13 @@
 }
 .dark .bubble {
   --bubble-fill: var(--card);
-  --bubble-edge: color-mix(in srgb, var(--foreground) 25%, var(--background));
+  --bubble-edge: color-mix(in srgb, var(--foreground) 17%, var(--background));
   --bubble-muted: color-mix(in srgb, var(--muted-foreground) 75%, var(--foreground));
   --bubble-faint: color-mix(in srgb, var(--muted-foreground) 80%, var(--background));
   --bubble-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
   --bubble-well: rgb(0 0 0 / 0.3);
   --bubble-ehl: rgb(255 255 255 / 0.16);
-  --bubble-esh: rgb(0 0 0 / 0.65);
+  --bubble-esh: rgb(0 0 0 / 0.5);
   --bubble-hl: rgb(255 255 255 / 0.11);
   --bubble-sh: rgb(0 0 0 / 0.3);
   --bubble-press: inset 0 1.5px 2.5px -0.5px rgb(0 0 0 / 0.5), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(0 0 0 / 0.14);
@@ -1324,11 +1324,12 @@
   font-weight: 600;
   color: var(--bubble-muted);
 }
+/* Key hints: quiet, borderless caps that read as a whisper beside the send button, not as buttons. */
 .bubble-kbd {
   padding: 1px 5px;
-  border: 1px solid var(--bubble-edge);
-  border-radius: 6px;
-  background: var(--bubble-hover);
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bubble-ink) 6%, transparent);
   font-family: inherit;
   font-size: 11px;
   line-height: 1.3;
@@ -1509,7 +1510,8 @@
 /* The tools ride the fold: they fade and sink as it closes, and rise back as it opens, on the box's own curve. */
 .bubble-tools { transition: opacity 260ms ease 90ms, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); }
 .bubble[data-shrunk] .bubble-tools { opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 140ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); }
-.bubble-hints { display: flex; align-items: center; gap: 4px; margin-right: 8px; font-size: 11px; color: var(--bubble-muted); white-space: nowrap; }
+.bubble-hints { display: flex; align-items: center; gap: 4px; margin-right: 10px; font-size: 11px; color: var(--bubble-faint); white-space: nowrap; }
+.bubble-hints .bubble-kbd { color: var(--bubble-muted); }
 @container (max-width: 26rem) { .bubble-hints { display: none; } }
 
 /* Embedded buttons: they look pressed in on hover and while their menu is open, deeper while pressed. */

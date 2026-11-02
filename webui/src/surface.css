@@ -25,7 +25,7 @@
   --hl: rgb(255 255 255 / 0.95);
   --sh: rgb(40 40 70 / 0.07);
   --ehl: rgb(255 255 255 / 0.8);
-  --esh: rgb(40 40 70 / 0.26);
+  --esh: rgb(60 45 30 / 0.14);
   --tdsh: rgb(30 30 70 / 0.16);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
   --drop2: 0 8px 24px -6px rgb(60 45 30 / 0.09);
@@ -49,6 +49,7 @@
   --spring: cubic-bezier(0.34, 1.5, 0.5, 1);
   --out: cubic-bezier(0.22, 1, 0.36, 1);
 }
+.dark .cs-layer.cs-edge { --shape: var(--edge); }
 .dark {
   --hover: color-mix(in srgb, var(--foreground) 9%, transparent);
   --well: rgb(0 0 0 / 0.22);
@@ -59,7 +60,7 @@
   --hl: rgb(255 255 255 / 0.11);
   --sh: rgb(0 0 0 / 0.3);
   --ehl: rgb(255 255 255 / 0.16);
-  --esh: rgb(0 0 0 / 0.65);
+  --esh: rgb(0 0 0 / 0.5);
   --tdsh: rgb(0 0 0 / 0.45);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.35);
   --drop2: 0 6px 16px rgb(0 0 0 / 0.22);
@@ -106,7 +107,8 @@
 .cs-gt { left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); }
 .cs-gr { right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); }
 .cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
-.cs-layer.cs-edge { --shape: var(--edge); filter: url(#cs-bayedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2)); }
+/* The bays' rim: a neutral hairline a shade lighter than a card's, so the floating shapes read by their soft shadow first. */
+.cs-layer.cs-edge { --shape: color-mix(in srgb, var(--foreground) 9%, var(--page)); filter: url(#cs-bayedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2)); }
 .cs-layer.cs-fill { --shape: var(--fill); filter: url(#cs-baylit); }
 .cs-bb { flex: 1 1 auto; min-height: 0; background: var(--shape); }
 .cs-edge .cs-bb { box-shadow: 0 0 0 1px var(--shape); }
@@ -155,10 +157,11 @@
 .cs-snew { display: grid; place-items: center; width: 22px; height: 22px; margin-right: -6px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; outline: none; }
 .cs-snew:hover, .cs-snew:focus-visible { color: var(--foreground); }
 .cs-snew:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
-/* The shelf's label and its Archive all are small buttons with room for the hover outline. */
-.cs-shb { min-width: 0; margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: inherit; cursor: pointer; outline: none; }
-.cs-shb:hover, .cs-shb:focus-visible { color: var(--foreground); }
-.cs-shb:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+/* The shelf's label and its Archive all are small buttons with room for the hover outline (cs-shlb, not the
+   slide-over's cs-shb body, whose padding once pushed these labels down over the rows). */
+.cs-shlb { min-width: 0; margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: inherit; cursor: pointer; outline: none; }
+.cs-shlb:hover, .cs-shlb:focus-visible { color: var(--foreground); }
+.cs-shlb:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
 
 /* Hover in the sidebar draws a simple 1px outline round the item under the pointer, on top of its usual fill: a
    session row (it stays outlined while its own buttons are hovered), a row's Rename / Archive / Delete, the search
@@ -166,7 +169,7 @@
 .cs-sbx { --hover-line: color-mix(in srgb, var(--foreground) 22%, transparent); }
 .cs-sbx .cs-sr:not(.cs-search, .cs-tools):hover, .cs-sbx .cs-srow:hover > .cs-sr { box-shadow: inset 0 0 0 1px var(--hover-line); }
 .cs-sbx .cs-srow:hover > .cs-sr:is([aria-current="true"], [data-active="true"]), .cs-sbx .cs-sr:is([aria-current="true"], [aria-current="page"]):hover { box-shadow: var(--inset), inset 0 0 0 1px var(--hover-line); }
-.cs-sbx :is(.cs-sact, .cs-snew, .cs-shb):hover { box-shadow: inset 0 0 0 1px var(--hover-line); }
+.cs-sbx :is(.cs-sact, .cs-snew, .cs-shlb):hover { box-shadow: inset 0 0 0 1px var(--hover-line); }
 .cs-sbx .cs-iconbtn:hover:not(:disabled) { box-shadow: var(--press), inset 0 0 0 1px var(--hover-line); }
 
 /* An embedded icon button or chip: pressed in on hover and while its menu is open, deeper while pressed. */
@@ -252,22 +255,21 @@
 /* An agent's turn starts at a small dot in its colour, so its name never reads as a heading inside a message. */
 .chat-name { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--who, var(--foreground)) 78%, var(--foreground)); }
 .chat-agent { gap: 2px; }
-.chat-prose { font-size: 14px; line-height: 1.6; }
-.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 9px 15px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
-.cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
-.cs-umsg .cs-ue { --shape: var(--bubble-line); }
+/* Reading size for the conversation: 15px (13.5 at the desktop scale), the agents' Markdown included, never the
+   small UI size. */
+.chat-prose { font-size: 15px; line-height: 1.6; letter-spacing: -0.003em; }
+.chat-prose .md-body, .cs-umsg .md-body { font-size: inherit; line-height: inherit; }
+.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 9px 15px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 15px; line-height: 1.5; letter-spacing: -0.003em; }
+.cs-umsg .cs-uf { position: absolute; inset: 0; display: block; pointer-events: none; }
 .cs-umsg .cs-uf { --shape: var(--bubble); }
-/* A plain soft fill, no outline: the colour alone sets it off from the page, as in the best chat apps. */
-.cs-umsg .cs-ue { display: none; }
+/* A plain soft fill, no outline: the colour alone sets it off from the page. */
 .cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 16px 16px 8px 16px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
-.cs-ut-edge { display: none; }
 .cs-ut-fill { fill: var(--bubble); }
-.cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
 /* The @name or /command a message starts with: in its colour, bolder, running into the first line. */
-.cs-umsg .cs-lead { float: left; margin-right: 0.3em; font-weight: 650; }
+.cs-umsg .cs-lead { float: left; margin-right: 0.3em; font-weight: 600; font-size: inherit; line-height: inherit; }
 .cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
 @keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
 .cs-umsg[data-new] .cs-ut { animation: cs-um-tail 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; transform-origin: 0 100%; }
@@ -1015,8 +1017,9 @@
 .cs-knc[data-sel] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 55%, var(--edge)); }
 .cs-knc[data-drag] { opacity: 0.5; box-shadow: inset 0 0 0 1.5px var(--faint); }
 @keyframes cs-knin { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-.cs-knch { display: flex; align-items: center; gap: 7px; margin: 0 0 7px; font-size: 12px; color: var(--muted-foreground); min-height: 26px; }
-.cs-knd { flex: none; display: grid; place-items: center; width: 14px; margin-left: -6px; color: var(--faint); cursor: grab; opacity: 0; transition: opacity 102ms; }
+.cs-knch { display: flex; align-items: center; gap: 5px; margin: 0 0 7px; font-size: 12px; color: var(--muted-foreground); min-height: 26px; }
+/* The drag grip sits in the card's left padding, so the agent's name lines up with the note under it. */
+.cs-knd { position: absolute; left: 1px; top: 14px; height: 26px; display: grid; place-items: center; width: 14px; color: var(--faint); cursor: grab; opacity: 0; transition: opacity 102ms; }
 .cs-knc:hover .cs-knd, .cs-knc[data-drag] .cs-knd { opacity: 1; }
 .cs-kat { flex: none; width: 18px; height: 18px; border-radius: 8px; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 15%, transparent); }
 .cs-knch b { font-weight: 600; color: var(--c); }

@@ -13,7 +13,7 @@ export interface Typeface {
 }
 
 export const TEXT_FACES: readonly Typeface[] = [
-  { id: "theme", label: "System", help: "The system's own (or the colour theme's)" },
+  { id: "theme", label: "Default", help: "San Francisco on Apple devices, Inter elsewhere" },
   { id: "inter", label: "Inter", help: "Neutral and very legible" },
   { id: "geist", label: "Geist", help: "Crisp and modern" },
   { id: "plex", label: "IBM Plex Sans", help: "Technical, with character" },
@@ -28,7 +28,7 @@ export const TEXT_FACES: readonly Typeface[] = [
 ]
 
 export const CODE_FACES: readonly Typeface[] = [
-  { id: "theme", label: "System mono", help: "The system's own (or the colour theme's)" },
+  { id: "theme", label: "Default mono", help: "SF Mono on Apple devices, JetBrains Mono elsewhere" },
   { id: "jetbrains", label: "JetBrains Mono", help: "Tall, made for code" },
   { id: "geist-mono", label: "Geist Mono", help: "Pairs with Geist" },
   { id: "fira-code", label: "Fira Code", help: "Ligatures for operators" },
