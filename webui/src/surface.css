@@ -182,7 +182,8 @@
 
 .cs-kbd { padding: 1px 5px; border: 1px solid var(--edge); border-radius: 6px; background: var(--hover); font: inherit; font-size: 11px; line-height: 1.4; color: var(--muted-foreground); }
 
-/* The tab navigator: always open, every tab showing. */
+/* The tab navigator: always open, every tab showing. A tab (its hover and its chosen pill) sits 3px inside the bar,
+ * so its corner is the bar's less those 3px: concentric, the corners run parallel. */
 .cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--fi)); }
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
@@ -191,7 +192,7 @@
 .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
-.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 90ms ease, color 160ms ease; -webkit-tap-highlight-color: transparent; }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: calc(var(--float-r) - 3px); background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 90ms ease, color 160ms ease; -webkit-tap-highlight-color: transparent; }
 .cs-tab:hover { background: var(--hover); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
@@ -204,7 +205,7 @@
  * hand-off rather than two blinks. Only opacity and transform move (no
  * blur, no layout), so it stays on the compositor and never stutters. */
 .cs-tab::before {
-  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--r-in); pointer-events: none;
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
   --pill: color-mix(in srgb, var(--primary) 11%, color-mix(in srgb, var(--fill) 91%, #000));
   background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 95%, #000), var(--pill) 55%);
   /* A deeper dent than --press (a darker shade under the top edge, a lit lip at the bottom) and a very thin outline. */
