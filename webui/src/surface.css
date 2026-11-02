@@ -197,29 +197,34 @@
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
 .cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: calc(var(--float-r) + 1px); background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 90ms ease, color 160ms ease; -webkit-tap-highlight-color: transparent; }
-.cs-tab:hover { background: color-mix(in srgb, var(--foreground) 3.5%, transparent); color: var(--foreground); }
+.cs-tab:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
-/* The chosen tab's pill: a soft, neutral dent in the bay. Its fill is the page's own warm grey (no accent tint, which
- * read as muddy), a fine shade under the top rim, a hairline all round so its edge is crisp, and a faint lit lip at
- * the bottom. The accent lives only in the chosen tab's icon.
+/* The tab bar is a segmented control: the bay is a soft grey track and the chosen tab's pill a raised white key
+ * on it (a light top edge, a hairline, a short contact shadow and a soft drop), the same keycap language as the
+ * buttons. The accent lives only in the chosen tab's icon.
  * Choosing another tab is the poof: the old pill shrinks and fades out while the new one grows in, both at once.
  * Each hidden pill waits shifted toward the chosen tab (data-side: a tab left of it leans right, and the reverse), so
  * the old pill drifts toward the new tab as it fades and the new one grows in from the old tab's side: one fluid
  * hand-off rather than two blinks. Only opacity and transform move (no
  * blur, no layout), so it stays on the compositor and never stutters. */
+.cs-gt .cs-layer.cs-fill { --shape: color-mix(in srgb, var(--foreground) 5%, var(--page)); }
+.dark .cs-gt .cs-layer.cs-fill { --shape: color-mix(in srgb, #000 22%, var(--fill)); }
 .cs-tab::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-  --pill: color-mix(in srgb, var(--foreground) 6.5%, var(--page));
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 97%, #000), var(--pill) 55%);
-  box-shadow: var(--pill-dent);
-  --pill-dent: inset 0 1px 2px rgb(60 45 30 / 0.13), inset 0 0 0 0.5px rgb(60 45 30 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.75);
+  background: var(--key-face);
+  box-shadow: var(--key-lift);
+  --key-face: linear-gradient(to bottom, #fff, color-mix(in srgb, var(--foreground) 2%, #fff));
+  --key-lift: 0 0 0 0.5px rgb(60 45 30 / 0.14), 0 1px 1.5px rgb(60 45 30 / 0.1), 0 3px 8px -3px rgb(60 45 30 / 0.16), inset 0 1px 0 #fff;
   opacity: 0; transform: translateX(var(--px, 0px)) scale(0.9, 0.78);
   transition: opacity 150ms cubic-bezier(0.4, 0, 0.6, 1), transform 200ms var(--out);
   will-change: transform, opacity;
 }
-.dark .cs-tab::before { --pill: color-mix(in srgb, #000 30%, var(--fill)); --pill-dent: inset 0 1px 2.5px rgb(0 0 0 / 0.45), inset 0 0 0 0.5px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.06); }
+.dark .cs-tab::before {
+  --key-face: linear-gradient(to bottom, color-mix(in srgb, #fff 14%, var(--fill)), color-mix(in srgb, #fff 9%, var(--fill)));
+  --key-lift: 0 0 0 0.5px rgb(0 0 0 / 0.5), 0 1px 2px rgb(0 0 0 / 0.4), 0 3px 8px -3px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
 .cs-tab[data-side="l"]::before { --px: 9px; }
 .cs-tab[data-side="r"]::before { --px: -9px; }
 .cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; transition: opacity 120ms ease-out, transform 280ms cubic-bezier(0.3, 1.2, 0.5, 1); }
@@ -1108,13 +1113,14 @@
 .cs-secn { margin: 0 0 20px; }
 /* The sections switch wears the tab bar's look: a raised bay, each section as wide as its name, the current one
  * pressed into the bay and tinted. */
-.cs-secn .cs-seg { display: flex; gap: 2px; width: 100%; box-sizing: border-box; padding: 4px; border-radius: var(--float-r); background: var(--fill); box-shadow: var(--rs); }
+.cs-secn .cs-seg { display: flex; gap: 2px; width: 100%; box-sizing: border-box; padding: 4px; border-radius: var(--float-r); background: color-mix(in srgb, var(--foreground) 5%, var(--page)); box-shadow: var(--rs); }
+.dark .cs-secn .cs-seg { background: color-mix(in srgb, #000 22%, var(--fill)); }
 .cs-secn .cs-seg .cs-thumb { display: none; }
 .cs-secn .cs-seg button { flex: 1 1 auto; height: 30px; font-size: 13px; padding: 0 10px; border-radius: 10px; transition: color 102ms ease, background 136ms ease, box-shadow 136ms ease; }
-.cs-secn .cs-seg button:hover:not([data-on]) { background: var(--hover); }
-/* The current section wears the tab bar's pill. */
-.cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--foreground) 6.5%, var(--page)); box-shadow: inset 0 1px 2px rgb(60 45 30 / 0.13), inset 0 0 0 0.5px rgb(60 45 30 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.75); font-weight: 600; }
-.dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, #000 30%, var(--fill)); box-shadow: inset 0 1px 2.5px rgb(0 0 0 / 0.45), inset 0 0 0 0.5px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.06); }
+.cs-secn .cs-seg button:hover:not([data-on]) { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+/* The current section wears the tab bar's raised key. */
+.cs-secn .cs-seg button[data-on] { background: linear-gradient(to bottom, #fff, color-mix(in srgb, var(--foreground) 2%, #fff)); box-shadow: 0 0 0 0.5px rgb(60 45 30 / 0.14), 0 1px 1.5px rgb(60 45 30 / 0.1), 0 3px 8px -3px rgb(60 45 30 / 0.16), inset 0 1px 0 #fff; font-weight: 600; color: var(--foreground); }
+.dark .cs-secn .cs-seg button[data-on] { background: linear-gradient(to bottom, color-mix(in srgb, #fff 14%, var(--fill)), color-mix(in srgb, #fff 9%, var(--fill))); box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.5), 0 1px 2px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.1); }
 .cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: var(--r-out); background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 9px; }

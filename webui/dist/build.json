@@ -1,6 +1,6 @@
 {
-  "hash": "708ad009450d82c390cb97fd1911e4072c5081093d1afee2c4ad427a4cc264c2",
-  "builtAt": "2026-11-02T19:28:51.719Z",
+  "hash": "b28da90ec8721cb43fb521fe401d3176c6b182720bda16df300ae87a79af5238",
+  "builtAt": "2026-11-02T19:39:07.691Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "2024b6bb07009bd5d26d4449721ed00147c70a6458afc0386a44fd74c7b88ab9"
+      "sha256": "af6a6df8a90dce22ac99f3f56d6c1ffc4362f35f867c9e26b902c43bfb2f4272"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
