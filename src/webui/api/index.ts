@@ -18,7 +18,7 @@ import { tasksArchive, tasksArchived, tasksAuto, tasksComment, tasksComments, ta
 import { knowledgeAccept, knowledgeAdd, knowledgeAsk, knowledgeComment, knowledgeDismiss, knowledgeEdit, knowledgeFiles, knowledgeLedger, knowledgeMove, knowledgeOpen, knowledgePin, knowledgeRemove, knowledgeReplaceFile, knowledgeRestore, knowledgeUnnote } from "./knowledge.ts";
 import { plansDiscard, plansGet, plansStart } from "./plans.ts";
 import { sessionsAnswer, sessionsArchive, sessionsChat, sessionsDelete, sessionsList, sessionsMessage, sessionsRename, sessionsStart, sessionsStop, sessionsSwitch } from "./sessions.ts";
-import { settingsGet, settingsGrants, settingsHarnesses, settingsLinters, settingsSet } from "./settings.ts";
+import { settingsGet, settingsGrants, settingsHarnesses, settingsLintCreate, settingsLinters, settingsLintRule, settingsLintSetup, settingsSet } from "./settings.ts";
 import { lobbyRetention, lobbySetRetention } from "./retention.ts";
 import { terminalClose, terminalInput, terminalList, terminalOpen, terminalResize } from "./terminal.ts";
 import { MAX_INPUT_CHARS } from "../terminal.ts";
@@ -377,6 +377,17 @@ function buildRoutes(): Record<string, Route> {
     run: (body, ctx) => settingsSet(body as { patch: Record<string, unknown> }, ctx),
   };
   routes["settings.linters"] = { schema: Empty, run: (_body, ctx) => settingsLinters(ctx) };
+  routes["settings.lintSetup"] = { schema: Empty, run: (_body, ctx) => settingsLintSetup(ctx) };
+  routes["settings.lintRule"] = {
+    schema: Type.Object({
+      tool: Type.String({ minLength: 1, maxLength: 40 }),
+      folder: Type.String({ maxLength: 4096 }),
+      rule: Type.String({ minLength: 1, maxLength: 120 }),
+      level: Type.Union([Type.Literal("default"), Type.Literal("off"), Type.Literal("warn"), Type.Literal("error")]),
+    }, { additionalProperties: false }),
+    run: (body, ctx) => settingsLintRule(body as { tool: string; folder: string; rule: string; level: "default" | "off" | "warn" | "error" }, ctx),
+  };
+  routes["settings.lintCreate"] = { schema: Type.Object({ name: Type.String({ minLength: 1, maxLength: 60 }) }, { additionalProperties: false }), run: (body, ctx) => settingsLintCreate(body as { name: string }, ctx) };
   routes["settings.grants"] = { schema: Empty, run: (_body, ctx) => settingsGrants(ctx) };
   routes["settings.harnesses"] = { schema: Empty, run: (_body, ctx) => settingsHarnesses(ctx) };
   const ThemeId = Type.String({ minLength: 1, maxLength: 40 });

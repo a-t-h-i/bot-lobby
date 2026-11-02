@@ -190,6 +190,30 @@ export const LINT = {
   top: "project root",
 } as const
 
+/** The linting wizard under the lint gate's settings. */
+export const LINT_WIZARD = {
+  title: "Linter setup",
+  help: "Install the project's linters and switch their common rules. What they find reaches QA and completion through the lint gate.",
+  stepLinters: "Linters",
+  stepRules: "Rules",
+  recheck: "Check again",
+  noneFound: "No linter config found in the project or the folders a few levels below it.",
+  install: "Install it here",
+  add: "Add a linter",
+  addAnother: "Add another linter",
+  addHelp: "Run runs the command in a new terminal under the composer, where you can answer its questions.",
+  run: "Run",
+  copy: "Copy",
+  create: "Create",
+  created: (name: string) => `${name} created.`,
+  failed: "That did not save.",
+  noRules: "Add or install a linter first; its rules show here.",
+  which: "Linter",
+  openConfig: (path: string) => `Open ${path.split("/").pop()}`,
+  writesTo: (path: string) => `Switches write to ${path}. Default leaves the rule as the config or the linter has it.`,
+  rulesOf: (tool: string) => `${tool} rules`,
+} as const
+
 /** The classifier hosts. */
 export const JEV_HOST_ITEMS = [
   { id: "auto", label: "Auto (OpenCode's free Jev, else TypeSafe)" },

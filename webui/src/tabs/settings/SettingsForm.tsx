@@ -8,7 +8,7 @@
  * notification and install rows are page-only and never sent to the server.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { Brain, Check, ChevronRight, CircleAlert, CircleCheck, Download, Maximize, Minimize, Wrench } from "lucide-react"
+import { Brain, Check, ChevronRight, Download, Maximize, Minimize, Wrench } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen, useInstallPrompt, useInstalled } from "@/app/install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "@/app/notify"
@@ -27,6 +27,7 @@ import { Choice, Field, Rows, type ChoiceItem } from "./parts"
 import { ThemeGroup } from "./ThemeGroup"
 import { GrantsGroup, grantsLine, grantsOf } from "./GrantsGroup"
 import { HarnessesGroup } from "./HarnessesGroup"
+import { LintWizard } from "./LintWizard"
 import type { BotLobbyConfig, HarnessModel, HarnessStatus, SettingsClassifierModel, SettingsModelInfo } from "@protocol"
 import {
   AGENT_LABELS,
@@ -462,42 +463,10 @@ function WorkflowGroup({ config, save }: { config: Config; save: Save }) {
   )
 }
 
-/** Where a found linter's config sits, as the page says it. */
-const folderLabel = (folder: string): string => (folder ? `${folder}/` : LINT.top)
 
 /** Extensions as typed (`.ts tsx, *.py`) into the list the config keeps. */
 function extensionList(text: string): string[] {
   return text.split(/[\s,]+/).map((entry) => entry.trim()).filter(Boolean)
-}
-
-function FoundLinters({ replaced }: { replaced: boolean }) {
-  const read = useApiRead("settings.linters", {}, [])
-  const linters = read.data?.linters
-  return (
-    <Field label={LINT.found} help={replaced ? LINT.foundReplaced : LINT.foundHelp}>
-      {!linters ? (
-        <p className="break-words text-sm text-muted-foreground text-right">{read.error ? read.error : "Looking…"}</p>
-      ) : linters.length === 0 ? (
-        <p className="break-words text-sm text-muted-foreground text-right">{LINT.foundNone}</p>
-      ) : (
-        <ul aria-label={LINT.found} className={cn("flex flex-col items-end gap-1.5", replaced && "opacity-60")}>
-          {linters.map((linter) => (
-            <li key={`${linter.tool}:${linter.folder}`} className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
-              <span className="min-w-0 break-words font-medium">{linter.tool}</span>
-              <span className="min-w-0 break-words text-xs text-muted-foreground">{folderLabel(linter.folder)}</span>
-              <span
-                title={linter.installed ? undefined : LINT.missingHelp}
-                className={cn("inline-flex shrink-0 items-center gap-1 text-xs", linter.installed ? "text-success" : "text-warning")}
-              >
-                {linter.installed ? <CircleCheck aria-hidden="true" className="size-3.5" /> : <CircleAlert aria-hidden="true" className="size-3.5" />}
-                {linter.installed ? LINT.installed : LINT.missing}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Field>
-  )
 }
 
 function LintGroup({ config, save }: { config: Config; save: Save }) {
@@ -523,9 +492,9 @@ function LintGroup({ config, save }: { config: Config; save: Save }) {
           <Field label={LINT.timeout} help={LINT.timeoutHelp}>
             <MinutesField value={lint.timeoutMs} label={`Lint ${LINT.timeout.toLowerCase()}`} onSave={(ms) => void save({ lint: { timeoutMs: ms } })} />
           </Field>
-          <FoundLinters replaced={custom} />
         </div>
       </Rows>
+      <LintWizard replaced={custom} />
     </Section>
   )
 }

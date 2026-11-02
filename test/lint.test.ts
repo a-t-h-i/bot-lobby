@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, resolveConfig, type LintConfig } from "../src/schemas/configuration.ts";
 import { commandWords, findLinters, planLint, runPlan, type LintExec, type LintExecResult } from "../src/execution/lint.ts";
+import { lintSetup, setLintRule } from "../src/execution/lint-setup.ts";
 import { lintContext, lintFeed, lintHolds, lintNote, lintRefusal, lintSuppressions, runLintGate } from "../src/workflow/lint.ts";
 import { createTask, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
@@ -60,9 +61,9 @@ function fakeEslint(calls: string[][] = []): LintExec {
 }
 
 test("lint settings normalise: a known mode, extensions with dots, a bounded time limit", () => {
-  assert.deepEqual(DEFAULT_CONFIG.lint, { mode: "advise", command: "", extensions: [], timeoutMs: 120_000 }, "on by default, advising only");
+  assert.deepEqual(DEFAULT_CONFIG.lint, { mode: "advise", command: "", extensions: [], timeoutMs: 120_000, eslintRules: {} }, "on by default, advising only");
   const lint = resolveConfig({ lint: { mode: "block", command: "  ruff check {files}  ", extensions: ["ts", "*.PY", ".tsx", "ts", ""], timeoutMs: 90_000 } }).lint;
-  assert.deepEqual(lint, { mode: "block", command: "ruff check {files}", extensions: [".ts", ".py", ".tsx"], timeoutMs: 90_000 });
+  assert.deepEqual(lint, { mode: "block", command: "ruff check {files}", extensions: [".ts", ".py", ".tsx"], timeoutMs: 90_000, eslintRules: {} });
   assert.deepEqual(resolveConfig({ lint: { mode: "loud", timeoutMs: -5, extensions: "ts" } }).lint, DEFAULT_CONFIG.lint, "anything else keeps the defaults");
   assert.equal(resolveConfig({ lint: { timeoutMs: 10 * 60 * 60 * 1000 } }).lint.timeoutMs, 30 * 60 * 1000);
 });
@@ -343,4 +344,44 @@ test("lint off runs nothing", async () => {
   assert.doesNotMatch(implemented.message, /Lint/);
   assert.deepEqual(calls, []);
   assert.equal(loadTask(dir, ".pi", "TASK-1")!.lint, undefined);
+});
+
+test("the linting wizard switches rules where each linter reads them, and ESLint's reach its run as --rule flags", async () => {
+  const top = tempDir();
+  mkdirSync(join(top, "web"));
+  mkdirSync(join(top, "api"));
+  writeFileSync(join(top, "web", "biome.json"), '{\n  "linter": { "rules": { "style": { "useConst": { "level": "warn", "options": {} } } } }\n}\n');
+  writeFileSync(join(top, "api", "pyproject.toml"), '[tool.ruff]\nline-length = 100\n\n[tool.ruff.lint]\nselect = ["E", "F"]\n\n[tool.other]\nx = 1\n');
+  writeFileSync(join(top, "eslint.config.js"), "export default [];\n");
+  const none = { eslintRules: {} };
+  setLintRule(top, none, { tool: "Biome", folder: "web", rule: "style/useConst", level: "error" });
+  setLintRule(top, none, { tool: "Biome", folder: "web", rule: "suspicious/noConsole", level: "warn" });
+  const biome = JSON.parse(readFileSync(join(top, "web", "biome.json"), "utf8"));
+  assert.deepEqual(biome.linter.rules.style.useConst, { level: "error", options: {} }, "a rule's options are kept");
+  assert.equal(biome.linter.rules.suspicious.noConsole, "warn");
+  setLintRule(top, none, { tool: "Ruff", folder: "api", rule: "B", level: "error" });
+  setLintRule(top, none, { tool: "Ruff", folder: "api", rule: "E501", level: "off" });
+  const toml = readFileSync(join(top, "api", "pyproject.toml"), "utf8");
+  assert.match(toml, /\[tool\.ruff\.lint\]\nignore = \["E501"\]\nextend-select = \["B"\]\nselect = \["E", "F"\]\n\n\[tool\.other\]/, "only the lint table changes");
+  setLintRule(top, none, { tool: "Ruff", folder: "api", rule: "B", level: "default" });
+  assert.doesNotMatch(readFileSync(join(top, "api", "pyproject.toml"), "utf8"), /extend-select/, "an emptied list goes");
+  const eslint = setLintRule(top, none, { tool: "ESLint", folder: "", rule: "no-console", level: "error" });
+  assert.deepEqual(eslint.eslintRules, { "no-console": "error" }, "ESLint's config is code: never written");
+  assert.equal(readFileSync(join(top, "eslint.config.js"), "utf8"), "export default [];\n");
+  assert.throws(() => setLintRule(top, none, { tool: "Ruff", folder: "api", rule: "B", level: "warn" }), /no warn level/);
+  const setup = lintSetup(top, { eslintRules: eslint.eslintRules! });
+  const ruff = setup.linters.find((linter) => linter.tool === "Ruff")!;
+  assert.equal(ruff.config, "api/pyproject.toml");
+  assert.equal(ruff.rules.find((rule) => rule.id === "E501")?.level, "off");
+  assert.equal(setup.linters.find((linter) => linter.tool === "ESLint")?.rules.find((rule) => rule.id === "no-console")?.level, "error");
+  assert.deepEqual(setup.linters.find((linter) => linter.tool === "Biome")?.install, ["cd web && npm install -D -E @biomejs/biome"], "installs in its own folder");
+
+  mkdirSync(join(top, "node_modules", "eslint", "bin"), { recursive: true });
+  writeFileSync(join(top, "node_modules", "eslint", "package.json"), JSON.stringify({ bin: { eslint: "bin/eslint.js" } }));
+  writeFileSync(join(top, "node_modules", "eslint", "bin", "eslint.js"), "");
+  let args: readonly string[] = [];
+  const exec: LintExec = async (_command, given) => { args = given; return { code: 0, stdout: "[]", stderr: "" }; };
+  const [plan] = planLint(top, ["a.ts"], { command: "", extensions: [] });
+  await runPlan(plan!, top, { command: "", timeoutMs: 1000, eslintRules: { "no-console": "error" } }, exec);
+  assert.deepEqual(args.slice(1, 3), ["--rule", "no-console: error"]);
 });

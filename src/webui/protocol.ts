@@ -13,6 +13,8 @@ import type { TaskRow } from "../lobby/task-rows.ts";
 import type { PlanComment } from "../state/comments.ts";
 import type { BotLobbyConfig, PanelMember } from "../schemas/configuration.ts";
 import type { QaRiskAssessment } from "../schemas/task.ts";
+import type { LintSetup } from "../schemas/lint.ts";
+export type { LintRuleInfo, LintSetup, LintSetupLinter, LintSetupOffer, LintSetupStep, RuleChoice } from "../schemas/lint.ts";
 import type { MemberState, PanelNote, PanelQuestion, PlannerMessage } from "../lobby/planner.ts";
 import type { HarnessStatus } from "../harness/status.ts";
 import type { HarnessModel } from "../harness/catalog.ts";
@@ -561,6 +563,9 @@ export interface Api {
   "settings.get": { request: Record<string, never>; result: SettingsInfo };
   "settings.set": { request: { patch: Record<string, unknown> }; result: { config: BotLobbyConfig } };
   "settings.linters": { request: Record<string, never>; result: { linters: SettingsLinter[] } };
+  "settings.lintSetup": { request: Record<string, never>; result: LintSetup };
+  "settings.lintRule": { request: { tool: string; folder: string; rule: string; level: "default" | "off" | "warn" | "error" }; result: LintSetup };
+  "settings.lintCreate": { request: { name: string }; result: LintSetup };
   "settings.grants": { request: Record<string, never>; result: SettingsGrants };
   "settings.harnesses": { request: Record<string, never>; result: SettingsHarnesses };
   "themes.get": { request: Record<string, never>; result: ThemeStoreInfo };

@@ -12,6 +12,8 @@ import { kindLabel } from "../../pi/model-support.ts";
 import { pushNotice } from "../notices.ts";
 import type { SettingsGrants, SettingsHarnesses, SettingsInfo, SettingsLinter } from "../protocol.ts";
 import { harnessStatuses } from "../../harness/status.ts";
+import { createLintConfig, lintSetup, LintSetupError, setLintRule } from "../../execution/lint-setup.ts";
+import type { LintSetup, RuleChoice } from "../../schemas/lint.ts";
 import type { ApiContext } from "./index.ts";
 import { fail } from "./index.ts";
 
@@ -82,6 +84,43 @@ export function settingsGet(ctx: ApiContext): SettingsInfo {
 /** The linters the project configures (its top and a few folders below), and whether each is installed. */
 export function settingsLinters(ctx: ApiContext): { linters: SettingsLinter[] } {
   return { linters: ctx.service.linters?.() ?? [] };
+}
+
+const lintRoot = (ctx: ApiContext) => ctx.service.projectRoot?.() ?? process.cwd();
+
+/** The linting wizard: the linters found, their common rules, and how to install or add one. */
+export function settingsLintSetup(ctx: ApiContext): LintSetup {
+  return lintSetup(lintRoot(ctx), readConfig(ctx).lint, ctx.service.linters?.());
+}
+
+/** Switch one of a linter's common rules: in its config file, or (ESLint) in the gate's own rules. */
+export function settingsLintRule(body: { tool: string; folder: string; rule: string; level: RuleChoice }, ctx: ApiContext): LintSetup {
+  const config = readConfig(ctx);
+  try {
+    const result = setLintRule(lintRoot(ctx), config.lint, body);
+    if (result.eslintRules) {
+      // Replaced whole, not merged, so a rule set back to the project's default is gone.
+      const next = resolveConfig({ ...config, lint: { ...config.lint, eslintRules: result.eslintRules } });
+      writeConfig(ctx, next);
+      ctx.service.configChanged?.();
+      lobbyTopics.bump("status");
+    }
+  } catch (error) {
+    if (error instanceof LintSetupError) fail(409, "conflict", error.message);
+    throw error;
+  }
+  return settingsLintSetup(ctx);
+}
+
+/** Write a starter config the wizard offers (ruff.toml). */
+export function settingsLintCreate(body: { name: string }, ctx: ApiContext): LintSetup {
+  try {
+    createLintConfig(lintRoot(ctx), body.name);
+  } catch (error) {
+    if (error instanceof LintSetupError) fail(409, "conflict", error.message);
+    throw error;
+  }
+  return settingsLintSetup(ctx);
 }
 
 /** The MCP tools and skills pi offers now, for each agent's grants. */
