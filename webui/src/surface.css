@@ -294,45 +294,174 @@
 .cs-wlines { padding: 2px 0 4px; display: flex; flex-direction: column; gap: 2px; }
 .cs-wl { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground); }
 .cs-wl b { margin-right: 2px; font-weight: 600; color: var(--foreground); }
-/* Each role's working word (tabs/lobby/RoleWord.tsx): the shimmer in the agent's colour (--tone) and one small motion
-   that acts out the job, drawn on an overlay (.cs-rw-o) so the word itself never moves. Only the oracle and an
-   unnamed agent keep the trailing dots; the others' motion says "still going" instead. */
+/* Each agent's working indicators (tabs/lobby/RoleWord.tsx): the shimmer in the agent's colour (--tone) and one small
+   motion that acts out the job, drawn on an overlay (.cs-rw-o) so the word itself barely moves. Every role has five
+   (data-fx), swapped at random every 30 to 60 seconds; a new one fades in. Only "dots" keeps the trailing dots. */
 .cs-rw { position: relative; display: inline-flex; align-items: center; flex: none; }
-.cs-rw-o { position: absolute; inset: 0; pointer-events: none; }
+.cs-rw-o { position: absolute; inset: 0; pointer-events: none; animation: cs-fxin 420ms var(--out) both; }
 .cs-rw-o::before, .cs-rw-o::after { content: ""; position: absolute; }
-.cs-rw:not([data-role="oracle"], [data-role="agent"]) .cs-wtx::after, .cs-rw-name .cs-wtx::after { display: none; }
-/* Oracle: the word glows softly, like a lamp turned up and down. */
-.cs-rw[data-role="oracle"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-lamp 2.4s ease-in-out infinite; }
+.cs-rw .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-fxin 420ms var(--out) both; }
+.cs-rw:not([data-fx="dots"]) .cs-wtx::after, .cs-rw-name .cs-wtx::after { display: none; }
+@keyframes cs-fxin { from { opacity: 0; } }
+/* Shared motions. */
+@keyframes cs-reveal { 0% { clip-path: inset(0 100% 0 0); } 75%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes cs-drop { 0% { clip-path: inset(0 0 100% 0); } 75%, 100% { clip-path: inset(0 0 0 0); } }
+@keyframes cs-sketch { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 50%, 82% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@keyframes cs-close-l { 0%, 100% { translate: -4px 0; opacity: 0.35; } 50% { translate: 0 0; opacity: 1; } }
+@keyframes cs-close-r { 0%, 100% { translate: 4px 0; opacity: 0.35; } 50% { translate: 0 0; opacity: 1; } }
+@keyframes cs-blink { 50% { opacity: 0; } }
+@keyframes cs-tick { 0%, 55% { opacity: 0; scale: 0.3; } 68%, 90% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
+
+/* Oracle. lamp: the word glows like a lamp turned up and down. */
+.cs-rw[data-fx="lamp"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-lamp 2.4s ease-in-out infinite, cs-fxin 420ms var(--out) both; }
 @keyframes cs-lamp { 0%, 100% { filter: none; } 50% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--tone) 60%, transparent)); } }
-/* Panel: a dotted route draws under the word a step at a time, then starts over. */
-.cs-rw[data-role="planner"] .cs-rw-o::after { left: 0; right: 0; bottom: -3px; height: 3px; background: radial-gradient(circle, var(--tone) 1px, transparent 1.4px) 0 50% / 6px 3px repeat-x; animation: cs-route 2.4s steps(6, jump-none) infinite; }
+/* ripple: soft rings spread out from the word, like a thought going round. */
+.cs-rw[data-fx="ripple"] .cs-rw-o::before, .cs-rw[data-fx="ripple"] .cs-rw-o::after { left: -6px; right: -6px; top: 50%; height: 20px; margin-top: -10px; border-radius: 8px; border: 1px solid var(--tone); opacity: 0; animation: cs-ripple 2.8s ease-out infinite; }
+.cs-rw[data-fx="ripple"] .cs-rw-o::after { animation-delay: 1.4s; }
+@keyframes cs-ripple { 0% { scale: 0.85; opacity: 0.55; } 100% { scale: 1.15 1.5; opacity: 0; } }
+/* twinkle: a four-point star turns and brightens after the word. */
+.cs-rw[data-fx="twinkle"] { padding-right: 15px; }
+.cs-rw[data-fx="twinkle"] .cs-rw-o::after { right: 0; top: 50%; width: 10px; height: 10px; margin-top: -6px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 0 6 4 10 5 6 6 5 10 4 6 0 5 4 4Z'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M5 0 6 4 10 5 6 6 5 10 4 6 0 5 4 4Z'/%3E%3C/svg%3E") center / contain no-repeat; animation: cs-twinkle 2.6s ease-in-out infinite; }
+@keyframes cs-twinkle { 0%, 100% { scale: 0.5; rotate: 0deg; opacity: 0.4; } 50% { scale: 1; rotate: 90deg; opacity: 1; } }
+/* breathe: the word swells a touch and settles, slowly. */
+.cs-rw[data-fx="breathe"] .cs-wtx { transform-origin: 0 50%; animation: cs-wshim 1.6s linear infinite, cs-breathe 3.2s ease-in-out infinite, cs-fxin 420ms var(--out) both; }
+@keyframes cs-breathe { 0%, 100% { scale: 1; } 50% { scale: 1.04; } }
+/* focus: the word drifts softly out of focus and back in. */
+.cs-rw[data-fx="focus"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-focus 3.4s ease-in-out infinite, cs-fxin 420ms var(--out) both; }
+@keyframes cs-focus { 0%, 55%, 100% { filter: none; } 25% { filter: blur(1.2px); } }
+
+/* Panel. route: a dotted route draws under the word a step at a time. */
+.cs-rw[data-fx="route"] .cs-rw-o::after { left: 0; right: 0; bottom: -3px; height: 3px; background: radial-gradient(circle, var(--tone) 1px, transparent 1.4px) 0 50% / 6px 3px repeat-x; animation: cs-route 2.4s steps(6, jump-none) infinite; }
 @keyframes cs-route { 0% { clip-path: inset(0 100% 0 0); } 75%, 100% { clip-path: inset(0 0 0 0); } }
-/* Scout: a small lens with its handle sweeps across the word and back. */
-.cs-rw[data-role="scout"] .cs-rw-o::after { top: 50%; left: 0; width: 12px; height: 12px; margin-top: -7px; border-radius: 50%; border: 1.5px solid var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); animation: cs-lens 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
-.cs-rw[data-role="scout"] .cs-rw-o::before { top: 50%; left: 0; width: 5px; height: 1.5px; margin-top: 5px; border-radius: 1px; background: var(--tone); transform-origin: 0 50%; rotate: 45deg; translate: 10px 0; animation: cs-lens-h 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+/* outline: three lines of an outline appear one by one before the word. */
+.cs-rw[data-fx="outline"] { padding-left: 16px; }
+.cs-rw[data-fx="outline"] .cs-rw-o::before { left: 0; top: 50%; width: 11px; height: 10px; margin-top: -5px; background: linear-gradient(var(--tone), var(--tone)) 0 0 / 100% 1.5px, linear-gradient(var(--tone), var(--tone)) 3px 4px / 8px 1.5px, linear-gradient(var(--tone), var(--tone)) 3px 8px / 6px 1.5px; background-repeat: no-repeat; animation: cs-drop 2.4s steps(3, jump-none) infinite; }
+/* fork: a line under the word splits into two paths. */
+.cs-rw[data-fx="fork"] .cs-rw-o::after { left: 0; right: 0; bottom: -6px; height: 6px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 6' preserveAspectRatio='none'%3E%3Cpath d='M1 3H28C38 3 40 1 59 1M28 3C38 3 40 5 59 5' fill='none' stroke='%23000' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 6' preserveAspectRatio='none'%3E%3Cpath d='M1 3H28C38 3 40 1 59 1M28 3C38 3 40 5 59 5' fill='none' stroke='%23000' stroke-width='1.3' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; animation: cs-sketch 2.8s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+/* brackets (panel) and braces (dev): a pair closes in around the word and eases back out. */
+.cs-rw:is([data-fx="brackets"], [data-fx="braces"]) { padding-inline: 9px; }
+.cs-rw:is([data-fx="brackets"], [data-fx="braces"]) .cs-rw-o::before, .cs-rw:is([data-fx="brackets"], [data-fx="braces"]) .cs-rw-o::after { top: 50%; translate: 0 0; line-height: 1; margin-top: -0.55em; font-weight: 500; color: var(--tone); }
+.cs-rw[data-fx="brackets"] .cs-rw-o::before { content: "["; left: 0; animation: cs-close-l 2.2s ease-in-out infinite; }
+.cs-rw[data-fx="brackets"] .cs-rw-o::after { content: "]"; right: 0; animation: cs-close-r 2.2s ease-in-out infinite; }
+.cs-rw[data-fx="braces"] .cs-rw-o::before { content: "{"; left: 0; animation: cs-close-l 2.2s ease-in-out infinite; }
+.cs-rw[data-fx="braces"] .cs-rw-o::after { content: "}"; right: 0; animation: cs-close-r 2.2s ease-in-out infinite; }
+/* stairs: a staircase climbs before the word, a step at a time. */
+.cs-rw[data-fx="stairs"] { padding-left: 16px; }
+.cs-rw[data-fx="stairs"] .cs-rw-o::before { left: 0; top: 50%; width: 11px; height: 10px; margin-top: -5px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 10'%3E%3Cpath d='M1 9H4V6H7V3H10V1' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 10'%3E%3Cpath d='M1 9H4V6H7V3H10V1' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; animation: cs-reveal 2.4s steps(3, jump-none) infinite; }
+
+/* Scout. lens: a small lens with its handle sweeps across the word and back. */
+.cs-rw[data-fx="lens"] .cs-rw-o::after { top: 50%; left: 0; width: 12px; height: 12px; margin-top: -7px; border-radius: 50%; border: 1.5px solid var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); animation: cs-lens 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+.cs-rw[data-fx="lens"] .cs-rw-o::before { top: 50%; left: 0; width: 5px; height: 1.5px; margin-top: 5px; border-radius: 1px; background: var(--tone); transform-origin: 0 50%; rotate: 45deg; translate: 10px 0; animation: cs-lens 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
 @keyframes cs-lens { from { left: -3px; } to { left: calc(100% - 9px); } }
-@keyframes cs-lens-h { from { left: -3px; } to { left: calc(100% - 9px); } }
-/* Research: a little book before the word turns its pages. */
-.cs-rw[data-role="research"] { padding-left: 17px; }
-.cs-rw[data-role="research"] .cs-rw-o::before { left: 0; top: 50%; width: 12px; height: 10px; margin-top: -5px; border: 1.5px solid var(--tone); border-radius: 2px; background: linear-gradient(var(--tone), var(--tone)) 50% 0 / 1.5px 100% no-repeat; }
-.cs-rw[data-role="research"] .cs-rw-o::after { left: 6px; top: 50%; width: 5px; height: 8px; margin-top: -4px; border-radius: 0 1px 1px 0; background: color-mix(in srgb, var(--tone) 55%, transparent); transform-origin: 0 50%; animation: cs-page 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+/* radar: a sweep goes round a small scope before the word. */
+.cs-rw[data-fx="radar"] { padding-left: 18px; }
+.cs-rw[data-fx="radar"] .cs-rw-o::before { left: 0; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--tone) 45%, transparent); }
+.cs-rw[data-fx="radar"] .cs-rw-o::after { left: 0; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 270deg, color-mix(in srgb, var(--tone) 70%, transparent) 360deg); animation: cs-spin 1.8s linear infinite; }
+@keyframes cs-spin { to { rotate: 360deg; } }
+/* sonar: arcs travel out from before the word. */
+.cs-rw[data-fx="sonar"] { padding-left: 16px; }
+.cs-rw[data-fx="sonar"] .cs-rw-o::before, .cs-rw[data-fx="sonar"] .cs-rw-o::after { left: 0; top: 50%; width: 10px; height: 12px; margin-top: -6px; border-radius: 50%; border-right: 1.5px solid var(--tone); opacity: 0; animation: cs-sonar 2s ease-out infinite; }
+.cs-rw[data-fx="sonar"] .cs-rw-o::after { animation-delay: 1s; }
+@keyframes cs-sonar { 0% { translate: -4px 0; scale: 0.5; opacity: 0.9; } 100% { translate: 2px 0; scale: 1.1; opacity: 0; } }
+/* spotlight: a soft pool of light drifts over the word. */
+.cs-rw[data-fx="spotlight"] .cs-rw-o::after { top: -3px; bottom: -3px; left: 0; width: 22px; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--tone) 28%, transparent), transparent); animation: cs-spot 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+@keyframes cs-spot { from { left: -8px; } to { left: calc(100% - 14px); } }
+/* needle: a compass needle swings and settles before the word. */
+.cs-rw[data-fx="needle"] { padding-left: 18px; }
+.cs-rw[data-fx="needle"] .cs-rw-o::before { left: 0; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--tone) 45%, transparent); }
+.cs-rw[data-fx="needle"] .cs-rw-o::after { left: 5.25px; top: 50%; width: 1.5px; height: 8px; margin-top: -4px; border-radius: 1px; background: linear-gradient(var(--tone) 50%, color-mix(in srgb, var(--tone) 35%, transparent) 50%); animation: cs-needle 2.8s cubic-bezier(0.34, 1.5, 0.5, 1) infinite; }
+@keyframes cs-needle { 0%, 100% { rotate: -40deg; } 30% { rotate: 35deg; } 55% { rotate: -12deg; } 75% { rotate: 8deg; } }
+
+/* Research. page: a little book before the word turns its pages. */
+.cs-rw[data-fx="page"] { padding-left: 17px; }
+.cs-rw[data-fx="page"] .cs-rw-o::before { left: 0; top: 50%; width: 12px; height: 10px; margin-top: -5px; border: 1.5px solid var(--tone); border-radius: 2px; background: linear-gradient(var(--tone), var(--tone)) 50% 0 / 1.5px 100% no-repeat; }
+.cs-rw[data-fx="page"] .cs-rw-o::after { left: 6px; top: 50%; width: 5px; height: 8px; margin-top: -4px; border-radius: 0 1px 1px 0; background: color-mix(in srgb, var(--tone) 55%, transparent); transform-origin: 0 50%; animation: cs-page 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
 @keyframes cs-page { 0%, 15% { transform: perspective(24px) rotateY(0deg); } 65%, 100% { transform: perspective(24px) rotateY(-180deg); } }
-/* Dev: the word types itself out behind a caret, rests, and is typed again. */
-.cs-rw[data-role="dev"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-type 3s steps(var(--n), jump-none) infinite; }
-.cs-rw[data-role="dev"] .cs-rw-o::after { top: 15%; bottom: 10%; left: 0; width: 1.5px; margin-left: 1px; border-radius: 1px; background: var(--tone); animation: cs-caret 3s steps(var(--n), jump-none) infinite, cs-blink 0.5s steps(1, end) infinite alternate; }
+/* bookmark: a ribbon drops in after the word, holds, and lifts away. */
+.cs-rw[data-fx="bookmark"] { padding-right: 12px; }
+.cs-rw[data-fx="bookmark"] .cs-rw-o::after { right: 0; top: 50%; width: 7px; height: 11px; margin-top: -6px; background: var(--tone); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); animation: cs-ribbon 2.6s var(--spring) infinite; }
+@keyframes cs-ribbon { 0% { translate: 0 -6px; opacity: 0; } 25%, 80% { translate: 0 0; opacity: 1; } 100% { translate: 0 -3px; opacity: 0; } }
+/* highlight: a marker runs along the word, holds, and fades. */
+.cs-rw[data-fx="highlight"] .cs-rw-o::after { left: -2px; right: -2px; bottom: 1px; height: 45%; border-radius: 2px; background: color-mix(in srgb, var(--tone) 22%, transparent); animation: cs-sketch 2.8s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+/* skim: a short line runs under the word, the way eyes run along a line. */
+.cs-rw[data-fx="skim"] .cs-rw-o::after { left: 0; bottom: -3px; width: 30%; height: 1.5px; border-radius: 1px; background: var(--tone); animation: cs-skim 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+@keyframes cs-skim { 0% { left: 0; opacity: 0; } 15% { opacity: 1; } 80% { opacity: 1; } 100% { left: 70%; opacity: 0; } }
+/* riffle: a stack of pages before the word, its top sheet flicked up again and again. */
+.cs-rw[data-fx="riffle"] { padding-left: 17px; }
+.cs-rw[data-fx="riffle"] .cs-rw-o::before { left: 0; top: 50%; width: 9px; height: 11px; margin-top: -5px; border-radius: 1.5px; box-shadow: inset 0 0 0 1.25px var(--tone), 2px -2px 0 -0.5px color-mix(in srgb, var(--tone) 45%, transparent); }
+.cs-rw[data-fx="riffle"] .cs-rw-o::after { left: 2px; top: 50%; width: 5px; height: 1.25px; margin-top: 3px; border-radius: 1px; background: var(--tone); animation: cs-riffle 1.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+@keyframes cs-riffle { 0% { translate: 0 0; opacity: 1; } 70% { translate: 0 -6px; opacity: 0.2; } 100% { translate: 0 -6px; opacity: 0; } }
+
+/* Dev. type: the word types itself out behind a caret, rests, and is typed again. */
+.cs-rw[data-fx="type"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-type 3s steps(var(--n), jump-none) infinite; }
+.cs-rw[data-fx="type"] .cs-rw-o::after { top: 15%; bottom: 10%; left: 0; width: 1.5px; margin-left: 1px; border-radius: 1px; background: var(--tone); animation: cs-caret 3s steps(var(--n), jump-none) infinite, cs-blink 0.5s steps(1, end) infinite alternate; }
 @keyframes cs-type { 0% { clip-path: inset(0 100% 0 0); } 55%, 100% { clip-path: inset(0 0 0 0); } }
 @keyframes cs-caret { 0% { left: 0; } 55%, 100% { left: 100%; } }
-@keyframes cs-blink { 50% { opacity: 0; } }
-/* QA: a scan line sweeps over the word, then a tick pops in after it. */
-.cs-rw[data-role="qa"] { padding-right: 15px; }
-.cs-rw[data-role="qa"] .cs-rw-o::after { top: -2px; bottom: -2px; left: 0; width: 2px; border-radius: 1px; background: var(--tone); box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 70%, transparent); animation: cs-scan 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
-.cs-rw[data-role="qa"] .cs-rw-o::before { right: 0; top: 50%; width: 9px; height: 5px; margin-top: -4px; border-left: 1.75px solid var(--tone); border-bottom: 1.75px solid var(--tone); rotate: -45deg; animation: cs-tick 2.2s var(--spring) infinite; }
+/* block: a terminal's block cursor blinks after the word. */
+.cs-rw[data-fx="block"] { padding-right: 11px; }
+.cs-rw[data-fx="block"] .cs-rw-o::after { right: 0; top: 50%; width: 7px; height: 13px; margin-top: -7px; border-radius: 1.5px; background: color-mix(in srgb, var(--tone) 75%, transparent); animation: cs-blink 1.05s steps(1, end) infinite; }
+/* build: a progress bar fills in steps under the word, then clears. */
+.cs-rw[data-fx="build"] .cs-rw-o::before { left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 1px; background: color-mix(in srgb, var(--tone) 18%, transparent); }
+.cs-rw[data-fx="build"] .cs-rw-o::after { left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 1px; background: var(--tone); animation: cs-sketch 2.6s steps(7, jump-none) infinite; }
+/* code: indented lines of code are written before the word, one under another. */
+.cs-rw[data-fx="code"] { padding-left: 16px; }
+.cs-rw[data-fx="code"] .cs-rw-o::before { left: 0; top: 50%; width: 11px; height: 10px; margin-top: -5px; background: linear-gradient(var(--tone), var(--tone)) 0 0 / 7px 1.5px, linear-gradient(var(--tone), var(--tone)) 3px 4px / 8px 1.5px, linear-gradient(var(--tone), var(--tone)) 3px 8px / 5px 1.5px; background-repeat: no-repeat; animation: cs-drop 2.1s steps(3, jump-none) infinite; }
+.cs-rw[data-fx="code"] .cs-rw-o::after { left: 0; top: 50%; width: 1.25px; height: 6px; margin-top: -1px; background: color-mix(in srgb, var(--tone) 45%, transparent); }
+
+/* QA. scan: a scan line sweeps over the word, then a tick pops in after it. */
+.cs-rw[data-fx="scan"] { padding-right: 15px; }
+.cs-rw[data-fx="scan"] .cs-rw-o::after { top: -2px; bottom: -2px; left: 0; width: 2px; border-radius: 1px; background: var(--tone); box-shadow: 0 0 6px color-mix(in srgb, var(--tone) 70%, transparent); animation: cs-scan 2.2s cubic-bezier(0.45, 0, 0.55, 1) infinite; }
+.cs-rw[data-fx="scan"] .cs-rw-o::before { right: 0; top: 50%; width: 9px; height: 5px; margin-top: -4px; border-left: 1.75px solid var(--tone); border-bottom: 1.75px solid var(--tone); rotate: -45deg; animation: cs-tick 2.2s var(--spring) infinite; }
 @keyframes cs-scan { 0% { left: 0; opacity: 0; } 8% { opacity: 1; } 55% { left: calc(100% - 15px); opacity: 1; } 62%, 100% { left: calc(100% - 15px); opacity: 0; } }
-@keyframes cs-tick { 0%, 55% { opacity: 0; scale: 0.3; } 68%, 90% { opacity: 1; scale: 1; } 100% { opacity: 0; scale: 1; } }
-/* Design: a freehand line is sketched under the word, held, and sketched again. */
-.cs-rw[data-role="design"] .cs-rw-o::after { left: -1px; right: -1px; bottom: -4px; height: 4px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; animation: cs-sketch 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
-@keyframes cs-sketch { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 50%, 82% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .cs-wtx, .cs-rw .cs-wtx { animation: none; color: var(--foreground); background: none; clip-path: none; filter: none; } .cs-wtx::after { content: "…"; animation: none; } .cs-rw-o { display: none; } .cs-rw[data-role] { padding: 0; } }
+/* frame: viewfinder corners close in on the word and open again. */
+.cs-rw[data-fx="frame"] .cs-rw-o::before, .cs-rw[data-fx="frame"] .cs-rw-o::after { width: 6px; height: 6px; border: 0 solid var(--tone); animation: cs-frame 2.4s ease-in-out infinite; }
+.cs-rw[data-fx="frame"] .cs-rw-o::before { left: -5px; top: -2px; border-width: 1.5px 0 0 1.5px; border-top-left-radius: 2px; }
+.cs-rw[data-fx="frame"] .cs-rw-o::after { right: -5px; bottom: -2px; border-width: 0 1.5px 1.5px 0; border-bottom-right-radius: 2px; --dir: -1; }
+@keyframes cs-frame { 0%, 100% { translate: calc(var(--dir, 1) * -3px) calc(var(--dir, 1) * -3px); opacity: 0.4; } 50% { translate: 0 0; opacity: 1; } }
+/* pulse: a heartbeat line is traced after the word. */
+.cs-rw[data-fx="pulse"] { padding-right: 19px; }
+.cs-rw[data-fx="pulse"] .cs-rw-o::after { right: 0; top: 50%; width: 14px; height: 10px; margin-top: -5px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10'%3E%3Cpath d='M0 5.5H4L6 1.5 8 8.5 10 5.5H14' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 10'%3E%3Cpath d='M0 5.5H4L6 1.5 8 8.5 10 5.5H14' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; animation: cs-sketch 1.6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+/* tests: three checks under the word pass one after another. */
+.cs-rw[data-fx="tests"] .cs-rw-o::before { left: 0; right: 0; bottom: -4px; height: 2px; background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 18%, transparent) 0 30%, transparent 30% 35%, color-mix(in srgb, var(--tone) 18%, transparent) 35% 65%, transparent 65% 70%, color-mix(in srgb, var(--tone) 18%, transparent) 70%); }
+.cs-rw[data-fx="tests"] .cs-rw-o::after { left: 0; right: 0; bottom: -4px; height: 2px; background: linear-gradient(90deg, var(--tone) 0 30%, transparent 30% 35%, var(--tone) 35% 65%, transparent 65% 70%, var(--tone) 70%); animation: cs-sketch 2.4s steps(3, jump-none) infinite; }
+/* stamp: a tick in a box is stamped after the word. */
+.cs-rw[data-fx="stamp"] { padding-right: 19px; }
+.cs-rw[data-fx="stamp"] .cs-rw-o::after { right: 0; top: 50%; width: 13px; height: 13px; margin-top: -7px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--tone); animation: cs-stamp 2.4s var(--spring) infinite; }
+.cs-rw[data-fx="stamp"] .cs-rw-o::before { right: 3.5px; top: 50%; width: 6px; height: 3.5px; margin-top: -3px; border-left: 1.5px solid var(--tone); border-bottom: 1.5px solid var(--tone); rotate: -45deg; animation: cs-tick 2.4s var(--spring) infinite; }
+@keyframes cs-stamp { 0%, 40% { scale: 1.6; opacity: 0; } 55%, 90% { scale: 1; opacity: 1; } 100% { scale: 1; opacity: 0; } }
+
+/* Design. sketch: a freehand line is sketched under the word, held, and sketched again. */
+.cs-rw[data-fx="sketch"] .cs-rw-o::after { left: -1px; right: -1px; bottom: -4px; height: 4px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 4' preserveAspectRatio='none'%3E%3Cpath d='M1 2.6C8 1 14 3.4 21 2.2S34 1 41 2.6 53 3.2 59 1.6' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat; animation: cs-sketch 2.6s cubic-bezier(0.5, 0, 0.3, 1) infinite; }
+/* swatch: a strip of three shades fans out before the word and folds back. */
+.cs-rw[data-fx="swatch"] { padding-left: 20px; }
+.cs-rw[data-fx="swatch"] .cs-rw-o::before { left: 0; top: 50%; width: 15px; height: 9px; margin-top: -5px; border-radius: 2.5px; background: linear-gradient(90deg, var(--tone) 0 33%, color-mix(in srgb, var(--tone) 60%, transparent) 33% 66%, color-mix(in srgb, var(--tone) 28%, transparent) 66%); transform-origin: 0 50%; animation: cs-swatch 2.6s var(--spring) infinite; }
+@keyframes cs-swatch { 0%, 100% { scale: 0.34 1; } 35%, 75% { scale: 1 1; } }
+/* grid: a layout grid fades in behind the word and away. */
+.cs-rw[data-fx="grid"] .cs-rw-o::after { inset: -3px -5px; border-radius: 3px; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--tone) 22%, transparent) 0 1px, transparent 1px 7px), repeating-linear-gradient(0deg, color-mix(in srgb, var(--tone) 22%, transparent) 0 1px, transparent 1px 7px); animation: cs-grid 3s ease-in-out infinite; }
+@keyframes cs-grid { 0%, 100% { opacity: 0; } 45%, 60% { opacity: 1; } }
+/* wave: a soft wave flows along under the word. */
+.cs-rw[data-fx="wave"] .cs-rw-o::after { left: 0; right: 0; bottom: -5px; height: 4px; background: var(--tone); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4'%3E%3Cpath d='M0 2C3 0 3 0 6 2S9 4 12 2' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3C/svg%3E") 0 0 / 12px 4px repeat-x; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 4'%3E%3Cpath d='M0 2C3 0 3 0 6 2S9 4 12 2' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3C/svg%3E") 0 0 / 12px 4px repeat-x; animation: cs-wave 1.2s linear infinite; }
+@keyframes cs-wave { to { -webkit-mask-position: 12px 0; mask-position: 12px 0; } }
+/* ruler: a marker slides along a ruler under the word. */
+.cs-rw[data-fx="ruler"] .cs-rw-o::before { left: 0; right: 0; bottom: -4px; height: 3px; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--tone) 45%, transparent) 0 1px, transparent 1px 5px); }
+.cs-rw[data-fx="ruler"] .cs-rw-o::after { left: 0; bottom: -5px; width: 1.5px; height: 6px; border-radius: 1px; background: var(--tone); animation: cs-ruler 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+@keyframes cs-ruler { from { left: 0; } to { left: calc(100% - 1.5px); } }
+
+/* Any other agent. dots: the word's trailing dots count up (the base .cs-wtx::after). */
+/* glide: a short line glides back and forth under the word. */
+.cs-rw[data-fx="glide"] .cs-rw-o::after { left: 0; bottom: -3px; width: 25%; height: 1.5px; border-radius: 1px; background: var(--tone); animation: cs-glide 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate; }
+@keyframes cs-glide { from { left: 0; } to { left: 75%; } }
+/* fade: the word dims and returns, slowly. */
+.cs-rw[data-fx="fade"] .cs-wtx { animation: cs-wshim 1.6s linear infinite, cs-fade 2.6s ease-in-out infinite; }
+@keyframes cs-fade { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+/* march: dashes march along under the word. */
+.cs-rw[data-fx="march"] .cs-rw-o::after { left: 0; right: 0; bottom: -3px; height: 1.5px; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--tone) 70%, transparent) 0 4px, transparent 4px 8px); animation: cs-march 0.8s linear infinite; }
+@keyframes cs-march { to { background-position: 8px 0; } }
+/* nudge: a chevron after the word nudges forward again and again. */
+.cs-rw[data-fx="nudge"] { padding-right: 12px; }
+.cs-rw[data-fx="nudge"] .cs-rw-o::after { right: 2px; top: 50%; width: 5px; height: 5px; margin-top: -3px; border-top: 1.5px solid var(--tone); border-right: 1.5px solid var(--tone); rotate: 45deg; animation: cs-nudge 1.3s ease-in-out infinite; }
+@keyframes cs-nudge { 0%, 100% { translate: -2px 0; opacity: 0.4; } 50% { translate: 1px 0; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .cs-wtx, .cs-rw .cs-wtx { animation: none; color: var(--foreground); background: none; clip-path: none; filter: none; scale: none; opacity: 1; } .cs-wtx::after { content: "…"; animation: none; } .cs-rw-o { display: none; } .cs-rw[data-fx] { padding: 0; } }
 
 /* ---------------------------------------------------------------------------------------------------------------
  * Controls shared by every page. Keycaps (`cs-kc`) and knobs are the only raised things on a page; cards are a
