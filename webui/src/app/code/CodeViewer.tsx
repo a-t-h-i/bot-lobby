@@ -14,9 +14,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { Columns2, FileCode2, FilePlus2, FileX2, PenLine, RefreshCw, Rows3, Save, Search, TextWrap, X } from "lucide-react"
 import type { CodeChange, CodeFile } from "@protocol"
 import { Button } from "@/components/ui/button"
-import { Keys } from "@/components/ui/kbd"
 import { Popup } from "@/components/ui/popup"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tip } from "@/ui/TipLayer"
 import { ApiError, call } from "@/lib/api"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
@@ -31,22 +30,12 @@ const CodeSurface = lazy(() => import("./CodeSurface"))
 const TOOL =
   "inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-accent aria-pressed:text-foreground"
 
-function Tip({ label, hint, children }: { label: string; hint?: string | undefined; children: React.ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="bottom">
-        {label} {hint ? <Keys chord={hint} /> : null}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 /** The bar's button that opens the viewer. */
 export function CodeToggle({ hint, className }: { hint?: string | undefined; className: string }) {
   const { open } = useCodeViewer()
   return (
-    <Tip label="Code and changes" hint={hint}>
+    <Tip side="bottom" label="Code and changes" hint={hint}>
       <button type="button" aria-label="Code" aria-pressed={open} aria-keyshortcuts={hint} onClick={() => (open ? closeCode() : openCode())} className={className}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6" /></svg>
       </button>
@@ -119,7 +108,7 @@ function ChangesRail({ changes, loading, error, current, onPick, onRefresh }: {
         <span className="font-medium text-foreground">Changes</span>
         <span className="text-muted-foreground tabular-nums">{files.length}{changes?.truncated ? "+" : ""}</span>
         <Counts change={totals} className="ml-auto" />
-        <Tip label="Read the changes again">
+        <Tip side="bottom" label="Read the changes again">
           <button type="button" aria-label="Refresh changes" onClick={onRefresh} disabled={loading} className={cn(TOOL, "-mr-1.5 size-6", files.length ? "" : "ml-auto")}>
             <RefreshCw aria-hidden="true" className={cn("size-3.5", loading && "animate-spin motion-reduce:animate-none")} />
           </button>
@@ -131,7 +120,7 @@ function ChangesRail({ changes, loading, error, current, onPick, onRefresh }: {
           const status = STATUS[file.status]
           return (
             <li key={file.path}>
-              <button type="button" onClick={() => onPick(file.path)} aria-current={file.path === current ? "true" : undefined} title={file.from ? `${file.from} → ${file.path}` : file.path}
+              <button type="button" onClick={() => onPick(file.path)} aria-current={file.path === current ? "true" : undefined} data-tip={file.from ? `${file.from} → ${file.path}` : file.path}
                 className="group/row flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-[0.8125rem] outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-[current=true]:bg-accent">
                 <span aria-label={status.word} className={cn("w-3 shrink-0 text-center font-mono text-[0.6875rem] font-semibold", status.tone)}>{status.letter}</span>
                 <span className={cn("min-w-0 flex-1 truncate", file.status === "deleted" && "text-muted-foreground line-through decoration-muted-foreground/50")}>
@@ -325,24 +314,24 @@ function Workspace({ requested, requestedMode, request, codeKey, onClose, onDirt
             <Segmented label="View" value={shownMode} onChange={setMode} items={[{ id: "code", label: "Code" }, { id: "diff", label: "Diff" }]} />
           ) : null}
           {shownMode === "diff" ? (
-            <Tip label={layout === "split" ? "Unified diff" : "Side by side"}>
+            <Tip side="bottom" label={layout === "split" ? "Unified diff" : "Side by side"}>
               <button type="button" aria-label="Side by side" aria-pressed={layout === "split"} onClick={() => setDiffLayout(layout === "split" ? "unified" : "split")} className={TOOL}>
                 {layout === "split" ? <Rows3 aria-hidden="true" className="size-4" /> : <Columns2 aria-hidden="true" className="size-4" />}
               </button>
             </Tip>
           ) : null}
-          <Tip label={wrap ? "Do not wrap lines" : "Wrap long lines"}>
+          <Tip side="bottom" label={wrap ? "Do not wrap lines" : "Wrap long lines"}>
             <button type="button" aria-label="Wrap lines" aria-pressed={wrap} onClick={() => setCodeWrap(!wrap)} className={TOOL}>
               <TextWrap aria-hidden="true" className="size-4" />
             </button>
           </Tip>
-          <Tip label="Save" hint="Ctrl+S">
+          <Tip side="bottom" label="Save" hint="Ctrl+S">
             <Button size="sm" variant={dirty ? "default" : "outline"} disabled={!dirty || saving} onClick={() => void save()} aria-keyshortcuts="Control+S Meta+S">
               <Save aria-hidden="true" />
               {saving ? "Saving…" : "Save"}
             </Button>
           </Tip>
-          <Tip label="Close" hint={codeKey}>
+          <Tip side="bottom" label="Close" hint={codeKey}>
             <button type="button" aria-label="Close code viewer" onClick={() => go({ kind: "close" })} className={TOOL}>
               <X aria-hidden="true" className="size-4" />
             </button>

@@ -102,12 +102,12 @@ export function Lightbox() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Open the original in a new tab"
-                  title="Open the original"
+                  data-tip="Open the original"
                   className="lightbox-tool pointer-events-auto"
                 >
                   <ExternalLink aria-hidden="true" className="size-4" />
                 </a>
-                <Dialog.Close aria-label="Close the image" title="Close · Esc" className="lightbox-tool pointer-events-auto">
+                <Dialog.Close aria-label="Close the image" data-tip="Close" data-tip-keys="Esc" className="lightbox-tool pointer-events-auto">
                   <X aria-hidden="true" className="size-4" />
                 </Dialog.Close>
               </div>

@@ -7,12 +7,12 @@
  * ones it started, then those in other terminals and the ended ones in groups that fold away), and at its foot
  * Settings and the app's switches. Switching to a session is a click on its row.
  */
-import { useCallback, useId, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useId, useRef, useState, type CSSProperties } from "react"
 import { Archive, ChevronDown, CircleDashed, Pencil, Trash2 } from "lucide-react"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { tip } from "@/ui/TipLayer"
 import { act } from "@/lib/act"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
@@ -40,17 +40,6 @@ export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 const OPEN = { w: 244, h: "min(600px, calc(100vh - 40px))" }
 
 const TOOL = "cs-iconbtn cs-sm"
-
-function Tip({ label, hint, side = "bottom", children }: { label: string; hint?: string | undefined; side?: "right" | "top" | "bottom"; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side={side}>
-        {label} {hint ? <Keys chord={hint} /> : null}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 /** The sessions as the sidebar lists them, read live (`sessions` and `status` topics). */
 function useSessions(): SessionEntry[] {
@@ -177,7 +166,8 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
           type="button"
           aria-current={entry.where === "here" ? "true" : undefined}
           aria-label={entry.where === "here" ? `${entry.name}, this window` : entry.where === "elsewhere" ? `${entry.name}, in another terminal` : `Switch to ${entry.name}`}
-          title={entry.name}
+          {...tip(entry.name, { side: "right" })}
+          data-tip-trunc=""
           data-where={entry.where}
           data-state={entry.state}
           data-dim={quiet || undefined}
@@ -199,25 +189,22 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
       {!renaming && hasActions ? (
         <span className="cs-sacts">
           {canRename ? (
-            <Tip label="Rename">
-              <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className="cs-sact">
-                <Pencil aria-hidden="true" className="size-3.5" />
-              </button>
-            </Tip>
+            <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className="cs-sact" {...tip("Rename", { side: "right" })}>
+              <Pencil aria-hidden="true" className="size-3.5" />
+            </button>
           ) : null}
           {canArchive ? (
-            <Tip label="Archive">
-              <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className="cs-sact">
-                <Archive aria-hidden="true" className="size-3.5" />
-              </button>
-            </Tip>
+            <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className="cs-sact" {...tip("Archive", { side: "right" })}>
+              <Archive aria-hidden="true" className="size-3.5" />
+            </button>
           ) : null}
           {canDelete ? (
             <ConfirmButton
               iconOnly
               className="cs-sact"
-              side="bottom"
+              side="right"
               label={`Delete ${entry.name}`}
+              text="Delete"
               icon={Trash2}
               variant="destructive"
               title={`Delete ${entry.name}?`}
@@ -240,7 +227,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
   return (
     <section aria-label={label} className="group/shelf flex flex-col">
       <div className="cs-sh" style={{ "--i": start } as CSSProperties}>
-        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none hover:text-foreground focus-visible:underline">
+        <button type="button" aria-expanded={!folded} aria-controls={body} onClick={toggle} className="cs-shb flex flex-1 items-center gap-1.5 text-left">
           <span>{label}</span>
           {folded ? <span className="tabular-nums">{entries.length}</span> : null}
           <ChevronDown aria-hidden="true" className={cn("size-3 opacity-0 transition-[opacity,rotate] duration-150 group-hover/shelf:opacity-100 group-focus-within/shelf:opacity-100", folded && "-rotate-90 opacity-100")} />
@@ -249,7 +236,7 @@ function Shelf({ id, label, entries, start, archivable = false }: { id: string; 
           <button
             type="button"
             onClick={() => void (async () => { for (const entry of entries) await act("sessions.archive", entry.key ? { key: entry.key } : { sessionId: entry.sessionId! }) })()}
-            className="shrink-0 outline-none hover:text-foreground focus-visible:underline"
+            className="cs-shb shrink-0"
           >
             Archive all
           </button>
@@ -289,11 +276,9 @@ function SearchRow({ query, onQuery, onNew }: { query: string; onQuery: (query: 
           }
         }}
       />
-      <Tip label="New session">
-        <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={onNew} className="flex text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
-        </button>
-      </Tip>
+      <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={onNew} className="cs-snew" {...tip("New session", { side: "bottom" })}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+      </button>
     </label>
   )
 }
@@ -380,21 +365,15 @@ export function useSidebar(props: SidebarProps) {
       <div className="cs-sbwrap" style={vars} {...bay.handlers}>
         <aside id="app-sidebar" aria-label="Sidebar" className="cs-sbx">
           <div className="cs-sbmini" inert={open}>
-            <Tip label={pinned ? "Unpin sidebar" : "Pin sidebar"} hint={props.keys.sidebar} side="bottom">
-              <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn">
-                <TabGlyph id="lobby" />
-              </button>
-            </Tip>
-            <Tip label="New session" side="bottom">
-              <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
-              </button>
-            </Tip>
-            <Tip label="Settings" hint={props.keys.settings ?? "Alt+S"} side="bottom">
-              <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn">
-                <TabGlyph id="settings" />
-              </a>
-            </Tip>
+            <button type="button" aria-label="Sessions" aria-pressed={pinned} aria-keyshortcuts={props.keys.sidebar} onClick={togglePin} className="cs-iconbtn" {...tip(pinned ? "Unpin sidebar" : "Pin sidebar", { keys: props.keys.sidebar, side: "bottom", keep: true })}>
+              <TabGlyph id="lobby" />
+            </button>
+            <button type="button" aria-label="New session" aria-haspopup="dialog" onClick={newSession} className="cs-iconbtn" {...tip("New session", { side: "bottom" })}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" /></svg>
+            </button>
+            <a href="#/settings" aria-label="Settings" aria-current={props.route.kind === "settings" ? "page" : undefined} className="cs-iconbtn" {...tip("Settings", { keys: props.keys.settings ?? "Alt+S", side: "bottom" })}>
+              <TabGlyph id="settings" />
+            </a>
           </div>
           <div className="cs-sbfull" inert={!open}>
             <SearchRow query={query} onQuery={setQuery} onNew={newSession} />

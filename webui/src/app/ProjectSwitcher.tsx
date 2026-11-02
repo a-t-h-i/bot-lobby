@@ -134,7 +134,6 @@ export function ProjectChip({ projects, name, branch, open, onToggle }: { projec
         event.preventDefault()
         onToggle()
       }}
-      title={branch ? `${name} · ${branch}` : name}
       className="bubble-chip bubble-tip bubble-tool min-w-0"
     >
       {projects.slow ? <Spinner aria-hidden="true" role="presentation" className="size-3.5" /> : <Folder aria-hidden="true" className={cn("size-3.5 shrink-0", message && "text-destructive")} />}

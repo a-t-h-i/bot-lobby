@@ -13,7 +13,7 @@ export function FileLink({ path, children, className }: { path: string; children
     <button
       type="button"
       data-file-link={path}
-      title={`Open ${path} in the code viewer`}
+      data-tip={`Open ${path} in the code viewer`}
       onClick={(event) => {
         event.stopPropagation()
         openCode(path)

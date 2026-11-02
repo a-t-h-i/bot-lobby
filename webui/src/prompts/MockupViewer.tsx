@@ -139,7 +139,7 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
   return (
     <div ref={root} tabIndex={-1} data-autofocus="" onKeyDown={onKeyDown} className="mockup-viewer flex h-full min-h-0 flex-col outline-none" role="region" aria-label={`Mockups: ${title}`} aria-roledescription="carousel">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-3">
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="Back to the question" title="Back · Esc" onClick={() => onClose(index)}>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="Back to the question" data-tip="Back" data-tip-keys="Esc" onClick={() => onClose(index)}>
           <Minimize2 aria-hidden="true" />
         </Button>
         <p className="min-w-0 flex-1 truncate text-sm font-medium">{title}</p>
@@ -194,12 +194,12 @@ export function MockupViewer({ options, start, title, picked = [], multi = false
           ))}
         </div>
         {index > 0 ? (
-          <Button type="button" variant="outline" size="icon" aria-label="Previous option" title="Previous · ←" onClick={() => go(index - 1)} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full">
+          <Button type="button" variant="outline" size="icon" aria-label="Previous option" data-tip="Previous" data-tip-keys="ArrowLeft" onClick={() => go(index - 1)} className="absolute top-1/2 left-2 -translate-y-1/2 rounded-full">
             <ChevronLeft aria-hidden="true" />
           </Button>
         ) : null}
         {index < last ? (
-          <Button type="button" variant="outline" size="icon" aria-label="Next option" title="Next · →" onClick={() => go(index + 1)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full">
+          <Button type="button" variant="outline" size="icon" aria-label="Next option" data-tip="Next" data-tip-keys="ArrowRight" onClick={() => go(index + 1)} className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full">
             <ChevronRight aria-hidden="true" />
           </Button>
         ) : null}

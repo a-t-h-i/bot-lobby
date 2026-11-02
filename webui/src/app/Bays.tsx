@@ -232,7 +232,9 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
               href={`#/${tab.id}`}
               aria-selected={tab.id === activeId}
               aria-keyshortcuts={tab.key}
-              title={`${tab.label} · ${tab.key.replace("+", " ")}`}
+              data-tip={tab.label}
+              data-tip-keys={tab.key}
+              data-tip-side="bottom"
               tabIndex={tab.id === activeId || (!activeId && index === 0) ? 0 : -1}
               className="cs-tab"
               data-side={activeIndex < 0 || index === activeIndex ? undefined : index < activeIndex ? "l" : "r"}

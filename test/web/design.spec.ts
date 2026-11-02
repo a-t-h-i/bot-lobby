@@ -451,7 +451,7 @@ test("keyboard hints: the box prints its keys, the header button opens the key l
   await expect(hints.getByText("new line"), "Shift+Enter is hinted in the strip under the box").toBeVisible();
   await expect(hints.getByText("shortcuts"), "and the way to the full list").toBeVisible();
   await page.getByRole("tab", { name: /Tasks/ }).hover();
-  await expect(page.locator('[data-slot="tooltip-content"]').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
+  await expect(page.locator('.tipbox').first(), "a tab's tooltip shows its Alt+N").toContainText(/Alt\s*(plus)?\s*2/);
   await page.mouse.move(0, 400);
   await page.getByRole("button", { name: "Keyboard shortcuts" }).first().click();
   const keys = page.getByRole("dialog", { name: "Keys" });
