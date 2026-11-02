@@ -11,14 +11,14 @@ export type KnowledgeAgentName = KnowledgeFileInfo["agent"]
 export const AGENT_ORDER: readonly KnowledgeAgentName[] = ["master", "designer", "backend", "qa"]
 
 export const AGENT_LABELS: Record<KnowledgeAgentName, string> = {
-  master: "Oracle",
+  master: "Orchestrator",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",
 }
 
 export const AGENT_DIR_NAMES: Record<KnowledgeAgentName, string> = {
-  master: "Oracle",
+  master: "Orchestrator",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",
@@ -35,7 +35,7 @@ export function sizeWords(chars: number): string {
 
 /** The warning above a file past its compaction threshold. */
 export function overWarning(file: string): string {
-  return `over the compaction threshold — ask the oracle to compact ${file}`
+  return `over the compaction threshold — ask the orchestrator to compact ${file}`
 }
 
 /** The picked entry as the server finds it again: its text and which duplicate it is. */

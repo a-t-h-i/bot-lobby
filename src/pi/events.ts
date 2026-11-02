@@ -2,12 +2,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, readDataRoots } from "../state/project.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
-import { readAgentKnowledge } from "../knowledge/store.ts";
+import { knowledgeFilePath, readAgentKnowledge } from "../knowledge/store.ts";
 import { selectKnowledge, selectRelevant } from "../knowledge/selector.ts";
 import { applySelection, assignmentKey, bookmarkBlock, lexicalBookmarks } from "../knowledge/bookmarks.ts";
 import { refreshCatalogue } from "../knowledge/catalogue.ts";
 import { readNotes } from "../knowledge/notes.ts";
-import { KNOWLEDGE_BUDGET_CHARS } from "../classifier/knowledge.ts";
+import { applyStartupBudget, KNOWLEDGE_BUDGET_CHARS } from "../classifier/knowledge.ts";
 import { libraryBlock } from "../scripts/pick.ts";
 import { cancelAllRuns } from "../execution/agent-runner.ts";
 import { describeTask } from "../workflow/workflow.ts";
@@ -162,20 +162,31 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
     const dataRoots = readDataRoots(root, configDir);
     const slices = readAgentKnowledge(dataRoots, "master");
     const query = `${taskRequest(task)} ${task.proposal ?? ""}`;
-    const retrieval = loadConfig().workflow.knowledgeRetrieval;
+    const config = loadConfig();
+    const retrieval = config.workflow.knowledgeRetrieval;
     const selected = retrieval
       ? { knowledge: "", decisions: "", standards: selectRelevant(query, slices.standards ?? "", KNOWLEDGE_BUDGET_CHARS) }
       : selectKnowledge(query, slices);
+    const first = dataRoots[0];
+    // One combined budget across every injected knowledge section; historical decisions and completed-task logs stay retrieval-on-demand (bookmarks), never injected.
+    const budgeted = applyStartupBudget([
+      { name: "standards", content: selected.standards, path: first ? knowledgeFilePath(first, "master", "standard") : undefined },
+      { name: "knowledge", content: selected.knowledge, path: first ? knowledgeFilePath(first, "master", "knowledge") : undefined },
+      { name: "decisions", content: selected.decisions, path: first ? knowledgeFilePath(first, "master", "decision") : undefined },
+      { name: "bookmarks", content: retrieval ? masterBookmarks(root, configDir, dataRoots, task.id, query) : "" },
+      { name: "scripts", content: first ? libraryBlock(first) : "" },
+    ], config.workflow.knowledgeStartupBudget);
+    const section = (name: string) => budgeted.sections.find((entry) => entry.name === name)?.content ?? "";
     event.systemPromptOptions.sections["bot-lobby"] = compilePrompt({
       domain: "master",
       task: masterTaskContext(task, readPlanComments(root, configDir, task.id), isAutoMode(root, configDir, task.id)),
-      standards: selected.standards,
-      knowledge: selected.knowledge,
-      decisions: selected.decisions,
-      bookmarks: retrieval ? masterBookmarks(root, configDir, dataRoots, task.id, query) : "",
-      scripts: dataRoots[0] ? libraryBlock(dataRoots[0]) : "",
-      workflowContext: masterWorkflowContext(task),
-      instructions: loadConfig().master.instructions,
+      standards: section("standards"),
+      knowledge: section("knowledge"),
+      decisions: section("decisions"),
+      bookmarks: section("bookmarks"),
+      scripts: section("scripts"),
+      workflowContext: [masterWorkflowContext(task), ...budgeted.diagnostics].filter(Boolean).join("\n\n"),
+      instructions: config.master.instructions,
     });
   });
 }

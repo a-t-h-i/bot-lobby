@@ -8,6 +8,7 @@ const chromiumLaunch = process.env.CHROMIUM_PATH
 /** Fixture-backed browser checks. Desktop dark keeps its @theme filtering. */
 export default defineConfig({
   testDir: "test/web",
+  globalSetup: "webui/scripts/freshness.mjs",
   fullyParallel: true,
   timeout: 90_000,
   expect: { timeout: 10_000 },

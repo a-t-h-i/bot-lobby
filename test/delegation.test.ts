@@ -16,6 +16,11 @@ import type { ExtensionAPI, ToolCallEvent } from "@earendil-works/pi-coding-agen
 import { runAgent } from "../src/execution/agent-runner.ts";
 import { Classifier } from "../src/classifier/classifier.ts";
 import { effortRouter } from "../src/classifier/effort.ts";
+import { chooseTrack, fastPathRecord } from "../src/workflow/track.ts";
+import { createTask } from "../src/schemas/task.ts";
+import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
+import { transition } from "../src/state/task-state.ts";
+import { readMetrics } from "../src/state/metrics.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 
 const reply = (text: string): ProcessOutcome => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text }], usage: { input: 10, output: 5, cost: { total: 0.01 } } } }) });
@@ -300,4 +305,90 @@ test("eligible parents delegate only useful separable work", async () => {
   assert.equal(scout.note.includes("sub-brief"), false);
   const child = await hostToolsAndNote({ runId: "c", taskId: "T", domain: "backend", role: "worker", depth: 2 });
   assert.match(child.note, /cannot delegate further/);
+});
+
+test("launch failures name their stage and whether a worker started; a failed child is one run, never a duplicate", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-launch-stages-"));
+  mkdirSync(join(cwd, ".pi"), { recursive: true });
+  const updates: AgentRun[] = [];
+  let answer: { ok: boolean; text: string } | undefined;
+  const run: ProcessRunner = async (_args, options) => {
+    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
+    if (policy.depth === 2) throw new Error("cannot spawn the agent CLI");
+    const target = JSON.parse(options.env![DELEGATION_ENV]!);
+    const client = createDeskClient(target.address, target.token);
+    try {
+      // An invalid brief is refused before any side effect, with no worker started.
+      const invalid = await client.request({ op: "delegate", briefs: [""] });
+      assert.equal(invalid.ok, false);
+      assert.match(invalid.text, /delegate failed at stage "briefs-validation" \(no worker started\)/);
+      answer = await client.request({ op: "delegate", briefs: ["step"] });
+      return reply("Parent done");
+    } finally { client.close(); }
+  };
+  try {
+    const result = await runPiAgent({ cwd, task: "t", tools: ["read"], agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" }, onChildRun: (child) => updates.push(child) }, run);
+    assert.equal(result.status, "success");
+    assert.equal(answer!.ok, true, answer!.text);
+    const child = JSON.parse(answer!.text) as AgentRun[];
+    assert.equal(child.length, 1);
+    assert.equal(child[0]!.status, "failed");
+    assert.match(child[0]!.error!, /delegate failed at stage "child-spawn" \(no worker started\): cannot spawn the agent CLI/);
+    // One brief, one child identity: the failure retried nothing and left no duplicate worker.
+    assert.deepEqual([...new Set(updates.map((update) => update.runId))].length, 1);
+    assert.equal(result.children!.length, 1);
+    assert.equal(result.children![0]!.status, "failed");
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test("a child that starts and then fails names child-run, not the launch", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-launch-run-"));
+  mkdirSync(join(cwd, ".pi"), { recursive: true });
+  let answer: { ok: boolean; text: string } | undefined;
+  const run: ProcessRunner = async (_args, options) => {
+    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
+    if (policy.depth === 2) return { ...reply("halfway"), exitCode: 1, stderr: "worker crashed" };
+    const target = JSON.parse(options.env![DELEGATION_ENV]!);
+    const client = createDeskClient(target.address, target.token);
+    try { answer = await client.request({ op: "delegate", briefs: ["step"] }); return reply("Parent done"); }
+    finally { client.close(); }
+  };
+  try {
+    const result = await runPiAgent({ cwd, task: "t", tools: ["read"], agent: { runId: "parent", taskId: "T", domain: "backend", role: "worker" } }, run);
+    assert.equal(answer!.ok, true);
+    const child = JSON.parse(answer!.text) as AgentRun[];
+    assert.equal(child[0]!.status, "failed");
+    assert.match(child[0]!.error!, /delegate failed at stage "child-run" \(worker [0-9a-f-]+ started\): worker crashed/);
+    assert.equal(result.children![0]!.status, "failed");
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test("a worker on a single-worker fast-path task cannot delegate its work down", async () => {
+  const cwd = mkdtempSync(join(tmpdir(), "bl-nested-fast-"));
+  ensureProjectStructure(cwd, ".pi");
+  const request = "rename the helper in src/page.tsx, src/form.tsx and src/ui.tsx";
+  const task = createTask("TASK-fast", "task", "2026-01-01T00:00:00.000Z", request);
+  task.track = chooseTrack(request, undefined, { fastTrack: true, forced: "fast" }, "2026-01-01T00:00:00.000Z");
+  task.fastPath = fastPathRecord(request, task.track);
+  transition(task, "clarifying");
+  saveTask(cwd, ".pi", task);
+  let answer: { ok: boolean; text: string } | undefined;
+  const run: ProcessRunner = async (_args, options) => {
+    const policy = JSON.parse(options.env![AGENT_ENV]!) as AgentPolicy;
+    if (policy.depth === 2) return reply("should never run");
+    const target = JSON.parse(options.env![DELEGATION_ENV]!);
+    const client = createDeskClient(target.address, target.token);
+    try { answer = await client.request({ op: "delegate", briefs: ["do the rename"] }); return reply("Parent done"); }
+    finally { client.close(); }
+  };
+  try {
+    const result = await runPiAgent({ cwd, task: "t", tools: ["read"], agent: { runId: "parent", taskId: "TASK-fast", domain: "backend", role: "worker" } }, run);
+    assert.equal(result.status, "success");
+    assert.equal(answer!.ok, false);
+    assert.match(answer!.text, /TASK-fast is on the single-worker fast path/);
+    assert.match(answer!.text, /sub-delegation would bypass that/);
+    assert.equal((result.children ?? []).length, 0, "no worker was started for the refused brief");
+    const avoided = readMetrics(cwd, ".pi").filter((record) => record.kind === "avoided");
+    assert.deepEqual(avoided.map((record) => record.purpose), ["nested delegation: single-worker fast path"]);
+  } finally { rmSync(cwd, { recursive: true, force: true }); }
 });

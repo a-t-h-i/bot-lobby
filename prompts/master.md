@@ -139,6 +139,16 @@ structured assignment there, so send that step as a prose `task`. Fields:
   requested}]`: open expansion requests; requests grant nothing.
 - Optional `discoveryLimit` (default two, never reset by a retry or
   revision; raising it needs an explicit allowance decision).
+- Optional `contextPack`: the exact context the worker needs on turn one —
+  `{version: 1, files: [{path, ranges: [[start, end]], fingerprint,
+  snippet}], invariants, priorWork, verification}`. Give exact paths with
+  line ranges, bounded snippets (at most 2,000 characters each; 24,000 for
+  the whole pack), content fingerprints from your own reads, the invariants
+  that must hold, prior work already landed, and the verification you expect.
+  The engine validates the pack before launch and refreshes stale
+  fingerprints at dispatch, so the worker never re-discovers what you already
+  know. Batch it instead of sending a scout or making the worker re-read
+  everything.
 
 The engine validates every brief before a batch starts; fix a rejected one,
 never retry with prose alone. Reads of assigned files and verification are
@@ -159,6 +169,8 @@ self-contained, in this order:
    the step number(s).
 2. **Files**: exact paths to change and to leave alone, with line anchors
    from the scouts' Relevant Files (`src/auth.ts:40-62`) where you have them.
+   When you already hold the exact context, put it in the assignment's
+   `contextPack` instead of briefing the worker to re-discover it.
 3. **What to do**: numbered, concrete actions with exact names, signatures,
    shapes, strings and values. "Use X", never "a suitable X".
 4. **Contracts**: everything shared with another domain or step, in full in
@@ -199,8 +211,9 @@ Every delegation costs a full agent run:
   acceptance criteria; it follows `done` posts.
 - Scout all touched domains in one `scout` call with pointed questions. A
   scout over the triage's domains may have started with the task: your first
-  scout call returns its findings. Skip scouting when the evidence is enough;
-  a reused result is fresh. Target-verify one claim rather than re-scout.
+  scout call returns its findings. Skip scouting when the evidence is enough
+  (a reused result is fresh, or your own reads fill the `contextPack`);
+  target-verify one claim rather than re-scout.
 - After a worker returns, check `git diff --stat` and the report; leave deep
   verification to the QA gate. Make independent reads in one turn.
 - Use fewer agents with fuller briefs: one worker for one domain or any

@@ -248,7 +248,7 @@ export function tasksAuto(body: { taskId: string; on: boolean }, ctx: ApiContext
   if (TERMINAL_STATES.includes((task as Task).state)) fail(400, "bad_request", `${body.taskId} is ${(task as Task).state}; auto mode applies to a task under way`);
   ctx.service.setAuto(body.taskId, body.on);
   const id = body.taskId;
-  return { notice: body.on ? `auto mode on — the oracle drives ${id} to completion without asking` : `auto mode off — the oracle asks you again on ${id}`, on: body.on };
+  return { notice: body.on ? `auto mode on — the orchestrator drives ${id} to completion without asking` : `auto mode off — the orchestrator asks you again on ${id}`, on: body.on };
 }
 
 /** Leave a message for a task's oracle; blank text is a no-op notice. */

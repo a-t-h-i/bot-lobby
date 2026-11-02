@@ -51,7 +51,7 @@ const DESCRIPTION = [
   "Do not use it for yes/no confirmations of what you were already told to do, or for questions the conversation already answers.",
 ].join(" ");
 
-const RELAYED = "Your questions reach the user through the oracle, and your clock stops while they answer. Ask only what is theirs to decide (a visual direction, a layout, a trade-off they care about), all at once; decide the rest yourself.";
+const RELAYED = "Your questions reach the user through the orchestrator, and your clock stops while they answer. Ask only what is theirs to decide (a visual direction, a layout, a trade-off they care about), all at once; decide the rest yourself.";
 
 /** Why a set of questions cannot be asked as given, or undefined when it can. */
 export function invalidQuestions(questions: readonly AskQuestion[]): string | undefined {

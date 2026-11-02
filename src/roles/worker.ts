@@ -1,4 +1,4 @@
-import type { AssignmentExpansionRequest, WorkerAssignment } from "../execution/assignment.ts";
+import type { AssignmentExpansionRequest, ContextPack, ContextPackFile, WorkerAssignment } from "../execution/assignment.ts";
 import type { Domain, RoleSpec } from "../schemas/agent.ts";
 import type { Blocker } from "../schemas/task.ts";
 import type { FileChange, KnowledgeProposal, ScriptProposal, WorkerResult } from "../schemas/findings.ts";
@@ -183,18 +183,48 @@ export function parseWorkerResult(domain: Domain, raw: string, now = new Date().
   };
 }
 
+/** One pack file as a prompt bullet: path, line ranges, fingerprint and its bounded snippet, once. */
+function packFileBlock(file: ContextPackFile): string {
+  const ranges = file.ranges?.length ? ` lines ${file.ranges.map(([start, end]) => `${start}-${end}`).join(", ")}` : "";
+  const fingerprint = file.fingerprint ? ` · fingerprint ${file.fingerprint}` : "";
+  const snippet = file.snippet ? `\n\n  \`\`\`\n${file.snippet.split("\n").map((line) => `  ${line}`).join("\n")}\n  \`\`\`` : "";
+  return `- ${file.path}${ranges}${fingerprint}${snippet}`;
+}
+
+/**
+ * The context pack as the worker's prompt carries it: one clean rendering of
+ * paths with line ranges, fingerprints, snippets, invariants, prior work and
+ * verification — never a JSON dump beside a prose copy. Dispatch appends what
+ * it refreshed, so the worker knows which entries are newer than the pack.
+ */
+export function contextPackBlock(pack: ContextPack, refreshed: readonly string[] = []): string {
+  return [
+    "## Context pack",
+    `Version ${pack.version}. Entries were current at dispatch (paths, line ranges, content fingerprints, bounded snippets); what dispatch refreshed is named below.`,
+    ...pack.files.map(packFileBlock),
+    pack.invariants?.length ? `Invariants that must hold:\n${pack.invariants.map((entry) => `- ${entry}`).join("\n")}` : "",
+    pack.priorWork?.length ? `Prior work already landed:\n${pack.priorWork.map((entry) => `- ${entry}`).join("\n")}` : "",
+    `Verification this pack requires of you:\n${pack.verification.map((entry) => `- ${entry}`).join("\n")}`,
+    refreshed.length ? `Refreshed at dispatch: ${refreshed.join("; ")}.` : "",
+    "Trust pack entries for files you only reference; re-read a packed file solely when you will edit it, reading just the needed line range, and make independent reads in one batch instead of sequential re-discovery.",
+  ].filter(Boolean).join("\n\n");
+}
+
 /** Assignment-specific content belongs in the user instruction, not the shared system prefix. */
 export function assignmentPrompt(assignment: WorkerAssignment): string {
+  const { contextPack, ...rest } = assignment;
   return [
     "## Validated master assignment",
-    JSON.stringify(assignment, null, 2),
+    // A pack is rendered once below; the JSON dump must not repeat it.
+    JSON.stringify(contextPack ? rest : assignment, null, 2),
     "Actions are numbered and authoritative. Begin with assigned files; paths and purposes are provided, not file bodies.",
     "Read current contents before editing; re-read after file handover. Reference paths are read-only. Only edit/create paths authorize changes.",
     `Discovery allowance: ${assignment.discoveryLimit ?? 2} total targeted lookups. Each nested or batched discovery call counts separately; retries and revisions do not reset consumed allowance. Assigned-file reads and assigned verification are exempt. Shell discovery follows the same limit.`,
     "Discovery never authorizes editing a newly found file. Tools listed here are a replacement selection intersected with existing grants; an empty list grants no tools. Codemode does not grant unselected nested or MCP tools.",
     "If files, tools, discovery allowance or decisions are missing, report each expansion request under Notes as a standalone JSON object (optionally in a json fence), with exactly these keys: {\"kind\":\"files|tools|discovery|decision\",\"reason\":\"why needed\",\"requested\":[\"exact path, tool, allowance or decision\"]}. Continue unaffected work; do not expand permissions yourself.",
     "Report completed work and evidence, outstanding needs, and one Brief Check per verification criterion. Reference-only work may succeed without edits; do not make artificial changes. Every changed file still requires verification.",
-  ].join("\n\n");
+    ...(contextPack ? [contextPackBlock(contextPack)] : []),
+  ].filter(Boolean).join("\n\n");
 }
 
 /** Report contract deviations so the Master does not accept unverified work. */

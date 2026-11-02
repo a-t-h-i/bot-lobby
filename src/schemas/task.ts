@@ -1,5 +1,6 @@
 import type { WorkerAssignment, AssignmentExpansionRequest } from "../execution/assignment.ts";
 import type { LintReport } from "./lint.ts";
+import type { VerificationReport } from "./verification.ts";
 import type { Domain, Role } from "./agent.ts";
 import type { Delivery } from "../delivery/types.ts";
 import type { TaskCheckpoint } from "../state/checkpoint.ts";
@@ -182,6 +183,19 @@ export interface QaRiskAssessment {
 /** How much process a task gets: the fast track for a small, clear, low-risk change, the full workflow for the rest. */
 export type TrackPath = "fast" | "full";
 
+/** Why a fast-track task is single-worker work, and what would end it. */
+export interface FastPathRecord {
+  /** The effort/size/risk rationale that made it fast, as the reading recorded it. */
+  basis: string;
+  risk: "none" | "low" | "medium" | "high";
+  /** The evidence behind the risk level, when the reading found any. */
+  riskEvidence?: string;
+  /** The one implementation domain that owns the work, when the reading names it. */
+  owner?: Domain;
+  /** When genuine risk promoted the task off the single-worker path. */
+  promotedAt?: string;
+}
+
 /** Who can take part in a task: the three domains and the researcher. */
 export type TrackMember = Domain | "researcher";
 
@@ -324,6 +338,8 @@ export interface Task {
   triage?: TaskTriage;
   /** The task's track; absent on tasks created before tracks, which take the full workflow. */
   track?: TaskTrack;
+  /** The single-worker fast path's persisted decision; absent on tasks that are not single-worker work. */
+  fastPath?: FastPathRecord;
   /** Files already changed when the first worker started: the QA gate reads them as pre-existing, not as this task's work. */
   baseline?: ChangeBaseline;
   /** Review rounds the user granted past `workflow.maxReviewIterations`. */
@@ -334,6 +350,8 @@ export interface Task {
   git?: TaskGit;
   /** The lint gate's last report on the files this task's agents touched. */
   lint?: LintReport;
+  /** Final verification's last report: the engine-run checks completion required. */
+  verification?: VerificationReport;
   /** The last read of what the built change warrants of QA, taken as the QA gate starts. */
   qaRisk?: QaRiskAssessment;
   /** Set only by the user: the work is accepted with the lint errors it has, so the task may complete. */

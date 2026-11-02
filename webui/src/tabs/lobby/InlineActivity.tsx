@@ -56,7 +56,7 @@ export function workedFor(ms: number): string {
 }
 
 /** The words on the folded line: the running step, or how many steps and whose. */
-export function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took: number; count: string; sources: string; errors: number; warnings: number } {
+export function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took: number; count: string; sources: string; errors: number; warnings: number; label: string } {
   const live = [...entries].reverse().find((entry) => entry.pending)
   const sources = [...new Set(entries.map((entry) => sourceLabel(entry.source)))]
   return {
@@ -66,7 +66,17 @@ export function summary(entries: ActivityEntry[]): { live?: ActivityEntry; took:
     sources: sources.length > 3 ? `${sources.slice(0, 3).join(", ")} +${sources.length - 3}` : sources.join(", "),
     errors: entries.filter((entry) => entry.kind === "error").length,
     warnings: entries.filter((entry) => entry.kind === "warning").length,
+    label: foldedLabel(entries, sources, (entries.at(-1)?.at ?? 0) - (entries[0]?.at ?? 0)),
   }
+}
+
+/** Deterministic, model-free: one agent's plain tool steps fold to a clock range; anything else keeps the fuller wording. */
+function foldedLabel(entries: ActivityEntry[], sources: string[], took: number): string {
+  const settled = entries.filter((entry) => !entry.pending)
+  const plain = settled.length > 1 && settled.every((entry) => entry.kind === "info" || entry.kind === "success") && sources.length === 1
+  if (plain && entries[0] !== undefined && entries.at(-1) !== undefined) return `Tool calls (${formatClock(entries[0].at)}–${formatClock(entries.at(-1)!.at)})`
+  const who = sources.length > 3 ? `${sources.slice(0, 3).join(", ")} +${sources.length - 3}` : sources.join(", ")
+  return `${took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"} · ${entries.length} ${entries.length === 1 ? "step" : "steps"}${who ? ` · ${who}` : ""}`
 }
 
 /** The time now, ticking each second while `running`. */
@@ -88,7 +98,7 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
   useEffect(() => setOwn(undefined), [all])
   const open = own ?? all
   const list = useId()
-  const { live, took, count, sources, errors, warnings } = summary(entries)
+  const { live, label, count, errors, warnings } = summary(entries)
   const now = useNow(Boolean(live))
   const style = live ? ({ "--orb": sourceTone(live.source) } as CSSProperties) : undefined
   return (
@@ -107,7 +117,7 @@ export function InlineActivity({ entries }: { entries: ActivityEntry[] }) {
           </>
         ) : (
           <span className="min-w-0 truncate">
-            {took >= 1000 ? `Worked for ${workedFor(took)}` : "Worked"} · {count}{sources ? ` · ${sources}` : ""}
+            {label}
           </span>
         )}
         {errors ? <span className="shrink-0 text-[var(--bad)]">{errors} {errors === 1 ? "error" : "errors"}</span> : null}

@@ -6,13 +6,14 @@
  * lines per project; reads keep the newest `MAX_READ` records.
  */
 import { appendFileSync, closeSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { RunLogEntry, Task } from "../schemas/task.ts";
 import { dataRoot } from "./project.ts";
 
-/** `chat`: an agent answering in the lobby chat; `quickfix` is kept so older logs still read. */
-export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "chat", "quickfix", "planner", "panel", "classifier"] as const;
+/** `chat`: an agent answering in the lobby chat; `quickfix` is kept so older logs still read; `avoided`: a launch the fast path refused or skipped. */
+export const METRIC_KINDS = ["master", "scout", "worker", "reviewer", "researcher", "chat", "quickfix", "planner", "panel", "classifier", "avoided"] as const;
 export type MetricKind = (typeof METRIC_KINDS)[number];
 
 export type MetricStatus = "success" | "failed" | "cancelled" | "timeout";
@@ -40,6 +41,10 @@ export interface MetricRecord {
   routedFrom?: string;
   /** Classifier calls: what the decision spared (seat runs skipped, questions answered). */
   saved?: number;
+  /** Worker runs dispatched with a context pack: the rendered pack's size in characters. */
+  contextChars?: number;
+  /** Final verification: how many of its checks reused a recorded pass. */
+  cacheHits?: number;
 }
 
 /** What the classifier did and spared, for the Metrics tab. */
@@ -210,10 +215,20 @@ function finalStatus(status: AgentRun["status"]): MetricStatus {
   return status === "running" ? "failed" : status;
 }
 
+/** Rendered context-pack sizes by run id, noted at dispatch and consumed when the run is recorded. */
+const runContextChars = new Map<string, number>();
+
+/** Record the rendered context-pack size for one worker run, so its metric record carries it. */
+export function noteRunContextChars(runId: string, chars: number): void {
+  runContextChars.set(runId, Math.max(0, Math.round(chars)));
+}
+
 /** A finished subagent run as a metric record. */
 export function metricFromRun(run: AgentRun): MetricRecord {
   const agent = run.role === "researcher" ? "RESEARCH" : AGENT_NAMES[run.domain] ?? run.domain.toUpperCase();
   const turns = run.turns ?? run.usage?.turns;
+  const contextChars = runContextChars.get(run.runId);
+  runContextChars.delete(run.runId);
   return {
     id: run.runId,
     kind: run.role,
@@ -229,6 +244,7 @@ export function metricFromRun(run: AgentRun): MetricRecord {
     taskId: run.taskId,
     ...(run.stalled ? { stalled: true } : {}),
     ...(run.routedFrom ? { routedFrom: run.routedFrom } : {}),
+    ...(contextChars !== undefined ? { contextChars } : {}),
   };
 }
 
@@ -250,6 +266,20 @@ export function metricFromLog(entry: RunLogEntry, taskId: string): MetricRecord 
     taskId,
     ...(entry.stalled ? { stalled: true } : {}),
     ...(entry.routedFrom ? { routedFrom: entry.routedFrom } : {}),
+  };
+}
+
+/** A launch the fast path refused or skipped: no agent ran, so it cost no time and no tokens. */
+export function avoidedLaunchRecord(taskId: string, description: string): MetricRecord {
+  return {
+    id: randomUUID(),
+    kind: "avoided",
+    agent: "ENGINE",
+    status: "success",
+    startedAt: new Date().toISOString(),
+    durationMs: 0,
+    taskId,
+    purpose: description,
   };
 }
 

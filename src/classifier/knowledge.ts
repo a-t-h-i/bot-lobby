@@ -23,6 +23,8 @@ import type { ScriptPicker } from "../scripts/pick.ts";
 
 /** How many characters of each knowledge file a prompt has room for. */
 export const KNOWLEDGE_BUDGET_CHARS = 4000;
+/** One combined budget across everything a prompt injects as knowledge (standards, knowledge, decisions, bookmarks, scripts): 8,000 characters per role by default. */
+export const STARTUP_KNOWLEDGE_BUDGET_CHARS = 8000;
 /** A section is judged on its first characters; the whole section is kept when it stays. */
 export const SECTION_EXCERPT_CHARS = 700;
 /** Sections judged per file; a longer file is narrowed by keywords first. */
@@ -102,6 +104,92 @@ export function leftOutNote(kept: Kept, name: string, path?: string): string {
   return kept.kept === 0
     ? `_No section of ${name} bears on this step (${kept.total} sections).${where}_`
     : `_Kept ${kept.kept} of ${kept.total} sections of ${name} for this step.${where}_`;
+}
+
+/** One knowledge section a prompt may inject, before the combined startup budget applies. */
+export interface StartupSection {
+  name: string;
+  content: string;
+  /** Pinned rules or user annotations: never truncated, whatever the budget says. */
+  protected?: boolean;
+  /** Where the whole content lives, for the left-out notes. */
+  path?: string;
+}
+
+/** The marker `pinFirst` puts above a slice that carries pinned rules. */
+const PINNED_MARKER = "## Pinned";
+
+/** A section that carries pinned rules (the pin block) is protected content. */
+export function isProtectedKnowledge(content: string): boolean {
+  return content.includes(PINNED_MARKER);
+}
+
+/** `(1.2k chars)` — the size note each injected section header carries. */
+export function sectionSizeNote(chars: number): string {
+  return chars >= 1000 ? `${(Math.round(chars / 100) / 10).toFixed(1)}k chars` : `${chars} chars`;
+}
+
+function withSize(content: string): string {
+  return `*(${sectionSizeNote(content.length)})*\n\n${content}`;
+}
+
+/** Whitespace-normalized equality is exact enough to drop a repeated section. */
+function normalizedKey(content: string): string {
+  return content.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export interface StartupBudgetResult {
+  sections: StartupSection[];
+  /** Visible diagnostics: protected content kept whole over budget, duplicates dropped, sections left out. */
+  diagnostics: string[];
+}
+
+/**
+ * One combined budget across every injected knowledge section of a prompt.
+ * Protected content (pinned rules, user annotations) is never truncated: when
+ * it alone exceeds the budget it is kept whole and a diagnostic names the
+ * file and its size. Anything else is kept whole while it fits, clipped once,
+ * then left out with a note saying where the whole content is. The same
+ * history or decision content is never injected twice: an exact duplicate of
+ * an earlier section is dropped with a diagnostic. Every kept section records
+ * its size under its header as `(1.2k chars)`.
+ */
+export function applyStartupBudget(sections: readonly StartupSection[], budget: number = STARTUP_KNOWLEDGE_BUDGET_CHARS): StartupBudgetResult {
+  const diagnostics: string[] = [];
+  const seen = new Set<string>();
+  const marked: StartupSection[] = sections.map((section) => {
+    if (!section.content.trim()) return { ...section, content: "" };
+    const key = normalizedKey(section.content);
+    if (seen.has(key)) {
+      diagnostics.push(`${section.name}: duplicate of content already injected above; not repeated.`);
+      return { ...section, content: "" };
+    }
+    seen.add(key);
+    return { ...section, protected: section.protected ?? isProtectedKnowledge(section.content) };
+  });
+  const guarded = marked.filter((section) => section.protected && section.content);
+  const guardedChars = guarded.reduce((total, section) => total + section.content.length, 0);
+  if (guardedChars > budget) {
+    for (const section of guarded) {
+      diagnostics.push(`Protected content in ${section.path ?? section.name} (${sectionSizeNote(section.content.length)}) alone exceeds the startup knowledge budget (${sectionSizeNote(budget)}); kept whole, not truncated.`);
+    }
+  }
+  let remaining = Math.max(0, budget - guardedChars);
+  const budgeted = marked.map((section): StartupSection => {
+    if (!section.content) return section;
+    if (section.protected) return { ...section, content: withSize(section.content) };
+    if (remaining <= 0) {
+      return { ...section, content: `_Left out to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._` };
+    }
+    if (section.content.length <= remaining) {
+      remaining -= section.content.length;
+      return { ...section, content: withSize(section.content) };
+    }
+    const clipped = clip(section.content, remaining).trimEnd();
+    remaining = 0;
+    return { ...section, content: `${withSize(clipped)}\n\n_Trimmed to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._` };
+  });
+  return { sections: budgeted, diagnostics };
 }
 
 /** Picks what an agent's prompt carries of its knowledge files, and of the shared scripts. */

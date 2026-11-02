@@ -79,7 +79,7 @@ export function SkipStep({ taskId, index, text, onSkipped }: Props) {
         <AlertDialogHeader>
           <AlertDialogTitle>Skip step {index + 1}?</AlertDialogTitle>
           <AlertDialogDescription>
-            The oracle is told to carry on without it, and your reason stays with the step in the task's history.
+            The orchestrator is told to carry on without it, and your reason stays with the step in the task's history.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <p className="rounded-md bg-muted px-2.5 py-1.5 text-sm break-words">{text}</p>

@@ -168,11 +168,11 @@ export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, confi
   // The owner's clock (pi/owner.ts) delivers comments and messages and drives auto mode; the lobby logs what it did.
   onOwnerEvent((event) => {
     lobbyTopics.bump("notices");
-    if (event.kind === "comments") lobbyFeed.log("LOBBY", `passed ${event.count} plan comment${event.count === 1 ? "" : "s"} on ${event.taskId} to the oracle`, "info");
-    else if (event.kind === "inbox" || event.kind === "messages") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the oracle`, "info");
+    if (event.kind === "comments") lobbyFeed.log("LOBBY", `passed ${event.count} plan comment${event.count === 1 ? "" : "s"} on ${event.taskId} to the orchestrator`, "info");
+    else if (event.kind === "inbox" || event.kind === "messages") lobbyFeed.log("LOBBY", `passed ${event.count} message${event.count === 1 ? "" : "s"} from another session to the orchestrator`, "info");
     else if (event.kind === "auto") lobbyFeed.log("LOBBY", `auto mode ${event.on ? "on" : "off"} for ${event.taskId}`, event.on ? "success" : "info");
-    else if (event.kind === "held") lobbyFeed.log("LOBBY", `auto mode: you stopped the oracle on ${event.taskId}; it waits for your next message`, "info");
-    else if (event.kind === "nudge") lobbyFeed.log("LOBBY", `auto mode: keeping the oracle going on ${event.taskId}`, "info");
+    else if (event.kind === "held") lobbyFeed.log("LOBBY", `auto mode: you stopped the orchestrator on ${event.taskId}; it waits for your next message`, "info");
+    else if (event.kind === "nudge") lobbyFeed.log("LOBBY", `auto mode: keeping the orchestrator going on ${event.taskId}`, "info");
     else lobbyFeed.log("LOBBY", `auto mode: no progress on ${event.taskId} — it needs you`, "warning");
   });
   return state;

@@ -385,7 +385,7 @@ function AgentCard({ kind, config, models, harnesses, save, onGrants }: { kind: 
       <div className="mt-auto grid gap-2.5">
       <ToggleField
         label="Auto-compact"
-        help={kind === "master" ? "Compacts the oracle's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
+        help={kind === "master" ? "Compacts the orchestrator's context as it fills, and files what it learned into the knowledge base, shared with the agents it concerns." : onHarness ? (harness?.protocol === "acp" ? `${harness.label} compacts on its own; this switch applies to pi, Codex and Claude Code.` : `Lets ${harness?.label ?? "the harness"} compact this agent's context, at the threshold under Harnesses.`) : "Compacts this agent's context as it fills."}
         checked={entry.autoCompact !== false}
         onChange={(on) => set({ autoCompact: on })}
         name={`${name} auto-compact`}

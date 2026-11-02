@@ -12,7 +12,7 @@ export type Role = "oracle" | "planner" | "scout" | "research" | "dev" | "qa" | 
 
 export function roleOf(source: string | undefined): Role {
   const key = (source ?? "").toUpperCase()
-  if (key === "MASTER" || key === "ORACLE") return "oracle"
+  if (key === "MASTER" || key === "ORACLE" || key === "ORCHESTRATOR") return "oracle"
   if (key === "PLANNER" || key === "PANEL") return "planner"
   if (key === "SCOUT") return "scout"
   if (key === "RESEARCH" || key === "RESEARCHER") return "research"

@@ -35,7 +35,7 @@ export function OpenInSession({ row, quiet = false }: { row: TaskRow; quiet?: bo
       if (!still()) return
       if (where.sessionId && where.sessionId === status.sessionId) return go("#/lobby")
       if (where.sessionId && !where.key) return toast.info("This task runs in another terminal. Switch to that terminal to work on it.")
-      if (status.busy) return toast.info("The oracle is working in this window. Stop it first, then open the task in its session.")
+      if (status.busy) return toast.info("The orchestrator is working in this window. Stop it first, then open the task in its session.")
       if ((await act("sessions.switch", where.key ? { key: where.key } : { claimTaskId: row.id })) && still()) go("#/lobby")
     } catch (e) { if (still()) toast.error(e instanceof Error ? e.message : String(e)) }
   }

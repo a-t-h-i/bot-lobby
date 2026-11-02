@@ -29,7 +29,7 @@ export const FILE_LABELS: Record<string, string> = {
 };
 
 /** Who the agents are, as the lobby names them. */
-export const AGENT_LABELS: Record<KnowledgeAgent, string> = { master: "Master (oracle)", designer: "Designer", backend: "Backend", qa: "QA" };
+export const AGENT_LABELS: Record<KnowledgeAgent, string> = { master: "Orchestrator", designer: "Designer", backend: "Backend", qa: "QA" };
 
 /** A question for the oracle, outside task routing and the implementation workflow. */
 export function knowledgeQuestion(text: string, roots: readonly string[]): string {
@@ -104,7 +104,7 @@ export interface KnowledgeLedgerView {
 /** The metrics' agent names (`DEV`, `DESIGN`, `MASTER`, …) as knowledge agents. */
 function runAgent(name: string): KnowledgeAgent | undefined {
   const key = name.toUpperCase();
-  if (key === "MASTER" || key === "ORACLE") return "master";
+  if (key === "MASTER" || key === "ORACLE" || key === "ORCHESTRATOR") return "master";
   if (key === "DEV" || key === "BACKEND") return "backend";
   if (key === "DESIGN" || key === "DESIGNER" || key === "FRONTEND") return "designer";
   if (key === "QA") return "qa";
@@ -112,7 +112,7 @@ function runAgent(name: string): KnowledgeAgent | undefined {
 }
 
 /** Short names, as the page's history lines use them. */
-const SHORT_NAMES: Record<KnowledgeAgent, string> = { master: "Oracle", designer: "Designer", backend: "Backend", qa: "QA" };
+const SHORT_NAMES: Record<KnowledgeAgent, string> = { master: "Orchestrator", designer: "Designer", backend: "Backend", qa: "QA" };
 
 export class KnowledgeBook {
   private readonly deps: KnowledgeDeps;

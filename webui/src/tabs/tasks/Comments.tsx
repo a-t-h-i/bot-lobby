@@ -19,7 +19,7 @@ import { Markdown } from "@/ui/Markdown"
 const COMMENT_ICONS: Record<PlanComment["status"], typeof Circle> = { open: Circle, delivered: CircleDot, addressed: CheckCircle2 }
 const COMMENT_WORDS: Record<PlanComment["status"], string> = {
   open: "waiting for the owning session",
-  delivered: "sent to the oracle",
+  delivered: "sent to the orchestrator",
   addressed: "plan amended",
 }
 
@@ -95,7 +95,7 @@ export function Comments({ taskId, finished, canComment }: { taskId: string; fin
       </h3>
       {comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {finished ? "No comments." : canComment ? "No comments yet. Comment on the plan here or in the box below (Markdown and images work there); the oracle amends it." : "No comments yet."}
+          {finished ? "No comments." : canComment ? "No comments yet. Comment on the plan here or in the box below (Markdown and images work there); the orchestrator amends it." : "No comments yet."}
         </p>
       ) : (
         <ul className="cs-cm">

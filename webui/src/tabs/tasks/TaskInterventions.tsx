@@ -128,8 +128,8 @@ function ApprovalActions({ taskId, item, onDone }: { taskId: string; item: Waiti
   const what = `${item.kind}${item.domain ? ` for ${item.domain}` : ""}`
   return (
     <span className="flex flex-wrap gap-1.5">
-      <AskButton label="Approve" icon={Check} title={`Approve the ${what}?`} description={`${item.detail} The task's oracle is told and carries on with it.`} confirmLabel="Approve" run={resolve("approved")} onDone={onDone} />
-      <AskButton label="Reject" icon={X} tone="danger" title={`Reject the ${what}?`} description={`${item.detail} The task's oracle is told and works without it.`} confirmLabel="Reject" run={resolve("rejected")} onDone={onDone} />
+      <AskButton label="Approve" icon={Check} title={`Approve the ${what}?`} description={`${item.detail} The task's orchestrator is told and carries on with it.`} confirmLabel="Approve" run={resolve("approved")} onDone={onDone} />
+      <AskButton label="Reject" icon={X} tone="danger" title={`Reject the ${what}?`} description={`${item.detail} The task's orchestrator is told and works without it.`} confirmLabel="Reject" run={resolve("rejected")} onDone={onDone} />
     </span>
   )
 }
@@ -165,7 +165,7 @@ function TaskActions({ row, detail, onChanged }: { row: TaskRow; detail: TaskDet
     <div className="cs-wacts">
       {row.resumable ? <ResumeTask row={row} onResumed={onChanged} /> : null}
       {detail.canAccept ? (
-        <AskButton label="Accept as is" icon={ShieldCheck} title={`Accept "${row.title}" as is?`} description="You accept the work unverified: missing QA and lint checks are waived on your word. The task's oracle is asked to complete it; nothing is merged." confirmLabel="Accept as is" run={() => call("tasks.accept", { taskId })} onDone={onChanged} />
+        <AskButton label="Accept as is" icon={ShieldCheck} title={`Accept "${row.title}" as is?`} description="You accept the work unverified: missing QA and lint checks are waived on your word. The task's orchestrator is asked to complete it; nothing is merged." confirmLabel="Accept as is" run={() => call("tasks.accept", { taskId })} onDone={onChanged} />
       ) : null}
       {detail.canForceClose ? (
         <AskButton label="Force close" icon={CircleSlash} tone="danger" title={`Force close "${row.title}"?`} description="The task is abandoned and its running work cancelled. Its code, worktree and history are kept; it is not marked complete." confirmLabel="Force close" typeToConfirm={row.title} run={(title) => call("tasks.forceClose", { taskId, title })} onDone={onChanged} />

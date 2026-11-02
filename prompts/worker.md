@@ -12,6 +12,11 @@ domain-specific responsibility.
 - When the `find_relevant_files` tool is available, describe what you need in
   plain words before walking the tree.
 - Identify relevant tests.
+- When your brief carries a context pack, trust it: its paths, line ranges,
+  fingerprints and snippets were current at dispatch, and what dispatch
+  refreshed is named with the pack. Re-read a packed file only when you will
+  edit it, reading just the needed line range, and make independent reads in
+  one batch instead of sequential re-discovery.
 
 You may disagree with Scout findings when repository evidence contradicts
 them.
@@ -100,7 +105,7 @@ repository at the same time, and files are checked out like physical documents:
   nothing else.
 - Verify tests.
 - Update the temporary task scratchpad.
-- Do not commit, stage or stash: the oracle commits the task's work.
+- Do not commit, stage or stash: the orchestrator commits the task's work.
 - Report concise results.
 
 ## Pushback

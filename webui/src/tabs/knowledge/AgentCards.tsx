@@ -55,7 +55,7 @@ export function AgentCards({ data, onOpen }: { data: KnowledgeRead; onOpen: (age
             {over.length ? (
               <p className="cs-kagw">
                 <CircleAlert aria-hidden="true" className="size-3.5" />Over the compaction threshold
-                <button type="button" className="cs-kc cs-sm" onClick={() => askToCompact(group.agent, over.map((info) => info.file))}>Ask the oracle to compact</button>
+                <button type="button" className="cs-kc cs-sm" onClick={() => askToCompact(group.agent, over.map((info) => info.file))}>Ask the orchestrator to compact</button>
               </p>
             ) : null}
             {recent.length ? (

@@ -45,7 +45,7 @@ export const PLANNER_TOOLS: readonly string[] = ["read", "grep", "find", "ls"];
 export const RESEARCH_PANEL_TOOLS: readonly string[] = [...PLANNER_TOOLS, "web_search", "fetch_content", "source_check", "get_search_content"];
 
 /** The chair of the panel, as the Plan tab, the feed and the metrics name it. */
-export const ORACLE_LABEL = "ORACLE";
+export const ORACLE_LABEL = "ORCHESTRATOR";
 
 export const MEMBER_LABELS: Record<PanelMember, string> = { backend: "DEV", designer: "DESIGN", qa: "QA", researcher: "RESEARCH" };
 
@@ -255,7 +255,7 @@ export function appendAssumptions(plan: string, questions: readonly PanelQuestio
   if (questions.length === 0) return plan;
   const lines = questions.map((question) => {
     const pick = recommendedOption(question);
-    return `- [${question.from}] ${question.text} → ${pick ? optionLabel(pick) : "the oracle's call"} (${why})`;
+    return `- [${question.from}] ${question.text} → ${pick ? optionLabel(pick) : "the orchestrator's call"} (${why})`;
   });
   const rows = plan.split("\n");
   const heading = rows.findIndex((row) => /^#{2,3}\s+assumptions\s*$/i.test(row.trim()));
@@ -356,7 +356,7 @@ export function roundQuestions(reply: PlannerReply | undefined, seatQuestions: r
 
 /** A leading `[SEAT]` tag names who asked; the oracle uses it when it relays a seat. */
 function tagged(question: AskedQuestion, fallback: string): PanelQuestion {
-  const tag = /^\[(DEV|DESIGN|QA|RESEARCH|ORACLE)\]\s*/i.exec(question.text);
+  const tag = /^\[(DEV|DESIGN|QA|RESEARCH|ORACLE|ORCHESTRATOR)\]\s*/i.exec(question.text);
   return tag ? { ...question, from: tag[1]!.toUpperCase(), text: question.text.slice(tag[0].length) } : { ...question, from: fallback };
 }
 
@@ -415,7 +415,7 @@ export function plannerTranscript(messages: readonly PlannerMessage[], seed?: Pl
   }
   const settled = messages.flatMap((message) => message.settled ?? []);
   if (settled.length > 0) lines.push(settledBlock(settled), "");
-  if (draft) lines.push("## The oracle's current draft plan", "", truncate(draft, 8000), "");
+  if (draft) lines.push("## The orchestrator's current draft plan", "", truncate(draft, 8000), "");
   lines.push(closing);
   return lines.join("\n");
 }
@@ -516,8 +516,8 @@ export function commentBlock(comments: readonly LineComment[]): string {
 export function plannerSays(ready: boolean, questions: readonly PanelQuestion[], mode: RoundMode = "normal"): string {
   if (mode !== "normal") {
     return ready
-      ? "The round limit is reached: the oracle decided what was still open (see Assumptions). Save the plan, or comment on a line to revise it."
-      : "The round limit is reached, but there is no draft yet. Reply or retry to let the oracle write one.";
+      ? "The round limit is reached: the orchestrator decided what was still open (see Assumptions). Save the plan, or comment on a line to revise it."
+      : "The round limit is reached, but there is no draft yet. Reply or retry to let the orchestrator write one.";
   }
   if (ready) return "The panel agrees the plan is clear. Save it as a pending task, or keep refining.";
   if (questions.length === 0) return "No open questions this round. Save the draft, or add detail.";

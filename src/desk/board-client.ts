@@ -46,7 +46,7 @@ export function registerBoardClient(pi: ExtensionAPI, env: NodeJS.ProcessEnv = p
     name: "post_board",
     label: "Post to the task board",
     description:
-      "Post a short, typed entry on the task board that every agent on this task can read: `contract` (an interface others build against: a route, a payload shape, a type, an event name, file location), `decision` (a choice others should follow), `blocker` (something stopping you that someone else must change), `question` (open, for the oracle), `done` (a piece is finished and ready to test), `note`. Unaddressed contracts and blockers reach the other running workers at once; `to` (worker ids: backend, designer, qa, a child id) or `files` narrows who is pushed it. Post facts, not progress chatter.",
+      "Post a short, typed entry on the task board that every agent on this task can read: `contract` (an interface others build against: a route, a payload shape, a type, an event name, file location), `decision` (a choice others should follow), `blocker` (something stopping you that someone else must change), `question` (open, for the orchestrator), `done` (a piece is finished and ready to test), `note`. Unaddressed contracts and blockers reach the other running workers at once; `to` (worker ids: backend, designer, qa, a child id) or `files` narrows who is pushed it. Post facts, not progress chatter.",
     parameters: Type.Object({
       kind: Type.Union(POST_KINDS.map((kind) => Type.Literal(kind))),
       text: Type.String({ description: "The post: the exact facts, at most a short paragraph" }),

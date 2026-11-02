@@ -373,7 +373,7 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
   // Auto mode's nudge to keep going (pi/owner.ts autoNudge) shows as one short line.
   if (/^Auto mode: \S+ is \S+\. Keep driving it to completion/.test(body)) return [{ role: "note", text: AUTO_NOTE }];
   const comment = /^The user left (?:a comment|\d+ comments) on (the approved plan|the proposal) of (\S+) from the lobby:/.exec(body);
-  if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the oracle` }];
+  if (comment) return [{ role: "note", text: `your comment on ${comment[1]} went to the orchestrator` }];
   return [{ role: "you", text: body }];
 }
 
@@ -480,7 +480,7 @@ export function narrateEvent(feed: LobbyFeed, event: AgentEventLike, describe: (
         feed.thinkEnd("MASTER");
         if (message.stopReason === "error") {
           const error = (message.errorMessage ?? "the model call failed").split("\n")[0]!;
-          feed.say("note", `✗ the oracle's turn failed: ${error}`);
+          feed.say("note", `✗ the orchestrator's turn failed: ${error}`);
           feed.log("MASTER", `turn failed — ${error}`, "error");
         }
       }

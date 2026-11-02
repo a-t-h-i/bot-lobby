@@ -34,7 +34,7 @@ const GROUP_MS = 5 * 60_000
 const GREETING = "What's on your mind?"
 const GREETING_HINT = "Ask a question or for a change below."
 const NOTHING_SAID = "Talk about this task"
-const NOTHING_SAID_HINT = "The oracle answers here."
+const NOTHING_SAID_HINT = "The orchestrator answers here."
 
 function NoteEntry({ entry }: { entry: ChatEntry }) {
   if (entry.text === AUTO_NOTE) return <ChatNote auto>{AUTO_NOTE}</ChatNote>

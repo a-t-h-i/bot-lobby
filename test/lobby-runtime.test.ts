@@ -190,7 +190,7 @@ test("a failed Master turn shows up in the lobby, not only in pi's chat", async 
   const { fake, ctx } = await start(true);
   try {
     await fake.emit("message_end", { type: "message_end", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "invalid token\nstack" } }, ctx);
-    assert.deepEqual(lobbyFeed.chat.at(-1)!.text, "✗ the oracle's turn failed: invalid token");
+    assert.deepEqual(lobbyFeed.chat.at(-1)!.text, "✗ the orchestrator's turn failed: invalid token");
     assert.equal(lobbyFeed.activity.at(-1)!.kind, "error");
   } finally {
     await stop(fake, ctx);

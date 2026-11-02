@@ -121,7 +121,7 @@ function ArchiveButton({ row, archive }: { row: TaskRow; archive: () => Promise<
 function AutoMode({ on, toggle }: { on: boolean; toggle: () => void }) {
   useHotkey("a", toggle)
   return (
-    <label className="cs-autol" {...tip("Auto mode: the oracle decides without asking")}>
+    <label className="cs-autol" {...tip("Auto mode: the orchestrator decides without asking")}>
       <RefreshCw aria-hidden="true" className="size-3.5" />
       <span>Auto</span>
       <Switch small checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />

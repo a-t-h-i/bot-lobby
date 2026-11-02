@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Classifier } from "../src/classifier/classifier.ts";
 import type { FetchLike } from "../src/classifier/client.ts";
-import { effortRouter, fellShort, planRoute, routeLabel, stepDown, type EffortRouter } from "../src/classifier/effort.ts";
+import { effortRouter, effortBasis, fellShort, planRoute, routeLabel, stepDown, type EffortRouter } from "../src/classifier/effort.ts";
+import { chooseTrack, fastPathRecord } from "../src/workflow/track.ts";
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { runScouts, runWorker } from "../src/master/master.ts";
 import { PlanningSession } from "../src/lobby/planner.ts";
@@ -37,6 +38,24 @@ test("routes only go down: simple drops one thinking level (never below low), tr
   assert.equal(fellShort({ status: "success" }, ["missing Completed section"]), true);
   assert.equal(fellShort({ status: "timeout" }), true);
   assert.equal(fellShort({ status: "cancelled" }), false, "a cancel is not a reason to run again");
+});
+
+test("a fast path's basis carries the effort reading; rename wording and file counts never set risk, serious words do", () => {
+  assert.equal(effortBasis(undefined), undefined, "no effort reading: no basis line");
+  assert.equal(effortBasis({ level: "simple", confidence: 0.876 }), "effort: simple (0.88)");
+  const fast = (request: string) => chooseTrack(request, undefined, { fastTrack: true, forced: "fast" }, "2026-01-01T00:00:00.000Z");
+  // Three files and the word "rename": trivial single-worker work, never risk.
+  const rename = fastPathRecord("rename the helper in src/page.tsx, src/form.tsx and src/ui.tsx", fast("rename the helper in src/page.tsx, src/form.tsx and src/ui.tsx"), { level: "trivial", confidence: 0.91 })!;
+  assert.equal(rename.risk, "none");
+  assert.equal(rename.riskEvidence, undefined);
+  assert.equal(rename.owner, "designer");
+  assert.match(rename.basis, /^effort: trivial \(0\.91\)/);
+  // The request's own serious words keep the risk on the record, so it never enforces the path.
+  for (const request of ["store the password hash in the lobby tab", "seal the credentials in the config file", "backfill the lobby data safely", "lock the desk against the race condition"]) {
+    const serious = fastPathRecord(request, fast(request))!;
+    assert.equal(serious.risk, "medium", request);
+    assert.ok(serious.riskEvidence, request);
+  }
 });
 
 /** A fake Jev scoring every step at `level` (0 trivial … 3 complex). */

@@ -6,7 +6,7 @@
  */
 import type { PanelMember, PlannerSnapshot } from "@protocol"
 
-export const ORACLE = "ORACLE"
+export const ORACLE = "ORCHESTRATOR"
 export const NO_DRAFT = "No draft yet."
 export const DRAFT_WAITS = "The draft appears after the panel's first round."
 export const SEATS_NEED = "What each seat needs"
@@ -16,6 +16,7 @@ export const MEMBER_LABELS: Record<PanelMember, string> = { backend: "DEV", desi
 
 /** What each seat brings to the panel, under its name on the start page. */
 export const SEAT_ROLES: Record<string, string> = {
+  ORCHESTRATOR: "Chairs the panel, and settles the last round alone.",
   ORACLE: "Chairs the panel, and settles the last round alone.",
   DEV: "Code, data and the APIs it touches.",
   DESIGN: "Screens, flows and the words on them.",
@@ -54,7 +55,7 @@ export function statusParts(snap: PlannerSnapshot): string[] {
   else if (error) parts.push(`${error} — Retry runs the round again`)
   else if (snap.questions.length > 0) parts.push(`${count(snap.questions.length, "question")} waiting`)
   if (!snap.busy && snap.round > 0) parts.push(roundLabel(snap.round, snap.limit))
-  if (!snap.busy && snap.limit > 0 && snap.round + 1 === snap.limit) parts.push("the next round is the last: the oracle settles the rest")
+  if (!snap.busy && snap.limit > 0 && snap.round + 1 === snap.limit) parts.push("the next round is the last: the orchestrator settles the rest")
   return parts
 }
 
@@ -83,7 +84,7 @@ function memberCell(member: PanelMember, snap: PlannerSnapshot): SeatCell {
 
 /** The oracle first, then the four seats. */
 export function seatCells(snap: PlannerSnapshot): SeatCell[] {
-  const asked = snap.questions.filter((question) => question.from === ORACLE).length
+  const asked = snap.questions.filter((question) => question.from === ORACLE || question.from === "ORACLE").length
   const oracle: SeatCell = { label: ORACLE, seated: true, working: snap.busy, text: snap.busy ? "chairing" : asked ? count(asked, "question") : "·" }
   return [oracle, ...MEMBER_ORDER.map((member) => memberCell(member, snap))]
 }

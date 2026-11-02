@@ -13,6 +13,30 @@ export interface AssignmentExpansionRequest {
   requested: string[];
 }
 
+/** One file of a context pack: an exact path with optional line ranges, a content fingerprint and a bounded snippet. */
+export interface ContextPackFile {
+  path: string;
+  /** Line ranges as [start, end] with 1 <= start <= end. */
+  ranges?: Array<[number, number]>;
+  /** Cheap content hash at pack-build time; dispatch refreshes entries whose fingerprint no longer matches. */
+  fingerprint?: string;
+  /** At most 2,000 characters of the file, current at pack-build time. */
+  snippet?: string;
+}
+
+/** Versioned, validated worker context: exact paths, bounded snippets, invariants, prior work and verification, rendered once into the initial worker prompt. */
+export interface ContextPack {
+  version: 1;
+  files: ContextPackFile[];
+  invariants?: string[];
+  priorWork?: string[];
+  verification: string[];
+}
+
+/** Total pack size, serialized, and the largest a single snippet may be. */
+export const CONTEXT_PACK_MAX_CHARS = 24_000;
+export const CONTEXT_SNIPPET_MAX_CHARS = 2_000;
+
 export interface WorkerAssignment {
   id: string;
   revision: number;
@@ -29,6 +53,8 @@ export interface WorkerAssignment {
   needs: AssignmentExpansionRequest[];
   /** Total allowance, not a fresh allowance on retry or revision. */
   discoveryLimit?: number;
+  /** Reusable context rendered once into the initial worker prompt; validated before dispatch. */
+  contextPack?: ContextPack;
 }
 
 export class AssignmentValidationError extends Error {
@@ -64,11 +90,12 @@ function texts(value: unknown, label: string, required = false): void {
 }
 
 function validateShape(input: unknown): WorkerAssignment {
-  const a = object(input, ["id", "revision", "objective", "actions", "files", "contracts", "constraints", "exclusions", "tools", "verification", "evidence", "completedWork", "needs", "discoveryLimit"], "assignment");
+  const a = object(input, ["id", "revision", "objective", "actions", "files", "contracts", "constraints", "exclusions", "tools", "verification", "evidence", "completedWork", "needs", "discoveryLimit", "contextPack"], "assignment");
   text(a.id, "id");
   text(a.objective, "objective");
   requireValue(Number.isSafeInteger(a.revision) && Number(a.revision) > 0, "revision must be a positive integer");
   requireValue(a.discoveryLimit === undefined || (Number.isSafeInteger(a.discoveryLimit) && Number(a.discoveryLimit) >= 0), "discoveryLimit must be a non-negative integer");
+  validateContextPackShape(a.contextPack);
   validateActions(a.actions);
   validateFiles(a.files);
   validateTools(a.tools);
@@ -110,6 +137,33 @@ function validateNeeds(value: unknown): void {
     text(need.reason, `needs[${i}].reason`);
     texts(need.requested, `needs[${i}].requested`, true);
   });
+}
+
+/** Shape-only pack checks; path scope is checked against the project root in validateAssignment. */
+function validateContextPackShape(value: unknown): void {
+  if (value === undefined) return;
+  const pack = object(value, ["version", "files", "invariants", "priorWork", "verification"], "contextPack");
+  requireValue(pack.version === 1, "contextPack.version must be 1");
+  const total = JSON.stringify(pack).length;
+  requireValue(total <= CONTEXT_PACK_MAX_CHARS, `contextPack is ${total} characters; at most ${CONTEXT_PACK_MAX_CHARS} are allowed: trim snippets, ranges or arrays`);
+  list(pack.files, "contextPack.files").forEach((entry, i) => {
+    const file = object(entry, ["path", "ranges", "fingerprint", "snippet"], `contextPack.files[${i}]`);
+    text(file.path, `contextPack.files[${i}].path`);
+    requireValue(!/[\0*?\[\]{}]/.test(file.path), `contextPack.files[${i}].path must be an exact path, not a pattern`);
+    if (file.ranges !== undefined) list(file.ranges, `contextPack.files[${i}].ranges`).forEach((range, r) => {
+      requireValue(Array.isArray(range) && range.length === 2 && range.every((bound) => Number.isSafeInteger(bound)), `contextPack.files[${i}].ranges[${r}] must be [start, end] integers`);
+      const [start, end] = range as [number, number];
+      requireValue(start >= 1 && start <= end, `contextPack.files[${i}].ranges[${r}] must satisfy 1 <= start <= end (got ${start}-${end})`);
+    });
+    if (file.fingerprint !== undefined) text(file.fingerprint, `contextPack.files[${i}].fingerprint`);
+    if (file.snippet !== undefined) {
+      requireValue(typeof file.snippet === "string", `contextPack.files[${i}].snippet must be text`);
+      requireValue(file.snippet.length <= CONTEXT_SNIPPET_MAX_CHARS, `contextPack.files[${i}].snippet is ${file.snippet.length} characters; at most ${CONTEXT_SNIPPET_MAX_CHARS} are allowed (${file.path})`);
+    }
+  });
+  if (pack.invariants !== undefined) texts(pack.invariants, "contextPack.invariants");
+  if (pack.priorWork !== undefined) texts(pack.priorWork, "contextPack.priorWork");
+  texts(pack.verification, "contextPack.verification", true);
 }
 
 function inside(root: string, path: string): boolean {
@@ -165,11 +219,33 @@ async function validateFile(file: AssignmentFile, root: string, seen: Set<string
   }
 }
 
+/** Pack paths resolve exactly like assigned reference paths: inside project scope, an existing file, no aliases. */
+async function validatePackFile(file: ContextPackFile, root: string, seen: Set<string>, index: number): Promise<void> {
+  const label = `contextPack.files[${index}].path`;
+  const path = resolve(root, file.path);
+  requireValue(inside(root, path), `${label} ${file.path} is outside project scope ${root}`);
+  try {
+    const target = await resolvedPath(path, false);
+    requireValue(inside(root, target), `${label} ${file.path} resolves outside project scope ${root}`);
+    const entry = await stat(target);
+    requireValue(entry.isFile(), `${label} ${file.path} must identify a file, not a directory`);
+    requireValue(!seen.has(target), `${label} ${file.path} duplicates another pack path`);
+    seen.add(target);
+  } catch (error) {
+    if (error instanceof AssignmentValidationError) throw error;
+    throw new AssignmentValidationError(`${label} ${file.path}: ${error instanceof Error ? error.message : String(error)}; correct the path or refresh the pack`);
+  }
+}
+
 /** Validate before dispatch; failure must never fall back to an unrestricted run. */
 export async function validateAssignment(input: unknown, projectRoot: string): Promise<WorkerAssignment> {
   const assignment = validateShape(input);
   const root = await realpath(projectRoot);
   const seen = new Set<string>();
   for (const file of assignment.files) await validateFile(file, root, seen);
+  if (assignment.contextPack) {
+    const packSeen = new Set<string>();
+    for (const [index, file] of assignment.contextPack.files.entries()) await validatePackFile(file, root, packSeen, index);
+  }
   return { ...assignment, discoveryLimit: assignment.discoveryLimit ?? 2 };
 }

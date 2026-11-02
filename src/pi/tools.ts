@@ -26,6 +26,19 @@ import {
   type WorkflowResult,
 } from "../workflow/workflow.ts";
 
+export const ContextPackSchema = Type.Object({
+  version: Type.Literal(1),
+  files: Type.Array(Type.Object({
+    path: Type.String({ minLength: 1 }),
+    ranges: Type.Optional(Type.Array(Type.Tuple([Type.Integer({ minimum: 1 }), Type.Integer({ minimum: 1 })]), { description: "[start, end] line ranges with 1 <= start <= end" })),
+    fingerprint: Type.Optional(Type.String({ minLength: 1, description: "content hash at pack-build time; dispatch refreshes stale entries" })),
+    snippet: Type.Optional(Type.String({ maxLength: 2000, description: "bounded excerpt, current at pack-build time" })),
+  }, { additionalProperties: false })),
+  invariants: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  priorWork: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  verification: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
+}, { additionalProperties: false, description: "Reusable worker context, rendered once into the initial prompt; at most 24,000 characters serialized" });
+
 export const WorkerAssignmentSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   revision: Type.Integer({ minimum: 1 }),
@@ -49,6 +62,7 @@ export const WorkerAssignmentSchema = Type.Object({
     requested: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
   }, { additionalProperties: false })),
   discoveryLimit: Type.Optional(Type.Integer({ minimum: 0 })),
+  contextPack: Type.Optional(ContextPackSchema),
 }, { additionalProperties: false });
 
 const OrchestrateSchema = Type.Object({

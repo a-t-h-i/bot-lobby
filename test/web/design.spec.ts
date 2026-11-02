@@ -797,7 +797,7 @@ test("Activity opens in place in the conversation, there is no Activity pane, an
   await expect(main.getByRole("log", { name: "Activity" }), "no side pane for activity").toHaveCount(0);
   const run = main.getByRole("log", { name: "Conversation" }).getByRole("button", { name: /10 steps/ });
   await expect(run, "the steps sit in the conversation, folded").toHaveAttribute("aria-expanded", "false");
-  await expect(run, "with who worked and what went wrong").toContainText(/Master, Dev, QA \+1.*1 warning/);
+  await expect(run, "with who worked and what went wrong").toContainText(/Orchestrator, Dev, QA \+1.*1 warning/);
   await run.click();
   const steps = main.getByRole("list", { name: "Activity" });
   await expect(steps.getByRole("listitem")).toHaveCount(10);
@@ -1234,7 +1234,7 @@ test("with agents at work and no thought to show, the orb breathes with the brai
   await expect(orb.locator('[data-agent-icon="thinking"]'), "the brain").toBeAttached();
   await expect.poll(() => orb.locator(".orb-icon").evaluate((el: any) => Number(getComputedStyle(el).opacity)), { message: "shown without pointing at it" }).toBeGreaterThan(0.9);
   expect(await orb.locator(".orb-float").evaluate((el: any) => getComputedStyle(el).animationName), "breathing").toContain("orb-breathe");
-  await expect(orb.locator(".orb-label"), "naming who is at work").toContainText("Oracle");
+  await expect(orb.locator(".orb-label"), "naming who is at work").toContainText("Orchestrator");
 });
 
 test("the Thinking pane's edge pulses in the working agent's colour while anyone thinks or works, and rests when nobody does", async ({ page, server }) => {

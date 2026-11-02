@@ -39,7 +39,7 @@ export const CHAT_AGENT_SOURCES: Record<ChatAgent, string> = {
 
 /** The @ names the composer offers, in its menu's order, with what each one is for. */
 export const CHAT_MENTIONS: ReadonlyArray<{ name: string; agent: ChatAgent; hint: string }> = [
-  { name: "master", agent: "master", hint: "The oracle: anything, and changes across the project" },
+  { name: "master", agent: "master", hint: "The orchestrator: anything, and changes across the project" },
   { name: "design", agent: "designer", hint: "Frontend: pages, components, styling and UX" },
   { name: "dev", agent: "backend", hint: "Backend: APIs, data and server code" },
   { name: "qa", agent: "qa", hint: "Tests, and how to check a change" },
@@ -48,7 +48,7 @@ export const CHAT_MENTIONS: ReadonlyArray<{ name: string; agent: ChatAgent; hint
 ];
 
 /** Other spellings an @ mention may use. */
-const MENTION_ALIASES: Record<string, ChatAgent> = { oracle: "master", designer: "designer", frontend: "designer", backend: "backend", researcher: "researcher" };
+const MENTION_ALIASES: Record<string, ChatAgent> = { orchestrator: "master", oracle: "master", designer: "designer", frontend: "designer", backend: "backend", researcher: "researcher" };
 
 /** A message that opens with `@name`: who it is for and the rest of it; undefined for any other message. */
 export function parseMention(text: string): { agent: ChatAgent; rest: string } | undefined {

@@ -1,4 +1,4 @@
-import { appendMetrics, metricFromRun } from "../state/metrics.ts";
+import { appendMetrics, avoidedLaunchRecord, metricFromRun } from "../state/metrics.ts";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -7,6 +7,7 @@ import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
 import { effortFor } from "../classifier/instance.ts";
 import { fellShort, profileLabel, routeLabel } from "../classifier/effort.ts";
+import { singleWorker } from "../workflow/track.ts";
 import { agentProfile } from "../schemas/configuration.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { EditLog } from "../state/changes.ts";
@@ -26,6 +27,25 @@ export const DELEGATE_TOOL = "delegate_subtasks";
 export const DURABLE_OUTPUT_TOOL = "read_durable_output_artifacts";
 export const AGENT_ENV = "BOT_LOBBY_AGENT_POLICY";
 export const DELEGATION_ENV = "BOT_LOBBY_DELEGATION";
+
+/** The stages of a delegate launch, in launch order. */
+export type LaunchStage = "briefs-validation" | "desk-open" | "delegation-server" | "child-identity" | "child-spawn" | "child-run";
+
+/** Every delegate launch failure's exact shape: which stage failed, whether a worker started, and why. */
+export function launchStageError(stage: LaunchStage, cause: unknown, childRunId?: string): Error {
+  const started = childRunId ? `worker ${childRunId} started` : "no worker started";
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return new Error(`delegate failed at stage "${stage}" (${started}): ${message}`);
+}
+
+/** Run one launch stage, naming it in the error when it fails. */
+async function launchStage<T>(stage: LaunchStage, work: () => Promise<T>, childRunId?: string): Promise<T> {
+  try {
+    return await work();
+  } catch (cause) {
+    throw launchStageError(stage, cause, childRunId);
+  }
+}
 
 /** Only DESIGN/DEV workers and the QA gate may spawn children. */
 export function canDelegate(agent: { role: Role; domain: Domain; depth?: number }, quotaUsed: number): boolean {
@@ -228,11 +248,11 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
 
   const address = options.env?.[DESK_ENV.address];
   let desk = address ? deskSessionAt(address) : undefined;
-  if (address && !desk) throw new Error("The inherited file desk is unavailable.");
+  if (address && !desk) throw launchStageError("desk-open", new Error("The inherited file desk is unavailable."));
   const board = options.env?.[BOARD_ENV];
   // A worker without a batch desk still needs claims among its children.
   const ownedDesk = editable && !desk ? new DeskSession({ cwd: options.cwd, ...(board ? { boardPath: board } : {}) }) : undefined;
-  if (ownedDesk) await ownedDesk.open();
+  if (ownedDesk) await launchStage("desk-open", () => ownedDesk.open());
   // Children claim files among themselves; the parent keeps the batch desk when it has one.
   const childDesk = ownedDesk ?? desk;
   desk ??= ownedDesk;
@@ -263,7 +283,12 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     // The child's board and desk identity carries its parent's role, so a post addressed to the role reaches every worker of it while the child keeps its own cursors.
     const childWorker = `${agent.domain}:${childId}`;
     // Each child runs under its own assignment identity, issued within the parent's live scope.
-    const childAccess = options.runtimeAccess?.issueChild({ taskId: agent.taskId, ownerSessionId: options.runtimeAccess.ownerSessionId, runId: id, worktree: options.cwd }, { runId: childId, domain: agent.domain, role: agent.role, worktree: options.cwd });
+    let childAccess: RuntimeAccess | undefined;
+    try {
+      childAccess = options.runtimeAccess?.issueChild({ taskId: agent.taskId, ownerSessionId: options.runtimeAccess.ownerSessionId, runId: id, worktree: options.cwd }, { runId: childId, domain: agent.domain, role: agent.role, worktree: options.cwd });
+    } catch (cause) {
+      throw launchStageError("child-identity", cause, childId);
+    }
     const base: AgentRun = { runId: childId, parentRunId: id, depth: 2, taskId: agent.taskId, domain: agent.domain, role: agent.role, instruction: brief, stepInstruction: options.task, status: "running", output: "", attempts: 1, startedAt: new Date().toISOString(), ...(options.thinking ? { thinking: options.thinking } : {}) };
     const edits = new EditLog(options.cwd);
     const live = createLiveRun(base, { onUpdate: update }, edits);
@@ -273,26 +298,36 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
       const effort = options.effort ?? effortFor();
       const route = await effort.childRoute?.(brief, configured, { context: options.task, signal }).catch(() => undefined);
       const attempt = async (model: string | undefined, thinking: string) => {
+        let started = false;
         signal.throwIfAborted();
         const routed = route && model === route.model && thinking === route.thinking;
         live.annotate({ model, thinking, route: routed ? routeLabel(route) : undefined, routedFrom: routed ? profileLabel(route.from) : undefined, note: routed ? routeLabel(route) : undefined, noteKind: "info" });
-        return runPiAgent({
-        ...options,
-        agent: { ...agent, runId: childId, depth: 2 },
-        task: brief,
-        model,
-        thinking,
-        tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && (tool !== DURABLE_OUTPUT_TOOL || !!childAccess)), ...(childDesk ? childDesk.tools() : [])])],
-        mcpTools,
-        ...(childAccess ? { runtimeAccess: childAccess } : {}),
-        signal,
-        delegationQuota: undefined,
-        onChildRun: undefined,
-        onEvent: live.onEvent,
-        // A child keeps the board but under its own identity, so its reads, pushes and acknowledgements never collide with its parent's or a same-role sibling's.
-        env: { ...options.env, ...(board ? { BOT_LOBBY_BOARD_FROM: childWorker } : {}), ...(childDesk ? childDesk.env(childWorker) : {}) },
-        onStart: (handle) => childDesk?.attach(childWorker, { runId: childId, steer: handle.steer, annotate: live.annotate }),
-      }, run);
+        try {
+          return await runPiAgent({
+            ...options,
+            agent: { ...agent, runId: childId, depth: 2 },
+            task: brief,
+            model,
+            thinking,
+            tools: [...new Set([...tools.filter((tool) => tool !== DELEGATE_TOOL && (tool !== DURABLE_OUTPUT_TOOL || !!childAccess)), ...(childDesk ? childDesk.tools() : [])])],
+            mcpTools,
+            ...(childAccess ? { runtimeAccess: childAccess } : {}),
+            signal,
+            delegationQuota: undefined,
+            onChildRun: undefined,
+            onEvent: live.onEvent,
+            // A child keeps the board but under its own identity, so its reads, pushes and acknowledgements never collide with its parent's or a same-role sibling's.
+            env: { ...options.env, ...(board ? { BOT_LOBBY_BOARD_FROM: childWorker } : {}), ...(childDesk ? childDesk.env(childWorker) : {}) },
+            onStart: (handle) => {
+              started = true;
+              childDesk?.attach(childWorker, { runId: childId, steer: handle.steer, annotate: live.annotate });
+            },
+          }, run);
+        } catch (cause) {
+          // A cancellation is not a launch failure: it settles as a cancelled run.
+          if (signal.aborted) throw cause;
+          throw launchStageError("child-spawn", cause, started ? childId : undefined);
+        }
       };
       let result = await attempt(route?.model ?? configured.model, route?.thinking ?? configured.thinking);
       let retried = false;
@@ -300,15 +335,20 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
         retried = true;
         result = await attempt(configured.model, configured.thinking);
       }
-      const final: AgentRun = { ...live.current(), ...result, thinking: retried ? configured.thinking : route?.thinking ?? configured.thinking, attempts: retried ? 2 : 1, ...(route && !retried ? { route: routeLabel(route), routedFrom: profileLabel(route.from) } : {}), edited: edits.list(), finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
+      // A run that started and then failed names its stage: the launcher tells failed-start from failed-work.
+      const failed = result.error ? { error: launchStageError("child-run", new Error(result.error), childId).message } : {};
+      const final: AgentRun = { ...live.current(), ...result, thinking: retried ? configured.thinking : route?.thinking ?? configured.thinking, attempts: retried ? 2 : 1, ...(route && !retried ? { route: routeLabel(route), routedFrom: profileLabel(route.from) } : {}), ...failed, edited: edits.list(), finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
       update(final);
       return final;
     } catch (error) {
-      const final: AgentRun = { ...live.current(), edited: edits.list(), status: signal.aborted ? "cancelled" : "failed", error: (error as Error).message, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
+      const cause = error instanceof Error ? error.message : String(error);
+      // A failure after the child's identity exists names its launch stage; a cancellation is not a launch failure.
+      const failure = signal.aborted || cause.startsWith('delegate failed at stage "') ? cause : launchStageError("child-run", error, childId).message;
+      const final: AgentRun = { ...live.current(), edited: edits.list(), status: signal.aborted ? "cancelled" : "failed", error: failure, finishedAt: new Date().toISOString(), note: undefined, noteKind: undefined };
       update(final);
       return final;
     } finally {
-      childDesk?.release(childId, () => "Child finished; re-read the file and check its report before continuing.");
+      childDesk?.release(childWorker, () => "Child finished; re-read the file and check its report before continuing.");
     }
   };
 
@@ -320,7 +360,20 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     if (request.op !== "delegate") return { ok: false, text: "Unknown delegation operation." };
     const signal = childSignal();
     signal.throwIfAborted();
-    const briefs = reserveChildren(quota, request.briefs);
+    // The single-worker fast path is one implementation worker end to end: its worker cannot hand work down. A pure read, before any side effect.
+    const projectRoot = detectProjectRoot(options.cwd, CONFIG_DIR_NAME);
+    const registry = loadTask(projectRoot, CONFIG_DIR_NAME, agent.taskId);
+    if (registry && singleWorker(registry)) {
+      appendMetrics(projectRoot, CONFIG_DIR_NAME, [avoidedLaunchRecord(registry.id, "nested delegation: single-worker fast path")]);
+      return { ok: false, text: `Task ${registry.id} is on the single-worker fast path: one implementation worker carries it end to end, and sub-delegation would bypass that. Do the work yourself; if it genuinely needs more workers, ask the orchestrator to promote the task (action=track track=full, with the reason).` };
+    }
+    // Briefs validate before any side effect: no claim release, no pool use, no child spawn.
+    let briefs: string[];
+    try {
+      briefs = reserveChildren(quota, request.briefs);
+    } catch (cause) {
+      throw launchStageError("briefs-validation", cause);
+    }
     // A coordinating parent must release claims before waiting for children that may need them.
     for (const held of new Set([desk, childDesk])) held?.releaseFiles(parentDeskId, () => "Delegating this work; re-read before editing.");
     const runs = briefs.map((brief) => {
@@ -331,11 +384,11 @@ export async function delegationHost(options: PiRunOptions, run: ProcessRunner) 
     });
     const results = await Promise.all(runs);
     return { ok: true, text: JSON.stringify(results.map((child) => ({ runId: child.runId, status: child.status, report: child.output.slice(0, 12_000), reportPath: join(dataRoot(detectProjectRoot(options.cwd, CONFIG_DIR_NAME), CONFIG_DIR_NAME), "delegations", `${child.runId}.json`), error: child.error, usage: child.usage }))) };
-  }, () => controller.abort()).catch(async (error) => {
+  }, () => controller.abort()).catch(async (cause) => {
     if (ownedDesk) await ownedDesk.close();
     pool.users -= 1;
     if (pool.users === 0) pools.delete(key);
-    throw error;
+    throw launchStageError("delegation-server", cause);
   });
 
   let closed = false;

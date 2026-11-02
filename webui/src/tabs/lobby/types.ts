@@ -72,12 +72,13 @@ const SOURCE_COLORS: Record<string, string> = {
   RESEARCH: "text-source-research",
   SCOUT: "text-source-scout",
   ORACLE: "text-primary",
+  ORCHESTRATOR: "text-primary",
   LOBBY: "text-muted-foreground",
 }
 
-/** A source as it reads on the page: `MASTER` → `Oracle`, `SCOUT` → `Scout`, `QA` stays. */
+/** A source as it reads on the page: `MASTER`/`ORACLE` → `Orchestrator`, `SCOUT` → `Scout`, `QA` stays. */
 export function sourceLabel(source: string): string {
-  if (source === "MASTER") return "Oracle"
+  if (source === "MASTER" || source === "ORACLE" || source === "ORCHESTRATOR") return "Orchestrator"
   if (source.length <= 2) return source
   return source.charAt(0) + source.slice(1).toLowerCase()
 }
@@ -95,6 +96,7 @@ const SOURCE_TONES: Record<string, string> = {
   RESEARCH: "var(--source-research)",
   SCOUT: "var(--source-scout)",
   ORACLE: "var(--primary)",
+  ORCHESTRATOR: "var(--primary)",
   LOBBY: "var(--muted-foreground)",
 }
 

@@ -489,6 +489,8 @@ export function likelyFilesBlock(result: LikelyFiles | undefined): string {
 export interface FileHinter {
   /** The Likely files block for a step, or "" (off, nothing stands out, out of time). */
   block(query: string, signal?: AbortSignal, context?: string): Promise<string>;
+  /** The same call's likely paths, newest first, or [] — so a caller can build a fingerprinted context pack from them. */
+  paths?(query: string, signal?: AbortSignal): Promise<string[]>;
   /** Tools to add to a subagent's allowlist: `find_relevant_files` while file hints are on. */
   tools(): readonly string[];
 }
@@ -501,6 +503,11 @@ export function fileHinter(classifier: Classifier, scope: FileScope, log?: (text
       const block = likelyFilesBlock(result);
       if (result) log?.(block ? `likely files: ${result.files.map((file) => `${file.path} (${file.relevance.toFixed(2)})`).join(", ")} · ${result.ms} ms` : `no file stands out (${result.anyRelevant.toFixed(2)}) · ${result.ms} ms`);
       return block;
+    },
+    async paths(query, signal) {
+      if (!classifier.enabled("files")) return [];
+      const result = await likelyFiles(classifier, scope, query, { ...(signal ? { signal } : {}), budgetMs: classifier.config.fileHints.budgetMs });
+      return result?.files.map((file) => file.path) ?? [];
     },
     tools: () => (classifier.enabled("files") ? [FIND_FILES_TOOL] : []),
   };

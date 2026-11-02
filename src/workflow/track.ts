@@ -13,7 +13,9 @@
  * `action=track`; the user can force either path with `--fast` or `--full`.
  * Once work is under way a track only gets stricter.
  */
-import type { Task, TaskTrack, TaskTriage, TrackMember, TrackPath, TriageSize } from "../schemas/task.ts";
+import type { Task, TaskTrack, TaskTriage, TrackMember, TrackPath, TriageSize, FastPathRecord } from "../schemas/task.ts";
+import type { Domain } from "../schemas/agent.ts";
+import { effortBasis, type EffortScore } from "../classifier/effort.ts";
 
 export const TRACK_MEMBERS: readonly TrackMember[] = ["designer", "backend", "qa", "researcher"];
 
@@ -271,6 +273,8 @@ const SOLO_YES = 0.7;
 export interface TrackOptions {
   /** `workflow.fastTrack`: false puts every task on the full workflow. */
   fastTrack: boolean;
+  /** Estimated work, independent of request length or file counts. */
+  effort?: EffortScore;
   /** The user's `--fast` or `--full`. */
   forced?: TrackPath;
   /** The task follows a plan agreed in the planning panel. */
@@ -304,7 +308,10 @@ export function chooseTrack(request: string, triage: TaskTriage | undefined, opt
   const source: TaskTrack["source"] = triage ? "classifier" : "rules";
   // A self-contained build (one file, one page) needs no survey or plan round even when it is rich.
   const selfContained = Boolean(rules.solo) || (triage?.solo ?? 0) >= SOLO_YES;
-  const fast = (size === "trivial" || size === "small" || (size === "medium" && selfContained)) && !rules.risk && !unclear;
+  const estimated = options.effort && options.effort.confidence >= SIZE_CONFIDENCE;
+  const manageable = estimated ? options.effort!.level !== "complex" : size === "trivial" || size === "small" || (size === "medium" && selfContained);
+  if (estimated) reasons.push(effortBasis(options.effort)!);
+  const fast = manageable && !rules.risk && !unclear;
   const [path, why, by]: [TrackPath, string[], TaskTrack["source"]] = options.forced
     ? [options.forced, [`the user asked for the ${options.forced === "fast" ? "fast track" : "full workflow"}`], "user"]
     : options.approvedPlan
@@ -351,6 +358,61 @@ function seatPlanPanel(roster: Set<TrackMember>, panel: readonly string[], why: 
 /** A member who sat out the planning panel of the task's plan and was not let back in: it does not work on the task. */
 export function satOut(task: Task, member: TrackMember): boolean {
   return Boolean(task.track?.satOut?.includes(member));
+}
+
+/* ------------------------------------------------------------ the single-worker fast path */
+
+/** The builders a task's work may belong to. */
+const BUILD_DOMAINS: readonly TrackMember[] = ["designer", "backend"];
+
+/**
+ * The single-worker fast-path record for a task on the fast track, from the
+ * reading that chose the track: why it is fast (basis: the effort/size/risk
+ * rationale the reading already recorded), how risky it read (risk), and the
+ * one domain that owns the work (owner). Undefined when the track is not
+ * single-worker work: not fast, more than one builder, or QA on the roster
+ * (the change needs tests, so more than one agent takes part).
+ */
+export function fastPathRecord(request: string, track: TaskTrack, effort?: EffortScore): FastPathRecord | undefined {
+  if (track.path !== "fast") return undefined;
+  const builders = track.roster.filter((member): member is Domain => BUILD_DOMAINS.includes(member));
+  if (track.roster.includes("qa") || builders.length > 1) return undefined;
+  const risk = readRequest(request).risk;
+  const basis = [effortBasis(effort), ...(track.reasons ?? [])].filter(Boolean).join("; ");
+  return {
+    basis: basis || "fast track",
+    risk: risk ? "medium" : "none",
+    ...(risk ? { riskEvidence: `the request reads as serious: touches ${risk}` } : {}),
+    ...(builders.length === 1 ? { owner: builders[0] } : {}),
+  };
+}
+
+/** A fast-track task with an unpromoted low-risk record: one worker carries it, end to end. */
+export function singleWorker(task: Task): boolean {
+  const fast = task.fastPath;
+  return task.track?.path === "fast" && !!fast && (fast.risk === "none" || fast.risk === "low") && !fast.promotedAt;
+}
+
+const RISK_ORDER = ["none", "low", "medium", "high"] as const;
+
+/**
+ * End the single-worker path for a task whose work turned out riskier than
+ * its request read: the record keeps the level and the evidence, the track
+ * goes full with the QA gate, and every fast-path bypass lifts. Returns true
+ * when it promoted; false when there was nothing to promote.
+ */
+export function promoteFastPath(task: Task, risk: "medium" | "high", evidence: string, now = new Date().toISOString()): boolean {
+  const fast = task.fastPath;
+  const track = task.track;
+  if (!fast || !track || fast.promotedAt) return false;
+  if (RISK_ORDER.indexOf(risk) > RISK_ORDER.indexOf(fast.risk)) fast.risk = risk;
+  fast.riskEvidence = evidence;
+  fast.promotedAt = now;
+  track.path = "full";
+  track.reasons = [...track.reasons, `risk promotion: ${evidence}`].slice(-8);
+  track.roster = parseRoster([...track.roster, "qa"]);
+  track.at = now;
+  return true;
 }
 
 /* ------------------------------------------------------------ what a track asks of the engine */
@@ -405,7 +467,7 @@ export function builtSomething(task: Task): boolean {
 /* ------------------------------------------------------------ words */
 
 export function rosterWords(roster: readonly TrackMember[]): string {
-  return roster.length > 0 ? roster.map((member) => MEMBER_LABELS[member]).join(", ") : "the one domain that owns the files (the oracle picks)";
+  return roster.length > 0 ? roster.map((member) => MEMBER_LABELS[member]).join(", ") : "the one domain that owns the files (the orchestrator picks)";
 }
 
 /** The track in one line, for the oracle's context and `/bot-lobby status`. */

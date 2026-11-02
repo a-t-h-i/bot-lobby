@@ -8,6 +8,7 @@ import { Classifier } from "../src/classifier/classifier.ts";
 import type { Answer, FetchLike, Question } from "../src/classifier/client.ts";
 import { ANY_RELEVANT_FLOOR, BATCH_SIZE, FIND_FILES_TOOL, excerptOf, excludedBy, fileCachePath, fileHinter, indexFiles, likelyFiles, likelyFilesBlock, prefilter, rankRequests, SECRET_EXCLUDES, terms, type FileHinter, type IndexedFile } from "../src/classifier/files.ts";
 import { findRelevantFiles, formatLikely, registerClassifierTools } from "../src/classifier/tools.ts";
+import { withRepoMap } from "../src/knowledge/repo-map.ts";
 import { DEFAULT_CONFIG, type ClassifierConfig } from "../src/schemas/configuration.ts";
 import { runScouts, runWorker } from "../src/master/master.ts";
 import { ChatAgents } from "../src/lobby/chat-agents.ts";
@@ -192,6 +193,19 @@ test("the hinter gives agents a block and the lookup tool only while file hints 
   assert.equal(await off.block("x"), "");
 });
 
+test("the hinter's paths are the same ranking's files, newest first, and withRepoMap forwards them", async () => {
+  const { scope } = repo();
+  const scores: Record<string, number> = { "src/auth/cookies.ts": 0.95, "src/auth/cookies.test.ts": 0.7, "src/ui/Button.tsx": 0.1, "README.md": 0.3 };
+  const on = fileHinter(jev(rankingJev((path) => scores[path] ?? 0)), scope);
+  assert.deepEqual(await on.paths?.("validate cookies"), ["src/auth/cookies.ts", "src/auth/cookies.test.ts"], "the same likely files the block renders, most relevant first");
+  const off = fileHinter(jev(rankingJev(() => 0.9), { enabled: false }), scope);
+  assert.deepEqual(await off.paths?.("x"), [], "off: no paths, like the empty block");
+  const settings = () => ({ on: true, exclude: [] });
+  assert.deepEqual(await withRepoMap(on, scope, settings).paths?.("validate cookies"), ["src/auth/cookies.ts", "src/auth/cookies.test.ts"], "the wrapper forwards paths to the wrapped hinter");
+  const bare: FileHinter = { block: async () => "", tools: () => [] };
+  assert.deepEqual(await withRepoMap(bare, scope, settings).paths?.("x"), [], "a wrapped hinter without paths has none");
+});
+
 test("find_relevant_files ranks by description inside a subagent, and says so when it cannot", async () => {
   const { scope } = repo();
   const answer = await findRelevantFiles(jev(rankingJev((path) => (path === "src/auth/cookies.ts" ? 0.93 : 0.2))), scope, "where cookies are validated", 3);
@@ -236,11 +250,13 @@ test("scouts and workers start with their likely files and may look more up; the
 test("a lobby chat reply and a planning round get their likely files too", async () => {
   const root = tempDir();
   const seen: Array<{ tools: string; system: string; task: string }> = [];
-  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: recorder("Renamed.", seen), hints: HINTS });
+  write(root, "src/api.ts", "// API surface.\nexport function getUser() {}\n");
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: recorder("Renamed.", seen), hints: { ...HINTS, paths: async () => ["src/api.ts"] } });
   chat.submit("backend", "rename getUser", "you named @dev");
   for (let i = 0; i < 20 && chat.busy; i++) await new Promise((resolve) => setTimeout(resolve, 5));
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.match(seen[0]!.task, /^Task: ## Message\n\nrename getUser\n\n## Likely files/);
+  assert.match(seen[0]!.task, /^Task: ## Message\n\nrename getUser\n\n## Context pack\n\nVersion 1\./, "a chat reply packs the hinted files instead of only listing them");
+  assert.match(seen[0]!.task, /- src\/api\.ts lines 1-3 · fingerprint /);
   assert.ok(seen[0]!.tools.split(",").includes(FIND_FILES_TOOL));
 
   const session = new PlanningSession({ cwd: root, root, configDir: ".pi", panel: ["qa"], profile: () => ({ thinking: "high" }), runProcess: recorder("## Status\nREADY\n## Plan\n1. x", seen), hints: HINTS });

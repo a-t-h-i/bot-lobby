@@ -23,6 +23,7 @@ function brief(id = "backend-step"): WorkerAssignment {
     contracts: [], constraints: ["No edits"], exclusions: [], tools: [],
     verification: ["Report the observed contract"], evidence: [], completedWork: [], needs: [],
     discoveryLimit: 2,
+    contextPack: { version: 1, files: [{ path: "source.ts", ranges: [[1, 1]], fingerprint: "sha256:abc", snippet: "export const value = 1;" }], invariants: ["value stays 1"], priorWork: [], verification: ["Report the observed contract"] },
   };
 }
 

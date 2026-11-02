@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { designRecordBlock, designStanding, withoutDesignRecord } from "../knowledge/design-record.ts";
-import { validateAssignment, type WorkerAssignment } from "../execution/assignment.ts";
+import { validateAssignment, type ContextPack, type ContextPackFile, CONTEXT_SNIPPET_MAX_CHARS, type WorkerAssignment } from "../execution/assignment.ts";
 import { join, resolve } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
 import type { Domain } from "../schemas/agent.ts";
@@ -15,10 +17,10 @@ import { appendPost, assignmentId } from "../desk/board.ts";
 import { refreshCatalogue } from "../knowledge/catalogue.ts";
 import { notesFor } from "../knowledge/retrieval.ts";
 import { assignmentKey, applySelection, bookmarkBlock, BOOKMARK_DEADLINE_MS, BOOKMARKS_VERSION, deliverBookmarks, fitHints, lexicalBookmarks, type BookmarkState, type Selection } from "../knowledge/bookmarks.ts";
-import { KNOWLEDGE_BUDGET_CHARS, type BookmarkPick, type BookmarkSelectorInput, type KnowledgePaths, type KnowledgePicker } from "../classifier/knowledge.ts";
+import { KNOWLEDGE_BUDGET_CHARS, applyStartupBudget, STARTUP_KNOWLEDGE_BUDGET_CHARS, type BookmarkPick, type BookmarkSelectorInput, type KnowledgePaths, type KnowledgePicker } from "../classifier/knowledge.ts";
 import { scriptsFor } from "../scripts/pick.ts";
 import { summarizeOutcomes } from "./synthesis.ts";
-import { parseWorkerResult, validateWorkerResult } from "../roles/worker.ts";
+import { parseWorkerResult, validateWorkerResult, contextPackBlock } from "../roles/worker.ts";
 import { parseReviewResult, readVerdict, validateReviewResult } from "../roles/reviewer.ts";
 import { truncate } from "../text.ts";
 import { isScoutResultUsable, parseScoutResult, validateScoutResult } from "../roles/scout.ts";
@@ -32,6 +34,7 @@ import { BOARD_ENV, BOARD_TOOLS, boardContext } from "../desk/board.ts";
 import { seedDelivery } from "../desk/delivery.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import { fellShort, profileLabel, routeLabel, type EffortRoute, type EffortRouter } from "../classifier/effort.ts";
+import { noteRunContextChars } from "../state/metrics.ts";
 
 export interface ScoutOutcome {
   result: ScoutResult;
@@ -95,6 +98,25 @@ function sharedScoutInstruction(request: ScoutRequest): string {
 function knowledgePaths(dataRoots: readonly string[], agent: Domain): KnowledgePaths {
   const root = dataRoots[0];
   return root ? { knowledge: knowledgeFilePath(root, agent, "knowledge"), standards: knowledgeFilePath(root, agent, "standard"), decisions: knowledgeFilePath(root, agent, "decision") } : {};
+}
+
+/** What one subagent prompt carries of its knowledge after the combined startup budget: sections, bookmarks and visible diagnostics. */
+function budgetKnowledge(request: { config?: BotLobbyConfig; dataRoots: readonly string[] }, agent: Domain, selected: KnowledgeSelection, bookmarks: string): { selected: KnowledgeSelection; bookmarks: string; notes: string[] } {
+  const paths = knowledgePaths(request.dataRoots, agent);
+  const budgeted = applyStartupBudget([
+    { name: "standards", content: selected.standards ?? "", path: paths.standards },
+    { name: "knowledge", content: selected.knowledge ?? "", path: paths.knowledge },
+    { name: "decisions", content: selected.decisions ?? "", path: paths.decisions },
+    { name: "bookmarks", content: bookmarks },
+    { name: "scripts", content: selected.scripts ?? "" },
+  ], request.config?.workflow.knowledgeStartupBudget ?? STARTUP_KNOWLEDGE_BUDGET_CHARS);
+  const by = (name: string) => budgeted.sections.find((section) => section.name === name)?.content ?? "";
+  const scripts = by("scripts");
+  return {
+    selected: { knowledge: by("knowledge"), standards: by("standards"), decisions: by("decisions"), ...(scripts ? { scripts } : {}) },
+    bookmarks: by("bookmarks"),
+    notes: budgeted.diagnostics,
+  };
 }
 
 /**
@@ -219,12 +241,13 @@ function bookmarkState(
 }
 
 function scoutContext(request: ScoutRequest, domain: Domain, selected: KnowledgeSelection, likely = "", bookmarks = ""): AgentRequest["context"] {
+  const budgeted = budgetKnowledge(request, domain, selected, bookmarks);
   return {
     task: request.taskText,
-    ...selected,
-    ...(bookmarks ? { bookmarks } : {}),
+    ...budgeted.selected,
+    ...(budgeted.bookmarks ? { bookmarks: budgeted.bookmarks } : {}),
     instructions: request.config.agents[domain].instructions,
-    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely].filter(Boolean).join("\n\n"),
+    workflowContext: [`Task state: scouting. Domain: ${domain}. Read-only reconnaissance; no implementation.`, toolBudgetNote(request.config.scout.maxToolCalls), likely, ...budgeted.notes].filter(Boolean).join("\n\n"),
   };
 }
 
@@ -475,7 +498,7 @@ function alongsideGuidance(request: WorkerRequest): string {
 /** What a worker that may ask the user is told about it. */
 function askGuidance(previews: string): string {
   return [
-    "You can ask the user with ask_user_question: the oracle relays it, and your clock stops while they answer.",
+    "You can ask the user with ask_user_question: the orchestrator relays it, and your clock stops while they answer.",
     "Ask when a design decision is genuinely theirs (a visual direction, a layout, a style), once, with all such questions together, before you build it; decide everything else yourself.",
     "Show each option. Give it a `preview`: a Markdown wireframe (a fenced block drawn with box characters) or a short snippet of the component.",
     `When you can render an option (a screenshot from the project's own tooling, a rendered mockup), save it as a PNG under ${previews} (never in the repository) and give its path as the option's \`image\`.`,
@@ -549,6 +572,52 @@ export function readOnlyAssignment(assignment: WorkerAssignment): boolean {
   return assignment.files.every((file) => file.access === "reference") && !assignment.tools.some((tool) => tool.name === "edit" || tool.name === "write");
 }
 
+/** A cheap content fingerprint: 16 hex characters of the file's bytes at pack time. */
+export function packFingerprint(content: string): string {
+  return createHash("sha1").update(content).digest("hex").slice(0, 16);
+}
+
+/** A stale entry's refreshed form: new fingerprint, re-read snippet for its range, ranges clamped into the file as it is. */
+function refreshedEntry(file: ContextPackFile, content: string): ContextPackFile {
+  const lines = content.replace(/\r?\n$/, "").split("\n");
+  const clamp = (value: number): number => Math.min(Math.max(1, value), Math.max(1, lines.length));
+  const ranges = file.ranges?.map(([start, end]): [number, number] => { const from = clamp(start); const to = clamp(end); return from <= to ? [from, to] : [to, from]; });
+  const [start, end] = ranges?.[0] ?? [1, Math.min(lines.length, 60)];
+  const snippet = file.snippet === undefined && !ranges?.length ? undefined : lines.slice(Math.max(0, start - 1), Math.max(0, end)).join("\n").slice(0, CONTEXT_SNIPPET_MAX_CHARS);
+  return { ...file, ...(ranges ? { ranges } : {}), fingerprint: packFingerprint(content), ...(snippet !== undefined ? { snippet } : {}) };
+}
+
+/**
+ * Stale-context refresh at dispatch. A fingerprint that no longer matches
+ * the file refreshes that entry (new fingerprint plus a re-read snippet and
+ * clamped range); a path that no longer exists drops its entry. The pack is
+ * never delivered silently stale, and the returned notes say exactly what
+ * changed so the worker knows which entries are newer than the rest.
+ */
+export async function refreshContextPack(pack: ContextPack, root: string): Promise<string[]> {
+  const notes: string[] = [];
+  const files: ContextPackFile[] = [];
+  for (const file of pack.files) {
+    if (!file.fingerprint) {
+      files.push(file);
+      continue;
+    }
+    const content = await readFile(join(root, file.path), "utf8").catch(() => undefined);
+    if (content === undefined) {
+      notes.push(`dropped ${file.path} (the file no longer exists)`);
+      continue;
+    }
+    const fingerprint = packFingerprint(content);
+    if (fingerprint === file.fingerprint) files.push(file);
+    else {
+      files.push(refreshedEntry(file, content));
+      notes.push(`refreshed ${file.path} (content had changed; new fingerprint ${fingerprint})`);
+    }
+  }
+  pack.files = files;
+  return notes;
+}
+
 /**
  * The worker's model, thinking and grants. A read-only assignment needs no
  * builder: it runs on the scout's model and thinking (keeping the worker's grants,
@@ -579,6 +648,7 @@ export async function runWorker(
     prepareBookmarks(request, request.domain, `${request.instruction}\n\n${request.taskText}`),
   ]);
   const hints = fitHints(bookmarked, likely);
+  const budgeted = budgetKnowledge(request, request.domain, selected, hints.bookmarks);
   const hintTools = request.hints?.tools() ?? [];
   const boardFrom = request.boardFrom ?? assignmentId(request.domain);
   const extraTools = [...(request.agent?.extraTools ?? []), ...hintTools, ...(request.board ? BOARD_TOOLS : [])];
@@ -594,10 +664,10 @@ export async function runWorker(
     instruction: request.instruction,
     context: {
       task: request.taskText,
-      ...selected,
-      ...(hints.bookmarks ? { bookmarks: hints.bookmarks } : {}),
+      ...budgeted.selected,
+      ...(budgeted.bookmarks ? { bookmarks: budgeted.bookmarks } : {}),
       instructions: request.config.agents[request.domain].instructions,
-      workflowContext: workerWorkflowContext(request, boardFrom, hints.likely),
+      workflowContext: [workerWorkflowContext(request, boardFrom, hints.likely), ...budgeted.notes].filter(Boolean).join("\n\n"),
     },
     ...configured,
     cwd: request.cwd,
@@ -642,10 +712,12 @@ async function runFreshWorker(request: WorkerRequest, assignment: WorkerAssignme
     checking = state.checks.start({ assignmentId: assignment.id, revision: assignment.revision, hints }).catch((error: unknown) => { checkError = error; });
     if (assignment.completedWork.length) state.checks.completed(assignment.id, assignment.revision);
     reportFreshness(request, reader, status());
-    const instruction = [base.instruction, freshnessHints(hints)].filter(Boolean).join("\n\n");
+    const refresh = assignment.contextPack ? await refreshContextPack(assignment.contextPack, request.cwd) : [];
+    const instruction = [base.instruction, freshnessHints(hints), refresh.length ? `Context pack refresh at dispatch: ${refresh.join("; ")}.` : ""].filter(Boolean).join("\n\n");
     // Assignment-local navigation hints belong in user content, not the shared system prefix.
     // Start actual dispatch now, before awaiting any source-file hashes.
     const outcome = await dispatchFreshWorker({ ...base, instruction }, request, assignment, route, state.checks, run);
+    if (assignment.contextPack) noteRunContextChars(outcome.run.runId, contextPackBlock(assignment.contextPack).length);
     state.checks.completed(assignment.id, assignment.revision);
     await checking;
     const freshness = status();
@@ -761,6 +833,7 @@ function isRetryableReviewRun(run: AgentRun): boolean {
 }
 
 function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelection, bookmarks = ""): AgentRequest {
+  const budgeted = budgetKnowledge(request, request.domain, selected, bookmarks);
   return {
     taskId: request.taskId,
     domain: request.domain,
@@ -771,10 +844,10 @@ function reviewerAgentRequest(request: ReviewerRequest, selected: KnowledgeSelec
       "Review the current repository changes against the approved requirements and plan.",
     context: {
       task: request.taskText,
-      ...selected,
-      ...(bookmarks ? { bookmarks } : {}),
+      ...budgeted.selected,
+      ...(budgeted.bookmarks ? { bookmarks: budgeted.bookmarks } : {}),
       instructions: request.config.agents[request.domain].instructions,
-      workflowContext: reviewerContext(request),
+      workflowContext: [reviewerContext(request), ...budgeted.notes].filter(Boolean).join("\n\n"),
     },
     ...profileFields(request.config, request.profile, request.domain, "reviewer"),
     cwd: request.cwd,

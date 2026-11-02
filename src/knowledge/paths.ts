@@ -11,6 +11,15 @@ export const AGENT_DIR_NAMES: Record<KnowledgeAgent, string> = {
   qa: "QA",
 };
 
+/**
+ * Permanent, searchable history: a `history/` sibling of the rotating
+ * `archive/` backups. Nothing under `history/` is pruned, so archived
+ * material stays findable.
+ */
+export function historyDir(dataRoot: string, agent: KnowledgeAgent): string {
+  return join(dataRoot, "history", AGENT_DIR_NAMES[agent]);
+}
+
 /** Domain-specific standards file per agent (§21). */
 export const STANDARDS_FILE: Record<KnowledgeAgent, string> = {
   master: "standards.md",

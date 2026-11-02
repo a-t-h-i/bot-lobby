@@ -9,8 +9,9 @@ import { createTask, type Task, type TaskTrack, type TaskTriage, type TrackPath 
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask, taskDirFor } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
 import { completionBlockers } from "../src/master/decisions.ts";
-import { runWorkflowAction, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
-import { chooseTrack, parseRoster, qaStillDue, qaWorkerCameLast, readRequest, trackLine, trackSummary } from "../src/workflow/track.ts";
+import { runWorkflowAction, prefetchScouts, type OrchestrateParams, type WorkflowDeps } from "../src/workflow/workflow.ts";
+import { chooseTrack, fastPathRecord, parseRoster, promoteFastPath, qaStillDue, qaWorkerCameLast, readRequest, singleWorker, trackLine, trackSummary } from "../src/workflow/track.ts";
+import { readMetrics } from "../src/state/metrics.ts";
 import { kickoff } from "../src/pi/start-task.ts";
 import { startFromAgreedPlan } from "../src/workflow/workflow.ts";
 import { parseCommand } from "../src/pi/commands.ts";
@@ -23,6 +24,16 @@ const ON = { fastTrack: true };
 function read(request: string, options: { fastTrack: boolean; forced?: TrackPath; approvedPlan?: boolean } = ON, triage?: TaskTriage): TaskTrack {
   return chooseTrack(request, triage, options, "2026-01-01T00:00:00.000Z");
 }
+
+test("estimated moderate effort permits a low-risk fast path despite a large size hint", () => {
+  const effort = { level: "moderate" as const, confidence: 0.95 };
+  const triage: TaskTriage = { size: "large", sizeConfidence: 0.9, domains: { backend: 0.9 }, research: 0, ambiguous: 0, at: "now" };
+  const track = chooseTrack("Format the catalog output", triage, { fastTrack: true, effort });
+  assert.equal(track.path, "fast");
+  assert.match(track.reasons.join("; "), /effort: moderate/);
+  const risky = chooseTrack("Migrate passwords", triage, { fastTrack: true, effort });
+  assert.equal(risky.path, "full", "effort never overrides genuine risk");
+});
 
 test("small, clear requests take the fast track with only the agents they need", () => {
   const colour = read("change the submit button colour to blue");
@@ -258,6 +269,10 @@ test("a fast task whose worker asks for a dependency gets QA", async () => {
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
   assert.deepEqual(task.track!.roster, ["designer", "qa"]);
   assert.match(task.decisions.map((decision) => decision.text).join("\n"), /QA joined the fast track: DESIGN asked for a colour library/);
+  // A task that outgrew its read is no longer single-worker work: it leaves the path.
+  assert.equal(task.track!.path, "full");
+  assert.ok(task.fastPath!.promotedAt, "the growth is kept as the promotion evidence");
+  assert.equal(singleWorker(task), false);
 });
 
 test("a fast task whose change turns out to touch security gets QA before it completes", async () => {
@@ -288,8 +303,134 @@ test("a fast task whose change turns out to touch security gets QA before it com
   assert.match(held.message, /QA joins before completion: QA risk: high \(rules\)[^\n]*Run action=qa, then complete/);
   const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
   assert.deepEqual(task.track!.roster, ["designer", "qa"]);
+  // Genuine risk in the built change is recorded and promotes the task off the single-worker path.
+  assert.equal(task.fastPath!.risk, "high");
+  assert.ok(task.fastPath!.promotedAt);
+  assert.ok(task.fastPath!.riskEvidence);
+  assert.equal(task.track!.path, "full");
+  assert.match(task.track!.reasons.join("; "), /risk promotion:/);
+  assert.equal(singleWorker(task), false);
   assert.match((await act(deps, { action: "qa" })).message, /QA gate: PASS/);
   assert.equal((await act(deps, { action: "complete" })).state, "completed");
+});
+
+/* ------------------------------------------------------------ the single-worker fast path */
+
+test("the single-worker record: what populates it, what it holds, and what ends it", () => {
+  // A benign multi-file rename reads trivial, names one domain and no risk: single-worker work.
+  const rename = "rename the helper in src/page.tsx, src/form.tsx and src/ui.tsx";
+  const track = read(rename);
+  assert.equal(track.path, "fast");
+  const record = fastPathRecord(rename, track, { level: "trivial", confidence: 0.91 })!;
+  assert.equal(record.risk, "none", "file counts and rename wording never set risk");
+  assert.equal(record.riskEvidence, undefined);
+  assert.equal(record.owner, "designer");
+  assert.match(record.basis, /effort: trivial \(0\.91\)/);
+  assert.match(record.basis, /trivial: rename/);
+
+  // Not single-worker work: the full workflow, or a fast track with QA (tests) or two builders.
+  assert.equal(fastPathRecord("add a login page", read("add a login page")), undefined);
+  assert.equal(fastPathRecord("fix the login redirect after sign in", read("fix the login redirect after sign in")), undefined);
+  assert.equal(fastPathRecord("check the latest Tailwind docs and restyle the header and the api", read("check the latest Tailwind docs and restyle the header and the api")), undefined, "two builders are not single-worker work");
+
+  // A request whose own words name genuine risk keeps the risk on the record, so it never enforces the path.
+  const forced = read("store the password hash in the lobby tab", { fastTrack: true, forced: "fast" });
+  const risky = fastPathRecord("store the password hash in the lobby tab", forced)!;
+  assert.equal(risky.risk, "medium");
+  assert.match(risky.riskEvidence!, /password/);
+
+  const task = createTask("TASK-1", "x");
+  task.track = track;
+  assert.equal(singleWorker(task), false, "no record yet: a legacy task loads unchanged and enforces nothing");
+  task.fastPath = record;
+  assert.equal(singleWorker(task), true);
+  assert.equal(singleWorker({ ...task, fastPath: { ...record, risk: "medium" } }), false);
+  assert.equal(singleWorker({ ...task, fastPath: { ...record, promotedAt: "2026-01-02T00:00:00.000Z" } }), false);
+  assert.equal(singleWorker({ ...task, track: { ...track, path: "full" } }), false);
+
+  // Promotion: the evidence is kept, the risk only rises, the track goes full with the QA gate.
+  assert.equal(promoteFastPath(task, "high", "touches password validation", "2026-01-02T00:00:00.000Z"), true);
+  assert.equal(task.fastPath!.risk, "high");
+  assert.equal(task.fastPath!.riskEvidence, "touches password validation");
+  assert.equal(task.fastPath!.promotedAt, "2026-01-02T00:00:00.000Z");
+  assert.equal(task.track!.path, "full");
+  assert.deepEqual(task.track!.roster, ["designer", "qa"]);
+  assert.match(task.track!.reasons.join("; "), /risk promotion: touches password validation/);
+  assert.equal(singleWorker(task), false);
+  assert.equal(promoteFastPath({ ...task, fastPath: { ...record, risk: "high", promotedAt: "2026-01-01T00:00:00.000Z" } }, "medium", "later, milder"), false, "already promoted: never twice, never down");
+});
+
+test("a single-worker task bypasses scouts, proposals and second workers, and completes on one run", async () => {
+  const runs: string[] = [];
+  const deps = makeDeps(runs);
+  withTask(deps, "rename the helper in src/page.tsx, src/form.tsx and src/ui.tsx");
+  const proposal = await act(deps, { action: "propose", proposal: "- rename it" });
+  assert.equal(proposal.ok, false);
+  assert.match(proposal.message, /single-worker fast path: no proposal round/);
+  const scout = await act(deps, { action: "scout", domains: ["designer"] });
+  assert.equal(scout.ok, false);
+  assert.match(scout.message, /single-worker fast path: no scouts/);
+  const built = await act(deps, { action: "implement", domain: "designer", task: "Step 1: rename the helper" });
+  assert.equal(built.ok, true, built.message);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.equal(singleWorker(task), true, "the decision is persisted with the task");
+  assert.equal(task.fastPath!.owner, "designer");
+  assert.equal(task.fastPath!.risk, "none");
+  assert.match(readFileSync(join(taskDirFor(deps.root, deps.configDir, "TASK-1"), "state.json"), "utf8"), /"fastPath"/);
+  const second = await act(deps, { action: "implement", domain: "backend", task: "Step 2: rename its callers" });
+  assert.equal(second.ok, false);
+  assert.match(second.message, /single-worker fast path: one implementation worker \(designer\)/);
+  const parallel = await act(deps, { action: "implement", assignments: [{ domain: "designer", task: "a" }, { domain: "backend", task: "b" }] });
+  assert.equal(parallel.ok, false);
+  assert.match(parallel.message, /single-worker fast path/);
+  const again = await act(deps, { action: "implement", domain: "designer", task: "Step 1: rename the helper, again" });
+  assert.equal(again.ok, true, "corrections go to the same owner: " + again.message);
+  const done = await act(deps, { action: "complete", text: "Renamed." });
+  assert.equal(done.ok, true, "completes on the worker's evidence: " + done.message);
+  assert.equal(runs.length, 2, "the worker and its one correction — the same owner; no scouts, proposals or reviewers");
+  const avoided = readMetrics(deps.root, deps.configDir).filter((record) => record.kind === "avoided");
+  assert.deepEqual(avoided.map((record) => record.purpose).sort(), ["parallel implementation batch: single-worker fast path", "proposal round: single-worker fast path", "scout: single-worker fast path", "second implementation worker: single-worker fast path"]);
+});
+
+test("the opening scout is refused for a single-worker task, and a QA gate that needs a reviewer promotes first", async () => {
+  const runs: string[] = [];
+  const deps = makeDeps(runs);
+  const task = withTask(deps, "rename the helper in src/page.tsx");
+  task.triage = { size: "trivial", sizeConfidence: 0.9, domains: { designer: 0.9 }, research: 0, ambiguous: 0, at: "now" };
+  saveTask(deps.root, deps.configDir, task);
+  const config = { ...LENIENT, workflow: { ...LENIENT.workflow, prefetchScout: true } };
+  assert.deepEqual(prefetchScouts(task, config, () => deps, { level: "simple", confidence: 0.9 }), [], "no opening scout for a single-worker task");
+  assert.match(task.fastPath!.basis, /effort: simple \(0\.90\)/, "production prefetch records the effort reading");
+  const avoided = readMetrics(deps.root, deps.configDir).filter((record) => record.kind === "avoided");
+  assert.deepEqual(avoided.map((record) => record.purpose), ["scout prefetch: single-worker fast path"]);
+
+  // The gate on a change it cannot read wants a full review: that is risk, so the task leaves the single-worker path first and the reviewer runs.
+  await act(deps, { action: "implement", domain: "designer", task: "Step 1: rename the helper" });
+  const gate = await act(deps, { action: "qa" });
+  assert.equal(gate.ok, true, gate.message);
+  const saved = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.ok(saved.fastPath!.promotedAt, "the gate's read promoted the task before its reviewer ran");
+  assert.equal(saved.track!.path, "full");
+  assert.ok(saved.track!.roster.includes("qa"));
+  assert.equal(runs.length, 2, "the worker, then the gate's reviewer");
+});
+
+test("a decision request naming migration or concurrency risk promotes the task off the fast path", async () => {
+  const needy = [WORKER, "", "## Notes", '{"kind":"decision","reason":"the rename must not corrupt the concurrent session migration","requested":["decide the locking order"]}'].join("\n");
+  let calls = 0;
+  const deps = makeDeps([], { runProcess: async () => { calls += 1; return { exitCode: 0, stdout: message(calls === 1 ? needy : WORKER), stderr: "", killed: false }; } });
+  withTask(deps, "rename the helper in src/page.tsx and src/form.tsx");
+  const built = await act(deps, { action: "implement", domain: "designer", task: "Step 1: rename the helper" });
+  assert.equal(built.ok, true, built.message);
+  const task = loadTask(deps.root, deps.configDir, "TASK-1")!;
+  assert.ok(task.fastPath!.promotedAt, "the decision request promoted the task before further risky work");
+  assert.equal(task.fastPath!.risk, "medium");
+  assert.match(task.fastPath!.riskEvidence!, /concurrent session migration/);
+  assert.equal(task.track!.path, "full");
+  assert.match(task.track!.reasons.join("; "), /risk promotion:/);
+  assert.ok(task.track!.roster.includes("qa"));
+  assert.equal(singleWorker(task), false);
+  assert.match(task.decisions.map((decision) => decision.text).join("\n"), /Risk promotion: DESIGN asked for a decision naming medium risk/);
 });
 
 /** A task started from a plan the panel agreed, as startTask makes it: `panel` is who sat on it. */
@@ -345,7 +486,7 @@ test("every member that sat out an agreed plan's panel stays off the task, unles
   assert.match(kept.message, /the user kept DESIGN \(frontend\) out of this task/);
   answer = "Let it join";
   assert.equal((await act(deps, { action: "track", roster: ["backend", "qa", "designer"], reason: "step 3 is a component" })).ok, true);
-  assert.match(titles[1]!, /DESIGN \(frontend\) sat out the planning panel for TASK-1\. The oracle asks to add it: step 3 is a component/);
+  assert.match(titles[1]!, /DESIGN \(frontend\) sat out the planning panel for TASK-1\. The orchestrator asks to add it: step 3 is a component/);
   assert.deepEqual(loadTask(deps.root, deps.configDir, "TASK-1")!.track!.satOut, ["researcher"]);
   assert.equal((await act(deps, { action: "implement", domain: "designer", task: "Step 3: build the toggle component" })).ok, true);
   assert.match((await act(deps, { action: "complete" })).message, /not allowed in state "implementing"/, "QA sat on the panel: its gate stays");

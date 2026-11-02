@@ -47,15 +47,15 @@ const HELP = [
   "/bot-lobby pause|resume     Pause or resume the active task",
   "/bot-lobby cancel [taskId]  Abandon a task",
   "/bot-lobby approve|amend <text>|decline   Answer the current proposal",
-  "/bot-lobby accept [taskId]  Accept a task's work as it is, without a QA pass; the oracle then completes it",
+  "/bot-lobby accept [taskId]  Accept a task's work as it is, without a QA pass; the orchestrator then completes it",
   "/bot-lobby knowledge        Show persistent knowledge files",
   "/bot-lobby runs [taskId]    Recent subagent runs: time, turns, tokens, cost, model",
   "/bot-lobby settings         Open the web lobby's Settings: per-agent model, effort and instructions",
   "/bot-lobby config           Show effective configuration",
   "/bot-lobby on|off           Turn bot-lobby on or off for this session (ctrl+shift+m); a new session starts off",
   "/bot-lobby claim <taskId>    Take ownership of an orphaned task",
-  "/bot-lobby carry-on <taskId>   Take over a task no running session drives, unpause it and have the oracle carry it on (the Tasks screen's Resume)",
-  "/bot-lobby auto [on|off]    Auto mode: the oracle drives this session's task without asking (alt+g)",
+  "/bot-lobby carry-on <taskId>   Take over a task no running session drives, unpause it and have the orchestrator carry it on (the Tasks screen's Resume)",
+  "/bot-lobby auto [on|off]    Auto mode: the orchestrator drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
   "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the web lobby's session browser uses it)",
   "/bot-lobby web [stop|link|reset]   Open the browser UI (it starts with pi, on this machine only), or stop it, print its link, reset its link",
@@ -201,7 +201,7 @@ function claimTaskCommand(ctx: ExtensionCommandContext, configDir: string, taskI
 /**
  * `/bot-lobby carry-on <taskId>`: take over a task no running session drives
  * (or this session's own, when it is started again from its file), unpause it
- * and have the oracle carry it on. A background session resumed from the
+ * and have the orchestrator carry it on. A background session resumed from the
  * Tasks screen runs it as its first message.
  */
 function carryOnCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
@@ -267,7 +267,7 @@ function acceptWork(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: s
   if (task.lint?.state === "failing") waiveLint(task, "with /bot-lobby accept");
   saveTask(root, configDir, task);
   applyStatus(ctx, root, configDir);
-  ctx.ui.notify(`bot-lobby: ${task.id} accepted as it is; the oracle will complete it.`, "info");
+  ctx.ui.notify(`bot-lobby: ${task.id} accepted as it is; the orchestrator will complete it.`, "info");
   const waived = [task.qaWaiver ? "the QA gate" : "", task.lintWaiver ? "the lint gate" : ""].filter(Boolean);
   const message = `The user accepted ${task.id}'s work as it is${waived.length ? ` (${waived.join(" and ")} ${waived.length === 1 ? "is" : "are"} waived)` : ""}. Call orchestrate action=complete now with a short summary that names anything QA or lint still asked for.`;
   pi.sendUserMessage(message, ctx.isIdle() ? undefined : { deliverAs: "followUp" });

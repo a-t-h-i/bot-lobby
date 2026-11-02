@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AssignmentValidationError, validateAssignment, type WorkerAssignment } from "../src/execution/assignment.ts";
 import { assignmentPrompt, parseWorkerResult, validateWorkerResult } from "../src/roles/worker.ts";
+import { applyStartupBudget } from "../src/classifier/knowledge.ts";
 
 function brief(): WorkerAssignment {
   return {
@@ -37,6 +38,41 @@ test("validated assignments preserve identity and purposes, default discovery, a
   assert.match(prompt, /expansion request/);
   assert.match(prompt, /retries and revisions do not reset/);
   assert.deepEqual((await validateAssignment({ ...input, tools: [], discoveryLimit: 0 }, root)).tools, []);
+});
+
+function contextPack() {
+  return { version: 1 as const, files: [{ path: "source.ts", ranges: [[1, 1] as [number, number]], snippet: "UNIQUE_PACK_SNIPPET" }], verification: ["Read source.ts"] };
+}
+
+test("context packs validate field errors and render once without breaking legacy assignments", async (t) => {
+  const root = await fixture(t);
+  const pack = contextPack();
+  const cases = [
+    [{ ...pack, files: [{ path: "../outside.ts" }] }, /contextPack.files\[0\].path.*outside project scope/],
+    [{ ...pack, files: [{ path: "source.ts", ranges: [[2, 1]] }] }, /contextPack.files\[0\].ranges\[0\].*1 <= start <= end/],
+    [{ ...pack, files: [{ path: "source.ts", snippet: "x".repeat(2001) }] }, /contextPack.files\[0\].snippet.*2000/],
+    [{ ...pack, priorWork: ["x".repeat(24001)] }, /contextPack.*24000.*trim/],
+    [{ ...pack, unknown: true }, /contextPack.unknown is unknown; remove it/],
+  ] as const;
+  for (const [contextPack, error] of cases) await assert.rejects(validateAssignment({ ...brief(), contextPack }, root), error);
+  assert.equal((await validateAssignment(brief(), root)).contextPack, undefined);
+  const valid = await validateAssignment({ ...brief(), contextPack: pack }, root);
+  assert.equal(assignmentPrompt(valid).split("UNIQUE_PACK_SNIPPET").length - 1, 1);
+});
+
+test("all four roles omit duplicate history and retain protected startup content whole", () => {
+  for (const role of ["master", "backend", "designer", "qa"]) {
+    const protectedContent = `## Pinned\n${role}: ${"rule ".repeat(1800)}`;
+    const result = applyStartupBudget([
+      { name: `${role} history`, content: "completed historical task" },
+      { name: `${role} repeated history`, content: "completed historical task" },
+      { name: `${role} rules`, content: protectedContent, path: `${role}/knowledge.md` },
+    ]);
+    assert.equal(result.sections[1]!.content, "");
+    assert.ok(result.sections[2]!.content.endsWith(protectedContent));
+    assert.ok(result.diagnostics.some((line) => line.includes("duplicate")));
+    assert.ok(result.diagnostics.some((line) => line.includes(`${role}/knowledge.md`) && line.includes("kept whole")));
+  }
 });
 
 test("malformed assignment fields fail actionably rather than defaulting", async (t) => {

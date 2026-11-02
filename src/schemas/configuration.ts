@@ -107,6 +107,8 @@ export interface WorkflowConfig {
   readOnlyOnScoutModel: boolean;
   /** The QA gate reviews with a clean context: the request, plan, board contracts and diff, not the workers' own accounts of their work. */
   cleanReview: boolean;
+  /** One combined budget, in characters, for everything a prompt injects as knowledge per role (standards, knowledge, decisions, bookmarks, scripts). */
+  knowledgeStartupBudget: number;
 }
 
 /**
@@ -285,6 +287,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     prefetchScout: true,
     readOnlyOnScoutModel: true,
     cleanReview: true,
+    knowledgeStartupBudget: 8000,
   },
   lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
   knowledge: {
@@ -403,6 +406,11 @@ function flag(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+/** A whole number of characters for the combined startup knowledge budget; anything smaller than 1,000 or not a whole number keeps the default. */
+function startupBudgetChars(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1000 ? value : fallback;
+}
+
 function normalizeLobby(value: unknown): LobbyConfig {
   const source = value as { planningPanel?: unknown; startOn?: unknown; panels?: unknown; keys?: unknown; maxPlanningRounds?: unknown; web?: unknown } | undefined;
   const defaults = DEFAULT_CONFIG.lobby;
@@ -509,6 +517,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   workflow.prefetchScout = workflow.prefetchScout !== false;
   workflow.readOnlyOnScoutModel = workflow.readOnlyOnScoutModel !== false;
   workflow.cleanReview = workflow.cleanReview !== false;
+  workflow.knowledgeStartupBudget = startupBudgetChars(workflow.knowledgeStartupBudget, DEFAULT_CONFIG.workflow.knowledgeStartupBudget);
   workflow.gitIsolation = isGitIsolation(workflow.gitIsolation) ? workflow.gitIsolation : DEFAULT_CONFIG.workflow.gitIsolation;
   // Agent time limits are gone: a config file that still names them is cleaned on its next save.
   // So are quick fixes: the lobby chat does that work now.

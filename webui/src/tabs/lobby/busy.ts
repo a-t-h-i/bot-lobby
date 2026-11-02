@@ -16,15 +16,15 @@ export interface BusyInput {
 /** The names, oracle first, each once; background sessions as one entry. */
 export function busyAgents({ oracleBusy, runs, activity, background }: BusyInput): string[] {
   const names = new Set<string>()
-  if (oracleBusy) names.add("Oracle")
+  if (oracleBusy) names.add("Orchestrator")
   for (const run of runs) if (run.status === "running") names.add(sourceLabel(agentName(run)))
-  for (const entry of activity) if (entry.pending && entry.source !== "LOBBY") names.add(entry.source === "MASTER" ? "Oracle" : sourceLabel(entry.source))
+  for (const entry of activity) if (entry.pending && entry.source !== "LOBBY") names.add(entry.source === "MASTER" ? "Orchestrator" : sourceLabel(entry.source))
   const elsewhere = background.filter((session) => session.alive && session.busy).length
   if (elsewhere) names.add(elsewhere === 1 ? "1 in the background" : `${elsewhere} in the background`)
   return [...names]
 }
 
-/** What the orb's tag says for them: `Dev`, `Dev, QA`, `Oracle, Dev +2`. */
+/** What the orb's tag says for them: `Dev`, `Dev, QA`, `Orchestrator, Dev +2`. */
 export function busyLabel(names: readonly string[]): string {
   if (names.length <= 2) return names.join(", ")
   return `${names.slice(0, 2).join(", ")} +${names.length - 2}`

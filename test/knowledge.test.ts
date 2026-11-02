@@ -1,6 +1,6 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { overThreshold } from "../src/knowledge/compactor.ts";
@@ -12,6 +12,7 @@ import {
   knowledgeFilePath,
   readFileOr,
   writeFileEnsured,
+  writeFileAtomic,
   readAgentKnowledge,
 } from "../src/knowledge/store.ts";
 import { parseKnowledgeProposals } from "../src/roles/worker.ts";
@@ -54,7 +55,7 @@ function makeDeps(): WorkflowDeps {
   return {
     root,
     configDir: ".pi",
-    cwd: process.cwd(),
+    cwd: root,
     config: DEFAULT_CONFIG,
     ask: async () => undefined,
     choose: async () => undefined,
@@ -124,6 +125,26 @@ test("applyKnowledge writes once and rejects duplicates", () => {
   assert.equal(again.result, "duplicate");
   const empty = applyKnowledge({ dataRoot: root, agent: "backend", kind: "knowledge", text: "   " });
   assert.equal(empty.result, "empty");
+});
+
+test("atomic knowledge updates retain existing private mode and ownership", () => {
+  const root = dataRootFor();
+  const path = knowledgeFilePath(root, "backend", "knowledge");
+  try {
+    if (process.platform !== "win32") chmodSync(path, 0o600);
+    const original = statSync(path);
+    for (const write of [writeFileEnsured, writeFileAtomic, (_file: string, content: string) => applyKnowledge({ dataRoot: root, agent: "backend", kind: "knowledge", text: content })]) {
+      const content = `private fact ${readFileOr(path).length}`;
+      write(path, content);
+      assert.ok(readFileOr(path).trimEnd().endsWith(content));
+      const current = statSync(path);
+      assert.equal(current.uid, original.uid);
+      assert.equal(current.gid, original.gid);
+      if (process.platform !== "win32") assert.equal(current.mode & 0o7777, 0o600);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("readAgentKnowledge prefers bot-lobby and falls back per file through both legacies", () => {
@@ -225,7 +246,7 @@ test("context selection keeps only task-relevant knowledge", () => {
   assert.doesNotMatch(selected.knowledge, /Billing/);
 });
 
-test("complete is refused while knowledge is over the threshold, then succeeds after compact", async () => {
+test("oversized knowledge schedules automatic maintenance instead of refusing completion", async () => {
   const deps = makeDeps();
   deps.config = { ...DEFAULT_CONFIG, knowledge: { ...DEFAULT_CONFIG.knowledge, compactionThreshold: 20 } };
   const task = withTask(deps, "reviewing");
@@ -238,22 +259,12 @@ test("complete is refused while knowledge is over the threshold, then succeeds a
   const decisionsPath = join(knowledgeDir(dataRoot, "backend"), "decisions.md");
   const before = readFileOr(decisionsPath);
 
-  const refused = await act(deps, { action: "complete" });
-  assert.equal(refused.ok, false, refused.message);
-  assert.match(refused.message, /compaction threshold/);
-  assert.match(refused.message, /action=knowledge \(domain=designer\|backend\|qa\)/);
-  assert.match(refused.message, /action=compact/);
-  assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "reviewing", "a refusal leaves the task untouched");
-  assert.equal(readFileOr(decisionsPath), before, "a refusal flushes no decisions");
-
-  const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), 20);
-  assert.ok(oversized.length > 0, "a seeded file is over the low threshold");
-  for (const entry of oversized) {
-    const rewritten = await act(deps, { action: "compact", domain: entry.agent, file: entry.file, text: "tidy" });
-    assert.equal(rewritten.ok, true, rewritten.message);
-  }
+  const oversizedBefore = overThreshold(readDataRoots(deps.root, deps.configDir), 20);
+  assert.ok(oversizedBefore.length > 0, "a seeded file is over the low threshold");
   const done = await act(deps, { action: "complete" });
   assert.equal(done.ok, true, done.message);
+  assert.match(done.message, /Automatic knowledge maintenance scheduled/, done.message);
   assert.equal(loadTask(deps.root, deps.configDir, "TASK-1")!.state, "completed");
+  assert.notEqual(readFileOr(decisionsPath), before, "completion still flushes decisions");
 });
 

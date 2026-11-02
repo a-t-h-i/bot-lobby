@@ -299,7 +299,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     toOracle: (text: string) => {
       const command = parseLobbyCommand(text);
       if (command?.command === "plan") return { notice: "planning on the Plan tab", open: "plan" as const };
-      if (command) return "starting a task — the oracle takes it from here";
+      if (command) return "starting a task — the orchestrator takes it from here";
       const mention = parseMention(text);
       if (mention && mention.agent !== "master") {
         const source = CHAT_AGENT_SOURCES[mention.agent];
@@ -344,7 +344,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     comment: (taskId: string, text: string) => {
       const entry = { id: `C-mock-${(commentSeq += 1)}`, taskId, text, by: fixture.status.sessionId, createdAt: new Date().toISOString(), status: "open" };
       comments.set(taskId, [...(comments.get(taskId) ?? []), entry]);
-      return "comment sent to the oracle — it will amend the plan";
+      return "comment sent to the orchestrator — it will amend the plan";
     },
     editComment: (taskId: string, commentId: string, text: string) => {
       const existing = (comments.get(taskId) ?? []).find((entry) => entry.id === commentId);
@@ -389,8 +389,8 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       if (on) auto.add(taskId);
       else auto.delete(taskId);
     },
-    sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its oracle` : `no task ${taskId}`),
-    sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its oracle within a few seconds",
+    sendToTask: (taskId: string, _text: string) => (tasks.some((task) => (task as { id: string }).id === taskId) ? `sent — the session driving ${taskId} passes it to its orchestrator` : `no task ${taskId}`),
+    sendToSession: (_sessionId: string, _text: string) => "sent — that session passes it to its orchestrator within a few seconds",
     skipTaskStep: async (taskId: string, step: number, text: string, reason: string) => {
       const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; skippedSteps?: Array<{ text: string; reason: string; at: string }>; decisions?: Array<{ domain: string; text: string; createdAt: string }> } | undefined;
       if (!task) throw new Error(`no task ${taskId}`);
@@ -398,7 +398,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
       task.skippedSteps = [...(task.skippedSteps ?? []), { text, reason: reason.trim(), at }];
       task.decisions = [...(task.decisions ?? []), { domain: "master", text: `The user skipped step ${step + 1} ("${text}") from the Tasks screen. Reason: ${reason.trim()}`, createdAt: at }];
       lobbyTopics.bump("tasks");
-      return { notice: `step ${step + 1} skipped; the oracle has been told` };
+      return { notice: `step ${step + 1} skipped; the orchestrator has been told` };
     },
     resumeTask: async (taskId: string) => {
       const task = tasks.find((entry) => (entry as { id: string }).id === taskId) as { id: string; title: string; paused?: boolean; ownerSessionId?: string } | undefined;
@@ -552,9 +552,9 @@ function mockLedger(view: { agent: string; file: string; entries: Array<Record<s
   return {
     pins: [{ agent, file, entry: first, at: iso(3 * day) }],
     events: [
-      { id: "ev1", agent, file, entry: first, by: "Oracle", what: "wrote this while planning the offline mock", source: "Planning · offline mock", at: iso(9 * day) },
+      { id: "ev1", agent, file, entry: first, by: "Orchestrator", what: "wrote this while planning the offline mock", source: "Planning · offline mock", at: iso(9 * day) },
       { id: "ev2", agent, file, entry: first, by: "you", what: "edited it", before: "- Mock everything the page needs.", at: iso(3 * day) },
-      { id: "ev3", agent, file, entry: second, by: "Oracle", what: "saved this from a chat with you", source: "Chat with you", at: iso(14 * day) },
+      { id: "ev3", agent, file, entry: second, by: "Orchestrator", what: "saved this from a chat with you", source: "Chat with you", at: iso(14 * day) },
       { id: "ev4", agent, file, entry: third, by: "Backend", what: "wrote this while working on task T-mock-1", source: "Task T-mock-1", at: iso(2 * day) },
     ],
     proposals: [

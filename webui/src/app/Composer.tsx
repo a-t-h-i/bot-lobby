@@ -608,7 +608,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const steering = busy && target.id === "oracle"
   const placeholder = shrunk ? (tab === "knowledge" ? "Ask what the agents know…" : "Write a message…")
     : ask ? (drawer.step?.typed ? drawer.step.placeholder : "Pick an answer above")
-      : steering ? "The oracle is working. Enter steers it…" : target.placeholder
+      : steering ? "The orchestrator is working. Enter steers it…" : target.placeholder
   const pickFiles = (input: RefObject<HTMLInputElement | null>) => {
     setPanel(null)
     input.current?.click()

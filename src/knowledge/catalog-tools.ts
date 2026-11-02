@@ -113,7 +113,7 @@ function registerListTool(pi: ExtensionAPI, configDir: string): void {
     name: LIST_BOOKMARKS_TOOL,
     label: "List assignment bookmarks",
     description:
-      "List the bookmarked knowledge references selected for this task and assignment (by the classifier or the oracle), with the reason each was picked and who it is for. "
+      "List the bookmarked knowledge references selected for this task and assignment (by the classifier or the orchestrator), with the reason each was picked and who it is for. "
       + "Every line is revalidated against the current catalogue and your access: stale or unauthorized references are never shown. "
       + "Open a reference with open_knowledge; search beyond the bookmarks with search_knowledge.",
     parameters: Type.Object({}),

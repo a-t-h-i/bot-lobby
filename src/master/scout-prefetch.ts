@@ -9,7 +9,9 @@
  */
 import type { Domain } from "../schemas/agent.ts";
 import type { AgentRun } from "../schemas/findings.ts";
-import type { TaskTriage } from "../schemas/task.ts";
+import type { Task, TaskTriage } from "../schemas/task.ts";
+import { appendMetrics, avoidedLaunchRecord } from "../state/metrics.ts";
+import { singleWorker } from "../workflow/track.ts";
 import type { ScoutOutcome } from "./master.ts";
 
 interface Prefetch {
@@ -31,6 +33,17 @@ const prefetches = new Map<string, Prefetch>();
 /** Domains at least this likely in the triage are scouted up front; QA only when it clearly takes part. */
 const BUILD_DOMAIN_AT = 0.35;
 const QA_DOMAIN_AT = 0.5;
+
+/**
+ * The opening scout a single-worker fast-path task never starts: its one
+ * worker reads what it needs itself, so the launch is refused before any
+ * process runs, and the avoided launch is recorded. False for every other task.
+ */
+export function skipSingleWorkerPrefetch(task: Task, metrics: { root: string; configDir: string }): boolean {
+  if (!singleWorker(task)) return false;
+  appendMetrics(metrics.root, metrics.configDir, [avoidedLaunchRecord(task.id, "scout prefetch: single-worker fast path")]);
+  return true;
+}
 
 /** The domains worth scouting before the oracle asks, from the triage; none without one. */
 export function prefetchDomains(triage: TaskTriage | undefined): Domain[] {

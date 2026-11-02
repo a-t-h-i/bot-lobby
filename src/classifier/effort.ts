@@ -107,6 +107,11 @@ export interface EffortScore {
   confidence: number;
 }
 
+/** The effort reading as one line of a fast path's basis: `effort: simple (0.88)`. */
+export function effortBasis(scored: EffortScore | undefined): string | undefined {
+  return scored ? `effort: ${scored.level} (${scored.confidence.toFixed(2)})` : undefined;
+}
+
 /** Lowers the model or thinking of a step the classifier judges simple or trivial. */
 export interface EffortRouter {
   /** Children may raise reasoning for complex work, using the parent's configured model. */

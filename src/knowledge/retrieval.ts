@@ -193,8 +193,14 @@ function rankEntries(entries: readonly CatalogueEntry[], allowed: Map<string, st
     .map((ranked) => ranked.entry);
 }
 
+/** Where a reference lives: the file's name, with `history/` in front of archived material so the two never read alike. */
+function whereOf(entry: CatalogueEntry): string {
+  const file = basename(sourceFile(entry.sourceKey));
+  return `${entry.origin === "knowledge-history" ? "history/" : ""}${file}${entry.locator.heading ? ` > ${entry.locator.heading}` : ""}`;
+}
+
 function formatRef(entry: CatalogueEntry, notes: readonly KnowledgeNote[], conflict?: string): string {
-  const where = `${basename(sourceFile(entry.sourceKey))}${entry.locator.heading ? ` > ${entry.locator.heading}` : ""}`;
+  const where = whereOf(entry);
   const fresh = entry.freshness === "changed" ? `changed (r${entry.revision}; verify)` : entry.freshness;
   const conflicts = conflictIds(entry, notes);
   const marks = [
@@ -355,7 +361,7 @@ function annotationBlock(entry: CatalogueEntry, notes: readonly KnowledgeNote[],
 }
 
 async function metadataLines(entry: CatalogueEntry, access: Access, notes: readonly KnowledgeNote[]): Promise<string[]> {
-  const where = `${basename(sourceFile(entry.sourceKey))}${entry.locator.heading ? ` > ${entry.locator.heading}` : ""}`;
+  const where = whereOf(entry);
   const conflicts = conflictIds(entry, notes);
   const dependency = await dependencyLine(entry, access);
   return [

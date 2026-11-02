@@ -20,9 +20,9 @@
  * land through a unique temp file and an atomic rename.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, sep } from "node:path";
-import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, knowledgeDir, type KnowledgeAgent } from "./paths.ts";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, sep } from "node:path";
+import { AGENT_DIR_NAMES, KNOWLEDGE_FILES, historyDir, knowledgeDir, type KnowledgeAgent } from "./paths.ts";
 import { parseEntries, type EntryKind } from "./edit.ts";
 import { fileNotesPath, readFileNotes } from "./file-notes.ts";
 
@@ -63,7 +63,7 @@ export function generationOfRef(ref: string): string | undefined {
 const SECRET_PATTERN = /(api[-_]?key|secret|password|passwd|credential|private[- ]key)\s*[:=]/i;
 
 export type CatalogueKind = "knowledge" | "standard" | "decision" | "completed" | "finding";
-export type CatalogueOrigin = "knowledge-file" | "file-note";
+export type CatalogueOrigin = "knowledge-file" | "knowledge-history" | "file-note";
 export type CatalogueScope = "project" | "task";
 export type Freshness = "current" | "changed" | "stale";
 export type Coverage = "complete" | "partial" | "stale" | "unavailable";
@@ -213,8 +213,10 @@ function kindOf(file: string): CatalogueKind {
 
 /**
  * The accepted sources: every agent's four knowledge files in every data
- * tree (the live one and the read-only pre-rename ones). Nothing else — no
- * repository contents, no session transcripts, no scratchpads — is indexed.
+ * tree (the live one and the read-only pre-rename ones), plus the permanent
+ * history files archiving keeps (they are searchable, never pruned).
+ * Nothing else — no repository contents, no session transcripts, no
+ * scratchpads — is indexed.
  */
 export function knowledgeSourceRefs(dataRoots: readonly string[]): SourceRef[] {
   const refs: SourceRef[] = [];
@@ -224,9 +226,22 @@ export function knowledgeSourceRefs(dataRoots: readonly string[]): SourceRef[] {
         const path = canonicalSource(dataRoot, join(knowledgeDir(dataRoot, agent), file));
         if (path) refs.push({ key: `kf:${path}`, file: path, agent, kind: kindOf(file), origin: "knowledge-file" });
       }
+      for (const file of historyFiles(dataRoot, agent)) {
+        const path = canonicalSource(dataRoot, file);
+        if (path) refs.push({ key: `kf:${path}`, file: path, agent, kind: kindOf(basename(file)), origin: "knowledge-history" });
+      }
     }
   }
   return refs;
+}
+
+/** The agent's archived knowledge files that exist under permanent history/, as absolute paths. */
+function historyFiles(dataRoot: string, agent: KnowledgeAgent): string[] {
+  try {
+    return readdirSync(historyDir(dataRoot, agent)).filter((file) => KNOWLEDGE_FILES[agent].includes(file)).map((file) => join(historyDir(dataRoot, agent), file));
+  } catch {
+    return [];
+  }
 }
 
 /** The scouts' file notes, one source with one passage per note. */

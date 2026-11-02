@@ -49,7 +49,7 @@ export function ComposerStopButton({ onStop }: { onStop: () => void }) {
       </button>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Stop the oracle?</AlertDialogTitle>
+          <AlertDialogTitle>Stop the orchestrator?</AlertDialogTitle>
           <AlertDialogDescription>The current response stops. Work already recorded is kept.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

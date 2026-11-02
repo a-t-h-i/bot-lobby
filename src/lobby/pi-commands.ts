@@ -54,7 +54,7 @@ export function piCommands(pi?: ExtensionAPI): LobbySlashCommand[] {
 }
 
 function compact(ctx: ExtensionContext, instructions: string): string {
-  if (!ctx.isIdle()) return "the oracle is working — stop it before compacting";
+  if (!ctx.isIdle()) return "the orchestrator is working — stop it before compacting";
   ctx.compact({
     ...(instructions ? { customInstructions: instructions } : {}),
     onComplete: () => pushNotice("Session context compacted", "success"),

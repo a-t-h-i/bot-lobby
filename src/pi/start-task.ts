@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
-import { chooseTrack, qaRequired, rosterWords, trackLine, trackSummary } from "../workflow/track.ts";
+import { chooseTrack, fastPathRecord, qaRequired, rosterWords, trackLine, trackSummary } from "../workflow/track.ts";
 import { prefetchScouts, startFromAgreedPlan } from "../workflow/workflow.ts";
 import { workflowDeps } from "./tools.ts";
 import { lobbyFeed } from "../lobby/feed.ts";
@@ -165,8 +165,11 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   // The classifier's read of the request (when it is on) reaches the Master's very first turn.
   const triage = options.triaged ? options.triage : await triageFor({ cwd: ctx.cwd, root, configDir }, request);
   if (triage) task.triage = triage;
-  // How serious the request reads: who takes part, and whether it takes the fast track or the full workflow.
-  task.track = chooseTrack(request, triage, { fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}), ...(options.panel ? { planPanel: options.panel } : {}) });
+  // Effort selects the fast path; genuine risk and ambiguity still veto it.
+  const makeDeps = () => workflowDeps(ctx, configDir, undefined, undefined);
+  const effort = await makeDeps().effort?.score(request).catch(() => undefined);
+  task.track = chooseTrack(request, triage, { effort, fastTrack: config.workflow.fastTrack, ...(options.track ? { forced: options.track } : {}), ...(options.approvedPlan ? { approvedPlan: true } : {}), ...(options.panel ? { planPanel: options.panel } : {}) });
+  task.fastPath = fastPathRecord(request, task.track, effort);
   lobbyFeed.log("LOBBY", trackLine(task.track), "info");
   // An agreed plan is the task's plan: it goes straight to delegating its steps.
   if (options.approvedPlan && options.plan) startFromAgreedPlan(task, options.plan, taskDirFor(root, configDir, task.id));
@@ -180,12 +183,12 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
   // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
   if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
-  // The full workflow scouts first: start it now, so the findings are on their way while the oracle reads the request.
+  // The full workflow scouts first: start it now, so the findings are on their way while the orchestrator reads the request.
   // It is only a head start: anything that stops it leaves the oracle to scout as before.
   let scouting: Domain[] = [];
-  try { scouting = prefetchScouts(task, config, () => workflowDeps(ctx, configDir, undefined, undefined)); }
+  try { scouting = prefetchScouts(task, config, makeDeps, effort); }
   catch { scouting = []; }
-  if (scouting.length > 0) lobbyFeed.log("LOBBY", `${task.id}: scouting ${scouting.join(", ")} while the oracle reads the request`, "info");
+  if (scouting.length > 0) lobbyFeed.log("LOBBY", `${task.id}: scouting ${scouting.join(", ")} while the orchestrator reads the request`, "info");
   // A kickoff while pi is still busy (another turn) queues behind it instead of throwing.
   pi.sendUserMessage(kickoff(task, { fastTrack: config.workflow.fastTrack, cwd: taskCwd(task, ctx.cwd), scouting }), ctx.isIdle() ? undefined : { deliverAs: "followUp" });
   return task;

@@ -9,10 +9,16 @@
  * finished reply lands in the metrics log. The Master's own replies are pi's
  * turns, not this queue's.
  */
+import { readFile } from "node:fs/promises";
 import { loadPrompt } from "../prompts/loader.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
 import { runPiAgent, spawnPiProcess, type PiStreamEvent, type ProcessRunner } from "../execution/pi-runner.ts";
 import { MAX_CHILDREN } from "../execution/delegation.ts";
+import { finalChecks, runVerification, verificationSummary, type VerifyExec } from "../execution/verification.ts";
+import { refreshContextPack, packFingerprint } from "../master/master.ts";
+import { contextPackBlock } from "../roles/worker.ts";
+import type { VerificationReport } from "../schemas/verification.ts";
+import type { ContextPack, ContextPackFile } from "../execution/assignment.ts";
 import { describeToolCall } from "../pi/activity.ts";
 import { appendMetrics, type MetricRecord, type MetricStatus } from "../state/metrics.ts";
 import { appendChange, EditLog } from "../state/changes.ts";
@@ -51,6 +57,10 @@ const ROLE_OF: Record<ChatWorker, Role> = { designer: "worker", backend: "worker
 
 /** Lines of conversation an agent is given, newest last. */
 export const CHAT_CONTEXT_LINES = 12;
+/** Likely files packed into a chat reply's context, at most. */
+export const CHAT_PACK_FILES = 8;
+/** Lines of each packed file the pack carries, at most. */
+const CHAT_PACK_LINES = 60;
 /** Longest line of earlier conversation it is given. */
 const CONTEXT_LINE_CHARS = 1200;
 export const MAX_CHAT_JOBS = 30;
@@ -95,6 +105,7 @@ export interface ChatAgentsDeps {
   stallTimeoutMs?: number;
   toolStallTimeoutMs?: number;
   runProcess?: ProcessRunner;
+  verificationExec?: VerifyExec;
 }
 
 /** An agent's system prompt: its domain's layers (the global one for RESEARCH and scouts), the lobby chat role and its seat. */
@@ -126,6 +137,9 @@ export class ChatAgents {
   private readonly controllers = new Map<string, AbortController>();
   private readonly edits = new Map<string, EditLog>();
   private counter = 0;
+  private previousVerification?: VerificationReport;
+  private verificationChain: Promise<void> = Promise.resolve();
+  private readonly verificationControllers = new Set<AbortController>();
 
   constructor(deps: ChatAgentsDeps) {
     this.deps = deps;
@@ -160,6 +174,7 @@ export class ChatAgents {
       job.finishedAt = now;
     }
     for (const controller of this.controllers.values()) controller.abort();
+    for (const controller of this.verificationControllers) controller.abort();
     this.changed();
   }
 
@@ -201,7 +216,7 @@ export class ChatAgents {
     const history = this.deps.history();
     const earlier = history.at(-1)?.endsWith(job.text) ? history.slice(0, -1) : history;
     try {
-      const likely = await this.likely(job.text, controller.signal);
+      const likely = await this.pack(job.text, controller.signal);
       const result = await runPiAgent(
         {
           cwd: this.deps.cwd,
@@ -238,13 +253,14 @@ export class ChatAgents {
     }
   }
 
-  /** The Likely files block for a message, or "" (no hints, nothing stands out, out of time). */
-  private async likely(text: string, signal: AbortSignal): Promise<string> {
-    try {
-      return (await this.deps.hints?.block(text, signal)) ?? "";
-    } catch {
-      return "";
-    }
+  /** The message's likely files as a fingerprinted, refreshed context pack — the same primitive task workers get — or "". */
+  private async pack(text: string, signal: AbortSignal): Promise<string> {
+    const paths = await this.deps.hints?.paths?.(text, signal).catch(() => undefined);
+    if (!paths?.length) return "";
+    const files = await Promise.all(paths.slice(0, CHAT_PACK_FILES).map((path) => packEntry(path, this.deps.cwd)));
+    const pack: ContextPack = { version: 1, files: files.filter((entry): entry is ContextPackFile => entry !== undefined), verification: [] };
+    const notes = await refreshContextPack(pack, this.deps.cwd);
+    return contextPackBlock(pack, notes);
   }
 
   private finish(job: ChatJob): void {
@@ -263,6 +279,7 @@ export class ChatAgents {
         finishedAt: new Date(job.finishedAt).toISOString(),
         status: job.status,
       });
+      if (job.status !== "cancelled") this.verify(edited);
     }
     this.deps.feed?.end(job.id, job.status !== "success");
     this.deps.feed?.settleThought(job.id);
@@ -272,6 +289,38 @@ export class ChatAgents {
     this.changed();
     this.pump();
   }
+
+  /** A chat reply that changed files gets the final checks in the background: single-flight, fingerprint-reused, reported to the feed. */
+  private verify(edited: readonly string[]): void {
+    const controller = new AbortController();
+    this.verificationControllers.add(controller);
+    this.verificationChain = this.verificationChain
+      .then(() => this.runChecks(edited, controller))
+      .catch((error: unknown) => {
+        this.deps.feed?.log("LOBBY", `chat checks could not run: ${error instanceof Error ? error.message : String(error)}`, "warning");
+        this.changed();
+      })
+      .finally(() => { this.verificationControllers.delete(controller); });
+  }
+
+  private async runChecks(edited: readonly string[], controller: AbortController): Promise<void> {
+    if (controller.signal.aborted) return;
+    const top = this.deps.cwd;
+    const report = await runVerification({ top, checks: finalChecks(top), signal: controller.signal, previous: this.previousVerification, exec: this.deps.verificationExec });
+    if (controller.signal.aborted) return;
+    this.previousVerification = report;
+    const passed = report.results.length > 0 && report.results.every((result) => result.state === "pass");
+    this.deps.feed?.log("LOBBY", `chat checks for ${edited.length} edited file${edited.length === 1 ? "" : "s"}: ${verificationSummary(report)}`, passed ? "success" : "warning");
+    this.changed();
+  }
+}
+
+/** One likely file's pack entry: fingerprint plus a bounded head snippet, or undefined when it cannot be read. */
+async function packEntry(path: string, root: string): Promise<ContextPackFile | undefined> {
+  const content = await readFile(`${root}/${path}`, "utf8").catch(() => undefined);
+  if (content === undefined) return undefined;
+  const snippet = content.split("\n").slice(0, CHAT_PACK_LINES).join("\n").slice(0, 2_000);
+  return { path, ranges: [[1, Math.min(CHAT_PACK_LINES, content.split("\n").length)]], fingerprint: packFingerprint(content), snippet };
 }
 
 export function chatMetric(job: ChatJob): MetricRecord {

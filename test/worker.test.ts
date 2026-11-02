@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseWorkerResult, validateWorkerResult } from "../src/roles/worker.ts";
 import { parseSections } from "../src/roles/markdown.ts";
+import { refreshContextPack } from "../src/master/master.ts";
+import type { ContextPack } from "../src/execution/assignment.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask, taskDirFor } from "../src/state/persistence.ts";
@@ -312,4 +314,16 @@ test("a vague delegation is sent back once with nothing started; the same text a
   assert.equal((await act(deps, vague)).ok, true, "the oracle sent it again unchanged");
   const concrete = await act(deps, { action: "implement", domain: "designer", task: "In `src/ui/list.tsx`, add limit and offset query parameters." });
   assert.equal(concrete.ok, true, "a short concrete task needs no ceremony");
+});
+
+test("a stale pack range refreshes clamped into the file as it is, with the lines it covers", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pack-refresh-"));
+  writeFileSync(join(root, "short.ts"), "one\ntwo\nthree\n");
+  const pack: ContextPack = { version: 1, files: [{ path: "short.ts", ranges: [[1000, 2000]], fingerprint: "stale", snippet: "gone" }], verification: [] };
+  const notes = await refreshContextPack(pack, root);
+  const entry = pack.files[0]!;
+  assert.deepEqual(entry.ranges, [[3, 3]], "both endpoints clamp into the file, in order");
+  assert.equal(entry.snippet, "three", "the snippet covers the clamped range");
+  assert.notEqual(entry.fingerprint, "stale");
+  assert.equal(notes.length, 1, "the refresh says what changed");
 });

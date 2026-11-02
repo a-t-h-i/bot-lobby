@@ -225,6 +225,7 @@ export function withRepoMap(hinter: FileHinter, scope: FileScope, settings: () =
       const [likely, mapped] = await Promise.all([hinter.block(query, signal, context), map]);
       return [withoutMapped(likely, mapped), mapped].filter(Boolean).join("\n\n");
     },
+    paths: (query, signal) => hinter.paths?.(query, signal) ?? Promise.resolve([]),
     tools: () => hinter.tools(),
   };
 }

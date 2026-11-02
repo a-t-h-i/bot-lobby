@@ -184,7 +184,7 @@ export function filterPosts(posts: readonly BoardPost[], filter: BoardFilter): B
   return filter.limit && matching.length > filter.limit ? matching.slice(-filter.limit) : matching;
 }
 
-const NAMES: Record<string, string> = { backend: "DEV", designer: "DESIGN", qa: "QA", oracle: "ORACLE" };
+const NAMES: Record<string, string> = { backend: "DEV", designer: "DESIGN", qa: "QA", oracle: "ORCHESTRATOR" };
 
 export function posterName(from: string): string {
   const role = roleOf(from);

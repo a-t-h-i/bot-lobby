@@ -16,11 +16,11 @@ test("the oracle, running agents, work still under way and busy background sessi
     activity: [{ source: "MASTER", pending: true }, { source: "DESIGN", pending: true }, { source: "LOBBY", pending: true }],
     background: [{ name: "S1", busy: true, alive: true }, { name: "S2", busy: true, alive: false }],
   });
-  assert.deepEqual(names, ["Oracle", "Dev", "QA", "Design", "1 in the background"]);
+  assert.deepEqual(names, ["Orchestrator", "Dev", "QA", "Design", "1 in the background"]);
 });
 
 test("the orb's tag names two and counts the rest", () => {
   assert.equal(busyLabel(["Dev"]), "Dev");
-  assert.equal(busyLabel(["Oracle", "Dev"]), "Oracle, Dev");
-  assert.equal(busyLabel(["Oracle", "Dev", "QA", "Design"]), "Oracle, Dev +2");
+  assert.equal(busyLabel(["Orchestrator", "Dev"]), "Orchestrator, Dev");
+  assert.equal(busyLabel(["Orchestrator", "Dev", "QA", "Design"]), "Orchestrator, Dev +2");
 });

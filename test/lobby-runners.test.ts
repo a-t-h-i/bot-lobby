@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describeToolCall } from "../src/pi/activity.ts";
@@ -14,6 +14,9 @@ import { invariantPrefix } from "../src/prompts/compiler.ts";
 import { loadPrompt } from "../src/prompts/loader.ts";
 import { MAX_QUESTIONS } from "../src/lobby/ask.ts";
 import type { Exec } from "../src/lobby/exec.ts";
+import type { FileHinter } from "../src/classifier/files.ts";
+import { packFingerprint } from "../src/master/master.ts";
+import type { VerifyExec } from "../src/execution/verification.ts";
 import { listPlannedTasks } from "../src/state/backlog.ts";
 import { readMetrics } from "../src/state/metrics.ts";
 import { readChanges } from "../src/state/changes.ts";
@@ -143,7 +146,7 @@ test("the conversation keeps text only and turns bot-lobby's kickoff into the ta
     { role: "note", text: "task started · add login" },
     { role: "you", text: "add a login page\nwith email" },
   ]);
-  assert.deepEqual(chatText("user", "The user left a comment on the proposal of TASK-x from the lobby:\n- cap it"), [{ role: "note", text: "your comment on the proposal went to the oracle" }]);
+  assert.deepEqual(chatText("user", "The user left a comment on the proposal of TASK-x from the lobby:\n- cap it"), [{ role: "note", text: "your comment on the proposal went to the orchestrator" }]);
   assert.deepEqual(chatText("assistant", "  Two questions.  "), [{ role: "oracle", text: "Two questions." }]);
   assert.deepEqual(chatText("user", "   "), []);
   const chat = chatFromEntries([
@@ -207,6 +210,117 @@ test("lobby chat agents answer one at a time with their own tools, and their edi
   assert.match(chatAgentPrompt("researcher"), /# Lobby Chat[\s\S]*## Your seat\n\nYou are RESEARCH/);
   assert.equal(chatAgentTask("hi", []), "## Message\n\nhi");
   assert.throws(() => chat.submit("qa", "   ", "x"), /needs some text/);
+});
+
+test("a chat reply whose hints name files starts from a fingerprinted context pack after the message", async () => {
+  const root = tempRoot();
+  const seen: Array<{ args: string[]; options: ProcessRunOptions }> = [];
+  mkdirSync(join(root, "src"));
+  const users = "// Users.\nexport function getUser() {}\n";
+  const api = "// Routes.\nexport function getUser() {}\n";
+  writeFileSync(join(root, "src/users.ts"), users);
+  writeFileSync(join(root, "src/api.ts"), api);
+  const hints: FileHinter = { block: async () => "", paths: async () => ["src/users.ts", "src/api.ts"], tools: () => [] };
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: fakeRunner("Renamed.", [], seen), hints });
+  chat.submit("backend", "rename getUser", "you named @dev");
+  for (let i = 0; i < 200 && chat.busy; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  const prompt = seen[0]!.options.prompt!;
+  assert.ok(prompt.startsWith("Task: ## Message\n\nrename getUser\n\n## Context pack\n\nVersion 1. Entries were current at dispatch"), "the pack block follows the message");
+  assert.equal(prompt.includes(`- src/users.ts lines 1-3 · fingerprint ${packFingerprint(users)}`), true, "each hinted file lands with its line range and fingerprint");
+  assert.ok(prompt.includes(`- src/api.ts lines 1-3 · fingerprint ${packFingerprint(api)}`));
+  assert.match(prompt, /```\n  \/\/ Users\.\n  export function getUser\(\) \{\}\n\s*```/, "the pack carries a bounded snippet of each file");
+  assert.doesNotMatch(prompt, /Refreshed at dispatch/, "unchanged files are packed as they are");
+});
+
+test("a chat reply without hinted paths sends no context pack", async () => {
+  const root = tempRoot();
+  const seen: Array<{ args: string[]; options: ProcessRunOptions }> = [];
+  const bare = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: fakeRunner("Done.", [], seen) });
+  bare.submit("qa", "read the tests", "the classifier (0.9)");
+  for (let i = 0; i < 200 && bare.busy; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.doesNotMatch(seen[0]!.options.prompt ?? "", /## Context pack/, "no hints at all: no pack");
+  const hints: FileHinter = { block: async () => "", paths: async () => [], tools: () => [] };
+  seen.length = 0;
+  const empty = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: fakeRunner("Done.", [], seen), hints });
+  empty.submit("backend", "anything", "the classifier (0.8)");
+  for (let i = 0; i < 200 && empty.busy; i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.doesNotMatch(seen[0]!.options.prompt ?? "", /## Context pack/, "hints with no likely paths: no pack either");
+});
+
+test("a chat reply that edited files runs the project's checks in the background and reports them to the feed", async () => {
+  const root = tempRoot();
+  const feed = new LobbyFeed();
+  const events: PiStreamEvent[] = [{ type: "tool_execution_start", toolName: "edit", args: { path: "src/a.ts" } }];
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", feed, profile: () => ({ thinking: "low" }), history: () => [], runProcess: fakeRunner("Edited.", events) });
+  chat.submit("designer", "make it so", "you named @design");
+  const reported = () => feed.activity.some((entry) => entry.text.startsWith("chat checks for "));
+  for (let i = 0; i < 400 && !reported(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(chat.busy, false, "the reply itself is done; the checks ran in the background");
+  const entry = feed.activity.find((entry) => entry.text.startsWith("chat checks for "));
+  assert.deepEqual([entry!.source, entry!.kind], ["LOBBY", "warning"], "a bare tmp project defines no checks, so every-pass is false");
+  assert.match(entry!.text, /^chat checks for 1 edited file: no applicable checks: the project defines none of typecheck, test, web:build, web:check$/);
+});
+
+function verificationChat(exec: VerifyExec) {
+  const root = tempRoot();
+  mkdirSync(join(root, "src"));
+  writeFileSync(join(root, "src/a.ts"), "export const a = 1;");
+  writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { typecheck: "fixture" } }));
+  const feed = new LobbyFeed();
+  const events: PiStreamEvent[] = [{ type: "tool_execution_start", toolName: "edit", args: { path: "src/a.ts" } }];
+  const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", feed, profile: () => ({ thinking: "low" }), history: () => [], runProcess: fakeRunner("Edited.", events), verificationExec: exec });
+  return { root, feed, chat };
+}
+
+async function waitForChat(predicate: () => boolean): Promise<void> {
+  for (let i = 0; i < 400 && !predicate(); i++) await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(predicate(), "chat condition completed within the bounded wait");
+}
+
+function stalledVerification() {
+  const signals: AbortSignal[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const exec: VerifyExec = async (_command, _args, options) => {
+    signals.push(options.signal!);
+    await gate;
+    return { code: 0, output: "", timedOut: false };
+  };
+  return { exec, signals, release };
+}
+
+test("cancelAll aborts running and queued verification without delaying queued replies", async () => {
+  const { exec, signals, release } = stalledVerification();
+  const { chat, feed } = verificationChat(exec);
+  chat.submit("backend", "first edit", "x");
+  await waitForChat(() => signals.length === 1);
+  const second = chat.submit("backend", "queued edit", "x");
+  await waitForChat(() => second.status === "success");
+  assert.equal(signals.length, 1, "verification is serialized but does not gate worker dispatch");
+  chat.cancelAll();
+  assert.equal(signals[0]!.aborted, true);
+  release();
+  await settle();
+  assert.equal(signals.length, 1, "the cancelled queued check never executes");
+  assert.ok(!feed.activity.some((entry) => entry.kind === "success" && entry.text.startsWith("chat checks")));
+});
+
+test("edited chat replies reuse current passes and invalidate them after source changes", async () => {
+  let calls = 0;
+  const { root, chat, feed } = verificationChat(async () => { calls++; return { code: 0, output: "", timedOut: false }; });
+  const reports = () => feed.activity.filter((entry) => entry.text.startsWith("chat checks for "));
+  chat.submit("backend", "first edit", "x");
+  await waitForChat(() => reports().length === 1);
+  chat.submit("backend", "unchanged edit", "x");
+  await waitForChat(() => reports().length === 2);
+  assert.equal(calls, 1);
+  assert.match(reports()[1]!.text, /reused: unchanged/);
+  writeFileSync(join(root, "src/a.ts"), "export const a = 2;");
+  chat.submit("backend", "changed edit", "x");
+  await waitForChat(() => reports().length === 3);
+  assert.equal(calls, 2);
+  assert.doesNotMatch(reports()[2]!.text, /reused/);
+  assert.ok(reports().every((entry) => entry.kind === "success"));
 });
 
 test("stopping the chat cancels the reply under way and drops the waiting ones", async () => {
@@ -285,7 +399,7 @@ test("the transcript carries the issue, every attributed question and the curren
   );
   assert.match(transcript, /^## Source: GitHub issue #7 — Dark mode\n\nPlease add it/);
   assert.match(transcript, /### User\n\nadd dark mode\n\n### Panel\n\n1\. \[DESIGN\] Which pages\?\n   - All \(Recommended\) — every page\n   - Settings only\n2\. \[QA\] Which browsers\?\n\n### User\n\n1\. all 2\. chrome/);
-  assert.match(transcript, /## The oracle's current draft plan\n\n### Steps\n1\. tokens/);
+  assert.match(transcript, /## The orchestrator's current draft plan\n\n### Steps\n1\. tokens/);
   assert.match(panelSection([{ member: "qa", reply: { status: "ready", questions: [], notes: ["e2e in tests/e2e"] } }, { member: "researcher", error: "timeout" }]), /### QA — READY\nNotes:\n- e2e in tests\/e2e\n\n### RESEARCH — no answer this round \(timeout\)/);
 });
 
@@ -370,14 +484,14 @@ test("a panel round asks every seat on its own model, then lets the oracle fold 
   assert.equal(saved.id, "PLAN-dark-mode-toggle");
   assert.deepEqual(listPlannedTasks(root, ".pi")[0]!.issue, { number: 7, title: "Dark mode please", url: "https://x/7" });
   const metrics = readMetrics(root, ".pi");
-  assert.deepEqual(metrics.slice(0, 4).map((metric) => [metric.kind, metric.agent]).sort(), [["panel", "DEV"], ["panel", "QA"], ["panel", "RESEARCH"], ["planner", "ORACLE"]]);
+  assert.deepEqual(metrics.slice(0, 4).map((metric) => [metric.kind, metric.agent]).sort(), [["panel", "DEV"], ["panel", "QA"], ["panel", "RESEARCH"], ["planner", "ORCHESTRATOR"]]);
 });
 
 test("a round never puts more than four questions to the user; seats' own go through only when the oracle fails", () => {
   const asked = (text: string) => ({ text, options: [] });
   const reply = { status: "grilling" as const, questions: ["[QA] One?", "[DEV] Two?", "Three?", "[DESIGN] Four?", "[RESEARCH] Five?"].map(asked) };
   const seats = [{ from: "DEV", ...asked("Seat one?") }, { from: "QA", ...asked("Seat two?") }];
-  assert.deepEqual(roundQuestions(reply, seats).map((question) => `${question.from} ${question.text}`), ["QA One?", "DEV Two?", "ORACLE Three?", "DESIGN Four?"]);
+  assert.deepEqual(roundQuestions(reply, seats).map((question) => `${question.from} ${question.text}`), ["QA One?", "DEV Two?", "ORCHESTRATOR Three?", "DESIGN Four?"]);
   assert.deepEqual(roundQuestions({ status: "grilling", questions: [] }, seats), [], "the oracle decided everything itself");
   assert.deepEqual(roundQuestions(undefined, seats).map((question) => question.text), ["Seat one?", "Seat two?"], "a failed oracle lets the seats ask");
   assert.equal(MAX_QUESTIONS, 4, "one questionnaire holds a whole round");
@@ -537,8 +651,8 @@ test("questions left at the limit become assumptions decided with the marked opt
   assert.equal(recommendedOption(browsers), undefined, "nothing is implied by order: an unmarked question has no recommendation");
   const plan = "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n\n### Steps\n1. y";
   assert.equal(appendAssumptions(plan, [flag, question("ORACLE", "Anything else?", [])], "decided at the round limit"),
-    "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n- [DEV] Behind a flag? → Yes (decided at the round limit)\n- [ORACLE] Anything else? → the oracle's call (decided at the round limit)\n\n### Steps\n1. y");
-  assert.equal(appendAssumptions("### Steps\n1. y\n", [browsers], "why"), "### Steps\n1. y\n\n### Assumptions\n- [QA] Which browsers? → the oracle's call (why)");
+    "### Objective\nx\n### Assumptions\n- [QA] Evergreen\n- [DEV] Behind a flag? → Yes (decided at the round limit)\n- [ORACLE] Anything else? → the orchestrator's call (decided at the round limit)\n\n### Steps\n1. y");
+  assert.equal(appendAssumptions("### Steps\n1. y\n", [browsers], "why"), "### Steps\n1. y\n\n### Assumptions\n- [QA] Which browsers? → the orchestrator's call (why)");
   assert.equal(appendAssumptions(plan, [], "why"), plan);
 });
 

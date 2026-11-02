@@ -18,7 +18,7 @@ export type AgentKind = (typeof AGENT_ORDER)[number]
 
 /** What each agent is called. */
 export const AGENT_LABELS: Record<AgentKind, string> = {
-  master: "Oracle",
+  master: "Orchestrator",
   designer: "Designer",
   backend: "Backend",
   qa: "QA",
@@ -112,7 +112,7 @@ export const GRANTS = {
   skills: "Skills",
   skillsHelp: "An agent sees each granted skill's name and description, and reads its instructions when the work calls for them.",
   sessionSkills: "this session's",
-  masterSkills: "The oracle is this pi session, so it uses the skills pi loads for it (pi's own skill settings).",
+  masterSkills: "The orchestrator is this pi session, so it uses the skills pi loads for it (pi's own skill settings).",
   everySkill: "Every skill pi finds",
   everySkillHelp: "Off: only the skills ticked below.",
   allSkills: "all skills",
@@ -145,7 +145,7 @@ export const PANEL_ITEMS = [
 export const PANEL_HELP = "shown on the Lobby tab"
 
 export const ROUNDS_LABEL = "Planning rounds"
-export const ROUNDS_HELP = "how many rounds the panel gets before the oracle settles the rest alone"
+export const ROUNDS_HELP = "how many rounds the panel gets before the orchestrator settles the rest alone"
 /** `PLANNING_ROUND_CHOICES`: 0 = unlimited. */
 export const ROUND_CHOICES = [2, 3, 5, 8, 0] as const
 
@@ -165,7 +165,7 @@ export const GIT_LABEL = "Git isolation"
 /** The lint gate's modes (`LINT_MODES`). */
 export const LINT_MODE_ITEMS = [
   { id: "off", label: "off", help: "agents' work is never linted" },
-  { id: "advise", label: "advise", help: "the oracle and QA are told what the project's linter finds on the lines a task changed; nothing is held" },
+  { id: "advise", label: "advise", help: "the orchestrator and QA are told what the project's linter finds on the lines a task changed; nothing is held" },
   { id: "block", label: "block", help: "new lint errors also hold a task's completion until they are fixed, or you accept the work as it is" },
 ] as const
 
@@ -203,8 +203,8 @@ export const JEV_HOST_ITEMS = [
 export const CLASSIFIER_FEATURE_ITEMS = [
   { id: "seats", label: "Planning seats", help: "each round, only the seats your idea or latest answers touch sit; 1-4 in the Plan tab pins one" },
   { id: "answers", label: "Obvious answers", help: "a panel question whose recommended option the conversation already makes clearly right is answered for you (listed under Assumptions)" },
-  { id: "lobby", label: "Lobby replies", help: "each lobby message goes to the agent whose area it is: a frontend question to Design, a library question to Research, \"how does this work\" to a scout; when it is unsure, or off, the Oracle answers. Naming an agent with @ always decides" },
-  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Oracle as hints" },
+  { id: "lobby", label: "Lobby replies", help: "each lobby message goes to the agent whose area it is: a frontend question to Design, a library question to Research, \"how does this work\" to a scout; when it is unsure, or off, the Orchestrator answers. Naming an agent with @ always decides" },
+  { id: "triage", label: "Task triage", help: "a new task's size, domains and research need reach the Orchestrator as hints" },
   { id: "effort", label: "Effort routing", help: "a simple step runs one thinking level lower, a trivial one on the cheaper model below; a routed run that falls short runs again on your settings" },
   { id: "qa", label: "QA risk", help: "once a task's work is in, the classifier reads the diff and sizes QA to it: no QA agent for a change with nothing that runs, a light check for a small one, deep review where a defect would spread; with it off the engine's rules decide" },
   { id: "review", label: "Pull request read", help: "the Git tab's quick read of a pull request: its size, and how likely it is risky, security-relevant, breaking or untested, before an agent reviews it" },
@@ -285,7 +285,7 @@ export const HARNESS = {
   older: "older",
   effortNote: "Applied when the agent offers effort levels in its session.",
   agentNote: "Runs in this harness with Bot Lobby's prompts. It cannot ask you questions or use Bot Lobby's own tools (desk, board).",
-  intro: "Run any agent but the oracle and the planner on another coding agent. The oracle stays on pi and hands each step over: the harness gets the agent's role prompt, and its own login and models. Pick the harness per agent under Agents.",
+  intro: "Run any agent but the orchestrator and the planner on another coding agent. The orchestrator stays on pi and hands each step over: the harness gets the agent's role prompt, and its own login and models. Pick the harness per agent under Agents.",
   installed: "Installed",
   notFound: "Not found",
   usedBy: "Used by",

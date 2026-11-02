@@ -1,11 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, join } from "node:path";
+import { withFileLock } from "../desk/lock.ts";
 import { knowledgeDir, STANDARDS_FILE, type KnowledgeAgent } from "./paths.ts";
 import { annotate, readNotes } from "./notes.ts";
 import { pinnedEntries, recordEvent, settleProposals } from "./ledger.ts";
 
 /** The agent's name as the Knowledge page shows it. */
-const AGENT_NAMES: Record<KnowledgeAgent, string> = { master: "Oracle", designer: "Designer", backend: "Backend", qa: "QA" };
+const AGENT_NAMES: Record<KnowledgeAgent, string> = { master: "Orchestrator", designer: "Designer", backend: "Backend", qa: "QA" };
 
 export function readFileOr(path: string, fallback = ""): string {
   try {
@@ -22,8 +24,45 @@ export function readFirstExisting(paths: readonly string[], fallback = ""): stri
 }
 
 export function writeFileEnsured(path: string, content: string): void {
+  writeFileAtomic(path, content);
+}
+
+/**
+ * Atomic replacement: the content lands in a temp file beside the target,
+ * then one rename swaps it in. A crash mid-write leaves the original file
+ * intact and a harmless temp file behind — never a half-written active file.
+ */
+export function writeFileAtomic(path: string, content: string, expected?: string): boolean {
+  return withFileLock(path, () => {
+    if (expected !== undefined && readFileOr(path) !== expected) return false;
+    writeFileAtomicUnlocked(path, content);
+    return true;
+  });
+}
+
+function existingStat(path: string): Stats | undefined {
+  try {
+    return statSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return undefined;
+  }
+}
+
+/** Only called while the target path's lock is held; metadata failures leave it intact. */
+function writeFileAtomicUnlocked(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, content, "utf8");
+  const original = existingStat(path);
+  const temp = `${path}.tmp-${process.pid}-${randomUUID()}`;
+  try {
+    writeFileSync(temp, content, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    const created = statSync(temp);
+    if (original && (original.uid !== created.uid || original.gid !== created.gid)) chownSync(temp, original.uid, original.gid);
+    chmodSync(temp, original ? original.mode & 0o7777 : 0o666 & ~process.umask());
+    renameSync(temp, path);
+  } finally {
+    rmSync(temp, { force: true });
+  }
 }
 
 /** Seed content for freshly created knowledge files (§21). */
@@ -38,16 +77,21 @@ export const DEFAULT_KNOWLEDGE_CONTENT: Record<string, string> = {
 };
 
 export function ensureFile(path: string, content: string): void {
-  if (!existsSync(path)) writeFileEnsured(path, content);
+  withFileLock(path, () => {
+    if (!existsSync(path)) writeFileAtomicUnlocked(path, content);
+  });
 }
 
 /** Append a line under a date heading, creating the heading when needed. */
 function appendDatedEntry(path: string, line: string, now: Date): void {
-  const date = now.toISOString().slice(0, 10);
-  const header = `# ${date}`;
-  const body = readFileOr(path, "").trimEnd();
+  withFileLock(path, () => writeFileAtomicUnlocked(path, datedContent(readFileOr(path), line, now)));
+}
+
+function datedContent(content: string, line: string, now: Date): string {
+  const header = `# ${now.toISOString().slice(0, 10)}`;
+  const body = content.trimEnd();
   const updated = body.includes(header) ? `${body}\n${line}` : `${body}\n\n${header}\n\n${line}`;
-  writeFileEnsured(path, `${updated.trimStart()}\n`);
+  return `${updated.trimStart()}\n`;
 }
 
 /** Append one operational-history line to an agent's completed-tasks log. */
@@ -91,12 +135,23 @@ export function applyKnowledge(entry: KnowledgeEntry): { path: string; result: "
   const text = entry.text.trim();
   if (!text) return { path: "", result: "empty" };
   const path = knowledgeFilePath(entry.dataRoot, entry.agent, entry.kind);
-  const existing = readFileOr(path);
-  if (existing.toLowerCase().includes(text.toLowerCase())) return { path, result: "duplicate" };
   const now = entry.now ?? new Date();
-  if (entry.kind === "decision") appendDecision(dirname(path), text, now);
-  else if (entry.kind === "completed") appendCompletedTask(dirname(path), text, now);
-  else writeFileEnsured(path, `${existing.trimEnd()}\n\n${text}\n`);
+  const added = withFileLock(path, () => addKnowledgeUnlocked(path, text, entry.kind, now));
+  if (!added) return { path, result: "duplicate" };
+  auditKnowledge(entry, path, text, now);
+  return { path, result: "added" };
+}
+
+function addKnowledgeUnlocked(path: string, text: string, kind: KnowledgeKind, now: Date): boolean {
+  const existing = readFileOr(path);
+  if (existing.toLowerCase().includes(text.toLowerCase())) return false;
+  const dated = kind === "decision" || kind === "completed";
+  const line = kind === "completed" ? `- [x] ${text}` : `- ${text}`;
+  writeFileAtomicUnlocked(path, dated ? datedContent(existing, line, now) : `${existing.trimEnd()}\n\n${text}\n`);
+  return true;
+}
+
+function auditKnowledge(entry: KnowledgeEntry, path: string, text: string, now: Date): void {
   if (entry.kind !== "completed") {
     const file = basename(path);
     const by = entry.by ?? AGENT_NAMES[entry.agent];
@@ -107,7 +162,6 @@ export function applyKnowledge(entry: KnowledgeEntry): { path: string; result: "
       // The history is a nicety; the knowledge itself is saved.
     }
   }
-  return { path, result: "added" };
 }
 
 /** Read an agent's knowledge slices for prompt context selection (§23). */

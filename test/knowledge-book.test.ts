@@ -32,7 +32,7 @@ test("every agent's knowledge is listed, with size, notes and whether it is past
   const decisions = files.find((info) => info.agent === "backend" && info.file === "decisions.md")!;
   assert.deepEqual([decisions.chars, decisions.over, decisions.notes], [DECISIONS.repeat(3).length, true, 0]);
   assert.equal(files.find((info) => info.agent === "qa" && info.file === "knowledge.md")!.over, false);
-  assert.equal(AGENT_LABELS.master, "Master (oracle)");
+  assert.equal(AGENT_LABELS.master, "Orchestrator");
   assert.equal(FILE_LABELS["engineering-standards.md"], "Engineering standards");
 });
 

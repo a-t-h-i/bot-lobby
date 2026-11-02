@@ -137,7 +137,7 @@ export interface AutoTrack {
   stalled: boolean;
 }
 
-/** Everything a workflow step changes, cheaply: two equal fingerprints mean the oracle made no progress. */
+/** Everything a workflow step changes, cheaply: two equal fingerprints mean the orchestrator made no progress. */
 export function taskFingerprint(task: Task): string {
   return [
     task.state,
@@ -185,7 +185,7 @@ export function driveAuto(): boolean {
   state.auto = step.track;
   if (step.stalledNow) {
     listener?.({ kind: "stalled", taskId: task.id });
-    state.ctx.ui.notify(`bot-lobby: auto mode — the oracle made no progress on ${task.id} after ${MAX_IDLE_NUDGES} nudges; it needs you.`, "warning");
+    state.ctx.ui.notify(`bot-lobby: auto mode — the orchestrator made no progress on ${task.id} after ${MAX_IDLE_NUDGES} nudges; it needs you.`, "warning");
   }
   if (!step.nudge) return false;
   state.pi.sendUserMessage(autoNudge(task));
@@ -214,7 +214,7 @@ export function toggleOwnAuto(): string {
   if (!live(task)) return "no active task in this session — auto mode applies to a task";
   const on = !isAutoMode(state.root, state.configDir, task.id);
   setAuto(state.root, state.configDir, task.id, on, state.ctx.sessionManager.getSessionId());
-  return on ? `auto mode on for ${task.id}: the oracle drives it to completion without asking you` : `auto mode off for ${task.id}: the oracle asks you again`;
+  return on ? `auto mode on for ${task.id}: the orchestrator drives it to completion without asking you` : `auto mode off for ${task.id}: the orchestrator asks you again`;
 }
 
 /** Whether a finished turn was stopped by the user (its last reply was aborted). */

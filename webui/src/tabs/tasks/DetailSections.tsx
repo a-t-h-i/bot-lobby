@@ -221,7 +221,7 @@ function PlanSection({ detail, finished }: { detail: TaskDetailData; finished: b
   return (
     <Section title="Plan">
       <p className="text-sm text-muted-foreground">
-        {finished ? "It ended before a plan was made." : "No proposal or plan yet — the oracle is still clarifying or scouting."}
+        {finished ? "It ended before a plan was made." : "No proposal or plan yet — the orchestrator is still clarifying or scouting."}
       </p>
     </Section>
   )

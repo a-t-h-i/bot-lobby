@@ -7,9 +7,10 @@ import { checkWorkerAssignments, recordWorkerAssignments } from "../state/persis
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { checkpointSummary, settledDecisions } from "../state/checkpoint.ts";
 import { draftAssignments, draftAssignmentsNote } from "./draft-assignments.ts";
-import { prefetchDomains, startScoutPrefetch, stopScoutPrefetch, takeScoutPrefetch } from "../master/scout-prefetch.ts";
+import { prefetchDomains, skipSingleWorkerPrefetch, startScoutPrefetch, stopScoutPrefetch, takeScoutPrefetch } from "../master/scout-prefetch.ts";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { profileFor, type BotLobbyConfig, type ProfileResolver } from "../schemas/configuration.ts";
+import { randomUUID } from "node:crypto";
 import type { AgentRun, Pushback, ResearchResult, ReviewResult } from "../schemas/findings.ts";
 import {
   MAX_RUN_LOG,
@@ -30,7 +31,8 @@ import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveT
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { proposalParts, propose } from "../knowledge/ledger.ts";
-import { compactKnowledgeFile, overThreshold } from "../knowledge/compactor.ts";
+import { compactKnowledgeFile, overThreshold, scheduleKnowledgeMaintenance } from "../knowledge/compactor.ts";
+import { finalChecks, runVerification, verificationSummary } from "../execution/verification.ts";
 import { oracleBookmarkOp, retireBookmarks, type OracleBookmarkOp } from "../knowledge/bookmarks.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { lobbyTopics } from "../lobby/topics.ts";
@@ -75,11 +77,11 @@ import { nextStates } from "./transitions.ts";
 import type { FileHinter } from "../classifier/files.ts";
 import type { KnowledgePicker } from "../classifier/knowledge.ts";
 import type { Classifier } from "../classifier/classifier.ts";
-import type { EffortRouter } from "../classifier/effort.ts";
+import type { EffortRouter, EffortScore } from "../classifier/effort.ts";
 import { answerClarify } from "../classifier/triage.ts";
-import { appendMetrics, metricFromRun } from "../state/metrics.ts";
+import { appendMetrics, avoidedLaunchRecord, metricFromRun } from "../state/metrics.ts";
 import { markCommentsAddressed, pendingComments, readPlanComments } from "../state/comments.ts";
-import { builtSomething, fastNext, onFastTrack, parseRoster, PLANNED_NEXT, qaRequired, qaTookPart, readRequest, rosterWords, satOut, trackSummary } from "./track.ts";
+import { builtSomething, fastNext, fastPathRecord, onFastTrack, parseRoster, PLANNED_NEXT, promoteFastPath, qaRequired, qaTookPart, readRequest, rosterWords, satOut, singleWorker, trackSummary } from "./track.ts";
 import { requestBesidePlan } from "../state/backlog.ts";
 import { missingWorktree, taskCwd } from "../execution/workspace.ts";
 import { completionReview, deferReview, refreshReview } from "../delivery/review.ts";
@@ -401,12 +403,44 @@ function scoutRequestFor(task: Task, deps: WorkflowDeps, instruction: string, do
 
 const DEFAULT_SCOUT_INSTRUCTION = "Investigate this request and report findings the Master needs.";
 
+/** Populate a fast-track task's single-worker record from the reading that chose its track, once; other tracks get none. */
+function ensureFastPath(task: Task, effort?: EffortScore): void {
+  if (task.fastPath || !task.track || task.track.path !== "fast") return;
+  const record = fastPathRecord(taskRequest(task), task.track, effort);
+  if (record) task.fastPath = record;
+}
+
+/** The estimated-effort reading for a task's request, when the effort router is on; never a failure. */
+async function effortScore(deps: WorkflowDeps, request: string): Promise<EffortScore | undefined> {
+  try {
+    return await deps.effort?.score(request);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Record a launch the single-worker fast path refused, so the avoided work is measurable. */
+function avoidedLaunch(deps: WorkflowDeps, task: Task, what: string): void {
+  appendMetrics(deps.root, deps.configDir, [avoidedLaunchRecord(task.id, `${what}: single-worker fast path`)]);
+}
+
 /**
  * Start the task's opening scout while the oracle reads the request: the full
  * workflow only (the fast track and an agreed plan skip scouting), over the
  * domains the triage names. Returns the domains it scouts; none when it did not start.
  */
-export function prefetchScouts(task: Task, config: BotLobbyConfig, makeDeps: () => WorkflowDeps): Domain[] {
+export function prefetchScouts(task: Task, config: BotLobbyConfig, makeDeps: () => WorkflowDeps, effort?: EffortScore): Domain[] {
+  // A single-worker fast-path task never opens a scout: its one worker reads what it needs itself.
+  ensureFastPath(task, effort);
+  if (singleWorker(task)) {
+    // The refusal stands even when the caller's deps cannot be built; the record is best-effort.
+    try {
+      skipSingleWorkerPrefetch(task, makeDeps());
+    } catch {
+      // No metrics sink: no scout either.
+    }
+    return [];
+  }
   if (!config.workflow.prefetchScout || task.approvedPlan || task.track?.path === "fast") return [];
   const domains = prefetchDomains(task.triage);
   if (domains.length === 0) return [];
@@ -418,6 +452,12 @@ export function prefetchScouts(task: Task, config: BotLobbyConfig, makeDeps: () 
 
 async function handleScout(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["created", "clarifying", "scouting", "synthesizing"]);
+  // The single-worker fast path skips scouts: its one worker reads what it needs itself.
+  ensureFastPath(task);
+  if (singleWorker(task)) {
+    avoidedLaunch(deps, task, "scout");
+    throw new Error(`task ${task.id} is on the single-worker fast path: no scouts. Delegate straight to its one worker with action=implement; if the work genuinely needs reconnaissance, promote the task with action=track track=full and the reason.`);
+  }
   const domains = deriveDomains(params.domains);
   if (task.state === "created") transition(task, "clarifying");
   if (task.state === "clarifying") transition(task, "scouting");
@@ -542,6 +582,12 @@ async function handleResearch(task: Task, params: OrchestrateParams, deps: Workf
 }
 
 async function handlePropose(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
+  // The single-worker fast path skips proposal rounds: its work goes straight to the worker.
+  ensureFastPath(task);
+  if (singleWorker(task)) {
+    avoidedLaunch(deps, task, "proposal round");
+    throw new Error(`task ${task.id} is on the single-worker fast path: no proposal round. Delegate straight to its one worker with action=implement, then call action=complete.`);
+  }
   requireState(task, ["created", "clarifying", "synthesizing", "awaiting_approval"]);
   const proposal = params.proposal?.trim();
   if (!proposal) throw new Error("propose requires a proposal");
@@ -851,6 +897,24 @@ interface Assignment {
   assignment?: WorkerAssignment;
 }
 
+/**
+ * The single-worker fast path's dispatch policy: one implementation worker
+ * carries the task's edits, focused tests and corrections. The first
+ * delegation names the owner when the reading did not; a parallel batch or a
+ * second implementation domain is refused.
+ */
+function dispatchSingleWorker(task: Task, assignments: readonly Assignment[], deps: WorkflowDeps): void {
+  const owner = task.fastPath!.owner;
+  const batch = assignments.length > 1;
+  const second = !batch && owner !== undefined && assignments[0]!.domain !== owner;
+  if (!batch && !second) {
+    if (owner === undefined) task.fastPath!.owner = assignments[0]!.domain;
+    return;
+  }
+  avoidedLaunch(deps, task, batch ? "parallel implementation batch" : "second implementation worker");
+  throw new Error(`task ${task.id} is on the single-worker fast path: one implementation worker${owner ? ` (${owner})` : ""} carries the edits, focused tests and corrections. ${batch ? "Run one assignment at a time" : `Delegate this to ${owner} instead`}; if the work genuinely needs more workers, promote the task with action=track track=full and the reason.`);
+}
+
 /** The delegation as a list: `assignments` for a parallel batch, otherwise the single domain/task. */
 async function parseAssignments(params: OrchestrateParams, cwd: string): Promise<Assignment[]> {
   if (params.assignments !== undefined && (params.workerAssignment !== undefined || params.domain !== undefined || params.task !== undefined)) throw new Error("Use either assignments or a single domain/workerAssignment, not both");
@@ -1046,6 +1110,7 @@ function absorbWorkerOutcome(task: Task, deps: WorkflowDeps, outcome: WorkerOutc
   });
   const approvals = recordWorkerApprovals(task, outcome, deps.config, isAutoMode(deps.root, deps.configDir, task.id));
   const pushback = recordPushback(task, outcome);
+  promoteOnRiskyDecision(task, outcome, deps);
   task.blockers = [...task.blockers.filter((blocker) => blocker.domain !== domain), ...outcome.result.blockers];
   updateScratchpad(deps, task, outcome);
   const grown = qaJoinsGrownFastTask(task, outcome);
@@ -1095,6 +1160,22 @@ function workerNeeds(outcome: WorkerOutcome): AssignmentExpansionRequest[] {
 /** Reports longer than this are kept whole in a file and the oracle gets the path. */
 const LONG_REPORT = 2400;
 
+/** Genuine risk in a worker's own words: security, credentials, data loss, concurrency, migrations. */
+const RISKY_DECISION = /\b(?:secur(?:e|ity)|vulnerab(?:le|ility)|credential|password|secret|api keys?|data loss|drop table|delete (?:all|the) data|backfill|migration|race condition|concurren(?:cy|t)|deadlock|transactions?)\b/i;
+const SEVERE_RISK = /\b(?:secur(?:e|ity)|vulnerab(?:le|ility)|credential|password|secret|api keys?|data loss|drop table)\b/i;
+
+/** A worker's decision request that names genuine risk promotes the task off the single-worker fast path before further risky work. */
+function promoteOnRiskyDecision(task: Task, outcome: WorkerOutcome, deps: WorkflowDeps): void {
+  if (!task.fastPath || task.fastPath.promotedAt) return;
+  const risky = workerNeeds(outcome).filter((need) => need.kind === "decision" && RISKY_DECISION.test(`${need.reason} ${need.requested.join(" ")}`));
+  if (risky.length === 0) return;
+  const evidence = risky.map((need) => `${need.reason} (requested: ${need.requested.join(", ")})`).join("; ");
+  const level: "medium" | "high" = SEVERE_RISK.test(evidence) ? "high" : "medium";
+  if (!promoteFastPath(task, level, evidence)) return;
+  recordDecision(task, `Risk promotion: ${AGENT_LABELS[outcome.result.domain]} asked for a decision naming ${level} risk (${truncate(evidence, 200)}); the task takes the full workflow.`);
+  deps.notify(`Task ${task.id} promoted off the single-worker fast path: a decision request names ${level} risk.`, "warning");
+}
+
 /**
  * Keep a long worker report whole in the task's `reports/` folder, so the
  * oracle reads what it needs from the file instead of getting a shortened
@@ -1123,8 +1204,11 @@ function qaJoinsGrownFastTask(task: Task, outcome: WorkerOutcome): string {
   if (!track || track.path !== "fast" || track.roster.includes("qa")) return "";
   const asks = [...outcome.result.dependencyNeeds, ...outcome.result.architectureChanges];
   if (asks.length === 0) return "";
-  track.roster = parseRoster([...track.roster, "qa"]);
-  track.reasons = [...track.reasons, `tests: ${AGENT_LABELS[outcome.result.domain]} asked for a dependency or an architecture change`];
+  // A task that outgrew its read is no longer single-worker work: it leaves the path, and QA joins with the full workflow.
+  if (!promoteFastPath(task, "medium", `outgrew the fast path: ${AGENT_LABELS[outcome.result.domain]} asked for ${truncate(asks.join("; "), 160)}`)) {
+    track.roster = parseRoster([...track.roster, "qa"]);
+    track.reasons = [...track.reasons, `tests: ${AGENT_LABELS[outcome.result.domain]} asked for a dependency or an architecture change`];
+  }
   recordDecision(task, `QA joined the fast track: ${AGENT_LABELS[outcome.result.domain]} asked for ${truncate(asks.join("; "), 200)}.`);
   return "QA now takes part: a fast-track change that needs a new dependency or an architecture change is checked before it completes.";
 }
@@ -1154,8 +1238,13 @@ async function qaJoinsRiskyFastTask(task: Task, deps: WorkflowDeps): Promise<str
   if (!track || track.path !== "fast" || track.roster.includes("qa") || task.qaWaiver || !builtSomething(task)) return "";
   const risk = await assessBuilt(task, deps);
   if (!risk || (risk.risk !== "medium" && risk.risk !== "high")) return "";
-  track.roster = parseRoster([...track.roster, "qa"]);
-  track.reasons = [...track.reasons, `tests: the change reads ${risk.risk} risk`];
+  // Genuine risk in what was built ends the single-worker path first; the evidence is kept on the record.
+  if (promoteFastPath(task, risk.risk, risk.riskFactors.length > 0 ? risk.riskFactors.join("; ") : `the change reads ${risk.risk} risk`)) {
+    deps.notify(`Task ${task.id} promoted off the single-worker fast path: the change reads ${risk.risk.toUpperCase()} risk; QA takes part before completion.`, "warning");
+  } else {
+    track.roster = parseRoster([...track.roster, "qa"]);
+    track.reasons = [...track.reasons, `tests: the change reads ${risk.risk} risk`];
+  }
   recordDecision(task, `QA joined the fast track: the change reads ${risk.risk.toUpperCase()} risk (${truncate(risk.riskFactors.join("; "), 200)}).`);
   return `QA joins before completion: ${qaRiskLine(risk)}. Run action=qa, then complete.`;
 }
@@ -1170,6 +1259,9 @@ async function handleImplement(task: Task, params: OrchestrateParams, deps: Work
   }
   if (!starting) requireState(task, ["planning", "implementing", "reviewing"]);
   const assignments = await parseAssignments(params, deps.cwd);
+  // The single-worker fast path keeps one implementation owner: no parallel batch, no second domain.
+  ensureFastPath(task);
+  if (singleWorker(task)) dispatchSingleWorker(task, assignments, deps);
   const structured = assignments.flatMap(({ domain, assignment }) => assignment ? [{ domain, assignment }] : []);
   checkWorkerAssignments(task, structured);
   // A harness cannot keep a sanitized conversation or attest its tools: refuse here, before anything is recorded.
@@ -1555,6 +1647,7 @@ function checksVerdict(lint: LintReport | undefined, deps: WorkflowDeps, waived:
 
 async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   requireState(task, ["implementing", "reviewing"]);
+  ensureFastPath(task);
   if (satOut(task, "qa")) throw new Error(`${benchedRefusal(task, "qa")} There is no QA gate: complete once every step is done.`);
   if (task.state !== "reviewing") transition(task, "reviewing");
   const iterations = (task.reviewIterations?.qa ?? 0) + 1;
@@ -1578,6 +1671,14 @@ async function handleQa(task: Task, params: OrchestrateParams, deps: WorkflowDep
     const header = `QA gate: ${result.verdict.toUpperCase()} on the engine's checks; no QA agent ran. ${qaRiskLine(risk)}.\nWhy: ${risk.reasoning}\nChecks:\n${result.verification}`;
     return qaReport(header, result, decision, provenance, lintLine);
   }
+  // An independent reviewer only runs once the change is off the single-worker path: a read that warrants one is genuine risk, and promotes first.
+  if (singleWorker(task)) {
+    promoteForGate(task, risk, deps);
+    if (singleWorker(task)) {
+      avoidedLaunch(deps, task, "independent QA reviewer");
+      throw new Error(`task ${task.id} is on the single-worker fast path: no independent QA reviewer runs for it. The engine's checks still run at action=complete; if the change needs QA eyes, promote the task with action=track track=full and the reason.`);
+    }
+  }
   const outcome = await runReviewer({ ...qaRequest(deps, task, diff, risk, params.task, provenance, lint), effort: deps.effort }, deps.runProcess ?? spawnPiProcess);
   const { result, run } = outcome;
   recordAdvisoryPushbacks(task, [{ pushback: result.pushback, who: "qa" }]);
@@ -1600,6 +1701,14 @@ async function settleQaRound(task: Task, result: ReviewResult, iterations: numbe
 /** Review rounds allowed: the configured limit plus any the user granted. */
 function reviewLimit(task: Task, deps: WorkflowDeps): number {
   return deps.config.workflow.maxReviewIterations + (task.extraReviewRounds ?? 0);
+}
+
+/** The gate's own read is a classifier risk signal: a change that warrants an independent reviewer is not single-worker work. */
+function promoteForGate(task: Task, risk: QaRiskAssessment, deps: WorkflowDeps): void {
+  const evidence = risk.riskFactors.length > 0 ? risk.riskFactors.join("; ") : `the change reads ${risk.risk} risk to the QA gate`;
+  if (!promoteFastPath(task, risk.risk === "high" ? "high" : "medium", evidence)) return;
+  recordDecision(task, `Risk promotion: the QA gate's read says ${risk.risk.toUpperCase()} risk (${truncate(evidence, 200)}); the task takes the full workflow.`);
+  deps.notify(`Task ${task.id} promoted off the single-worker fast path: the change reads ${risk.risk.toUpperCase()} risk; QA takes part.`, "warning");
 }
 
 /** What QA still asks for, one line each: its blocking findings and required changes. */
@@ -1686,7 +1795,7 @@ function handleKnowledge(task: Task | undefined, params: OrchestrateParams, deps
     agent,
     kind,
     text,
-    by: "Oracle",
+    by: "Orchestrator",
     what: task ? `recorded this while working on task ${task.id}` : "saved this from a chat with you",
     source: task ? `Task ${task.id}` : "Chat with you",
   });
@@ -1802,9 +1911,23 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // New lint errors in what the task touched hold it in block mode, unless the user accepted the work as it is.
   const lint = await lintTask(task, deps);
   if (lint && lintHolds(lint, deps.config.lint.mode, Boolean(task.lintWaiver))) throw new Error(`cannot complete: ${lintRefusal(lint)}`);
-  // The gate refuses before any side effect, so a refusal leaves the task untouched.
+  // Final verification: the applicable engine-run checks (typecheck, tests, build, browser fixtures —
+  // fast tasks included) must pass on the tree as it stands before anything is committed. Recorded
+  // passes are reused while their inputs are unchanged; missing, stale, failed, cancelled and
+  // unavailable results are not passes. Heavy checks run here only, never between worker steps.
+  const verification = await runVerification({ top: deps.cwd, checks: finalChecks(deps.cwd), previous: task.verification, ...(deps.signal ? { signal: deps.signal } : {}) });
+  deps.signal?.throwIfAborted();
+  task.verification = verification;
+  saveTask(deps.root, deps.configDir, task);
+  appendMetrics(deps.root, deps.configDir, [{ id: randomUUID(), kind: "master", agent: "ORACLE", status: "success", startedAt: verification.at, durationMs: verification.results.reduce((total, result) => total + result.ms, 0), purpose: `final verification (${verification.results.length} checks)`, cacheHits: verification.results.filter((result) => result.reused).length, ...(task.id ? { taskId: task.id } : {}) }]);
+  if (verification.state !== "passing") throw new Error(`cannot complete: final verification failed — ${verificationSummary(verification)}. Fix the failing checks and call complete again; unchanged passes are kept.`);
+  // The gate refuses before any side effect, so a refusal leaves the task untouched. Oversized knowledge no
+  // longer holds completion: automatic maintenance is scheduled and runs after this response.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
-  if (oversized.length > 0) throw new Error(`cannot complete: knowledge files over the compaction threshold: ${oversized.map((entry) => `${entry.agent}/${entry.file} (${entry.chars})`).join(", ")}. First record domain-relevant facts where they belong with action=knowledge (domain=designer|backend|qa), then rewrite each oversized file with action=compact, then call complete again.`);
+  for (const entry of oversized) {
+    scheduleKnowledgeMaintenance({ dataRoot: dataRoot(deps.root, deps.configDir), agent: entry.agent, file: entry.file, backupCount: deps.config.knowledge.backupCount });
+  }
+  const maintenance = oversized.length > 0 ? ` Automatic knowledge maintenance scheduled for ${oversized.map((entry) => `${entry.agent}/${entry.file}`).join(", ")}; it archives duplicate and historical material after this response.` : "";
   deps.signal?.throwIfAborted();
   const committed = await commitTaskWork(task, params, deps);
   deps.signal?.throwIfAborted();
@@ -1824,7 +1947,7 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   flushDecisions(deps, task);
   const delivery = await offerDelivery(task, deps);
   const left = lint?.state === "failing" ? ` ${task.lintWaiver ? "Accepted by the user with lint errors" : "Lint (advisory)"}: ${lintSummary(lint)} Tell the user.` : "";
-  return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}`;
+  return `Task ${task.id} completed.${committed} History recorded and temporary scratchpads removed. ${delivery}${left}${maintenance}`;
 }
 
 /** The files a task's own workers changed: not one that held changes before they started, nor another task's. */
@@ -1911,7 +2034,7 @@ async function offerAcceptance(task: Task, deps: WorkflowDeps): Promise<void> {
     ].filter(Boolean).join("\n\n"),
     ["Complete it anyway", "Not yet"],
   );
-  if (choice === "Complete it anyway") waiveQa(task, asks, "when the oracle completed it");
+  if (choice === "Complete it anyway") waiveQa(task, asks, "when the orchestrator completed it");
 }
 
 function flushDecisions(deps: WorkflowDeps, task: Task): void {
@@ -1960,7 +2083,7 @@ async function letJoin(task: Task, joining: readonly TrackMember[], reason: stri
   const them = joining.length === 1 ? "it" : "them";
   if (isAutoMode(deps.root, deps.configDir, task.id)) throw new Error(`${words} sat out the planning panel for this plan, and only the user can let ${them} work on the task (auto mode is on: nobody can be asked)`);
   const yes = `Let ${them} join`;
-  const choice = await deps.choose(`${words} sat out the planning panel for ${task.id}. The oracle asks to add ${them}: ${reason}`, [yes, `Keep ${them} out`]);
+  const choice = await deps.choose(`${words} sat out the planning panel for ${task.id}. The orchestrator asks to add ${them}: ${reason}`, [yes, `Keep ${them} out`]);
   if (choice !== yes) throw new Error(`the user kept ${words} out of this task: give the work to the members who took part in the plan`);
   recordDecision(task, `The user let ${words} join the task, though ${joining.length === 1 ? "it" : "they"} sat out the planning panel: ${reason}`);
 }
@@ -1990,7 +2113,7 @@ async function handleTrack(task: Task, params: OrchestrateParams, deps: Workflow
     path,
     size: current?.size ?? "small",
     roster,
-    reasons: [`oracle: ${reason}`, ...(current?.reasons ?? [])].slice(0, 8),
+    reasons: [`orchestrator: ${reason}`, ...(current?.reasons ?? [])].slice(0, 8),
     source: "oracle",
     ...(current?.userChoice ? { userChoice: current.userChoice } : {}),
     ...(current?.autoPlan ? { autoPlan: true } : {}),
@@ -1998,6 +2121,8 @@ async function handleTrack(task: Task, params: OrchestrateParams, deps: Workflow
     at: new Date().toISOString(),
   };
   recordDecision(task, `Track: ${path === "fast" ? "fast track" : "full workflow"}; ${rosterWords(roster)} — ${reason}`);
+  // The oracle's own reading of the request may differ from the engine's; the single-worker record follows the corrected track.
+  ensureFastPath(task, await effortScore(deps, taskRequest(task)));
   if (path === "fast") {
     return `Fast track: ${rosterWords(roster)}. Delegate straight away with action=implement (open each task with "Step N:"); no scouts, proposal or plan. ${qaRequired(task) ? "QA takes part before completion: action=qa, sized to the change." : "No QA gate unless the change turns out riskier than it read."} Then action=complete.`;
   }

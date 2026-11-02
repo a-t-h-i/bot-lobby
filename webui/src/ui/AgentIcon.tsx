@@ -48,7 +48,7 @@ function Glyph({ name, className, strokeWidth = 2, source }: { name: string; cla
 function glyphKey(source: string | undefined): string | undefined {
   const name = source?.toUpperCase()
   if (!name) return undefined
-  if (name === "ORACLE" || name === "MASTER") return "MASTER"
+  if (name === "ORACLE" || name === "ORCHESTRATOR" || name === "MASTER") return "MASTER"
   if (name === "BACKEND") return "DEV"
   if (name === "DESIGNER" || name === "FRONTEND") return "DESIGN"
   if (name === "RESEARCHER") return "RESEARCH"
@@ -76,7 +76,7 @@ export function sameAgent(a: string | undefined, b: string | undefined): boolean
 
 export function isOracle(source: string | undefined): boolean {
   const name = source?.toUpperCase()
-  return name === "ORACLE" || name === "MASTER"
+  return name === "ORACLE" || name === "ORCHESTRATOR" || name === "MASTER"
 }
 
 export function AgentIcon({ source, className, strokeWidth }: { source: string | undefined; className?: string; strokeWidth?: number }) {

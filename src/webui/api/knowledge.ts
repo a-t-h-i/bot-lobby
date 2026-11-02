@@ -19,7 +19,7 @@ export function knowledgeAsk(body: { text: string; attachments?: string[] }, ctx
   if (!body.text.trim() && !body.attachments?.length) fail(400, "bad_request", "type a question first");
   const busy = ctx.service.masterBusy();
   ctx.service.askKnowledge(withAttachments(body.text, body.attachments, undefined, ctx.service.projectRoot?.()));
-  return { notice: busy ? "question queued — the oracle answers after its current turn" : "the oracle is checking project knowledge" };
+  return { notice: busy ? "question queued — the orchestrator answers after its current turn" : "the orchestrator is checking project knowledge" };
 }
 
 /** The terminal's stale-entry refusal, as `KnowledgeBook` words it. */

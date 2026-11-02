@@ -124,11 +124,11 @@ function addComment(state: Runtime, taskId: string, text: string): string {
 function deliverComment(task: Task, sessionId: string): string {
   const taskId = task.id;
   if (task.ownerSessionId === sessionId) {
-    if (deliverComments() === 0) return `comment saved — it reaches the oracle once ${taskId} is resumed or restored`;
-    return `comment sent to the oracle — it will ${task.plan ? "amend the plan" : "revise the proposal"}`;
+    if (deliverComments() === 0) return `comment saved — it reaches the orchestrator once ${taskId} is resumed or restored`;
+    return `comment sent to the orchestrator — it will ${task.plan ? "amend the plan" : "revise the proposal"}`;
   }
   if (!task.ownerSessionId) return `comment saved — ${taskId} has no owning session; it is delivered once a session claims it`;
-  return `comment saved — the session driving ${taskId} passes it to its oracle`;
+  return `comment saved — the session driving ${taskId} passes it to its orchestrator`;
 }
 
 /**
@@ -215,7 +215,7 @@ async function routeChat(state: Runtime, text: string): Promise<void> {
     return;
   }
   if (picked.route === "knowledge") {
-    lobbyFeed.log("LOBBY", `a knowledge question (${picked.probability.toFixed(2)}): the oracle reads the project's knowledge`, "info");
+    lobbyFeed.log("LOBBY", `a knowledge question (${picked.probability.toFixed(2)}): the orchestrator reads the project's knowledge`, "info");
     state.pi.sendUserMessage(knowledgeQuestion(text, readDataRoots(state.root, state.configDir)), state.ctx.isIdle() ? undefined : { deliverAs: "followUp" });
     return;
   }
@@ -280,7 +280,7 @@ function lobbyCommand(state: Runtime, command: LobbyCommand, rest: string): Lobb
     startTask(state.pi, state.ctx, state.configDir, request)
       .then(() => lobbyTopics.bump("tasks"))
       .catch((error: Error) => failed(state, "could not start the task", error));
-    return "starting a task — the oracle takes it from here";
+    return "starting a task — the orchestrator takes it from here";
   }
   if (state.planner?.busy) return "the panel is still thinking — wait for the round to finish";
   // A plan under way stays among the project's previous plans; this one starts afresh.
@@ -583,7 +583,7 @@ async function resumeTask(state: Runtime, taskId: string): Promise<{ notice: str
       try {
         sendToInbox(state.root, state.configDir, taskId, message, state.ctx.sessionManager.getSessionId());
       } catch (error) {
-        return { notice: `unpaused ${taskId}, but could not tell its oracle — ${(error as Error).message}` };
+        return { notice: `unpaused ${taskId}, but could not tell its orchestrator — ${(error as Error).message}` };
       }
       lobbyFeed.log("LOBBY", `resumed ${taskId} in another terminal`, "success");
       return { notice: `resumed ${taskId} — the session driving it in another terminal carries on` };
@@ -625,7 +625,7 @@ function mutableTask(state: Runtime, taskId: string): Task {
 
 async function wakeTask(state: Runtime, task: Task, message: string): Promise<string> {
   if (!tellOracle(state, task, message)) return (await resumeTask(state, task.id)).notice;
-  return "the owning oracle has been notified";
+  return "the owning orchestrator has been notified";
 }
 
 /**
@@ -674,7 +674,7 @@ async function acceptTask(state: Runtime, taskId: string): Promise<{ notice: str
   const asks = lastQaAsks(task);
   if (task.qaVerdict !== "pass" && !task.qaWaiver) waiveQa(task, asks, "from the Tasks screen");
   if (task.lint?.state === "failing") waiveLint(task, "from the Tasks screen");
-  recordDecision(task, "The user accepted the work as it is from the Tasks screen; the oracle was asked to complete it.");
+  recordDecision(task, "The user accepted the work as it is from the Tasks screen; the orchestrator was asked to complete it.");
   saveTask(state.root, state.configDir, task);
   lobbyTopics.bump("tasks");
   const wake = await wakeTask(state, task, `The user accepted ${task.id}'s work as it is. Call orchestrate action=complete now with a short summary naming outstanding QA/lint asks: ${asks.join("; ") || "none recorded"}. Read the persisted gate waivers first. Do not merge automatically.`);
@@ -704,8 +704,8 @@ async function skipTaskStep(state: Runtime, taskId: string, step: number, text: 
   lobbyTopics.bump("tasks");
   lobbyTopics.bump("lobby");
   const message = `The user skipped step ${step + 1} of ${task.id}'s plan: "${text}". Their reason: ${why}. Do not delegate, build or review that step; if an agent is on it now, let it stop there or tell it to. Carry on with the next open step.`;
-  if (!tellOracle(state, task, message)) return { notice: `step ${step + 1} skipped; the oracle reads why when the task carries on` };
-  return { notice: `step ${step + 1} skipped; the oracle has been told` };
+  if (!tellOracle(state, task, message)) return { notice: `step ${step + 1} skipped; the orchestrator reads why when the task carries on` };
+  return { notice: `step ${step + 1} skipped; the orchestrator has been told` };
 }
 
 async function resolveTaskApproval(state: Runtime, taskId: string, approvalId: string, decision: "approved" | "rejected", note?: string): Promise<{ notice: string }> {
@@ -729,8 +729,8 @@ function sendToTask(state: Runtime, taskId: string, text: string): string {
   } catch (error) {
     return (error as Error).message;
   }
-  lobbyFeed.log("LOBBY", `message for ${taskId}'s oracle saved`, "info");
-  return task.ownerSessionId ? `sent — the session driving ${taskId} passes it to its oracle` : `saved — ${taskId} has no owning session; its oracle gets it once a session claims it`;
+  lobbyFeed.log("LOBBY", `message for ${taskId}'s orchestrator saved`, "info");
+  return task.ownerSessionId ? `sent — the session driving ${taskId} passes it to its orchestrator` : `saved — ${taskId} has no owning session; its orchestrator gets it once a session claims it`;
 }
 
 /** Auto mode as the lobby last read it, per task: every frame asks, the file is read at most once a second. */
@@ -787,8 +787,8 @@ function sendToSession(state: Runtime, sessionId: string, text: string): string 
   } catch (error) {
     return (error as Error).message;
   }
-  lobbyFeed.log("LOBBY", "message for another session's oracle saved", "info");
-  return "sent — that session passes it to its oracle within a few seconds";
+  lobbyFeed.log("LOBBY", "message for another session's orchestrator saved", "info");
+  return "sent — that session passes it to its orchestrator within a few seconds";
 }
 
 /**
@@ -805,7 +805,7 @@ function sendToSession(state: Runtime, sessionId: string, text: string): string 
  */
 async function switchTo(state: Runtime, target: SwitchTarget): Promise<string> {
   if (target.claimTaskId) {
-    if (!state.ctx.isIdle()) return "this window's oracle is working — stop it, then take the task over here";
+    if (!state.ctx.isIdle()) return "this window's orchestrator is working — stop it, then take the task over here";
     state.pi.sendUserMessage(`/bot-lobby claim ${target.claimTaskId}`, { expandPromptTemplates: true });
     return `taking ${target.claimTaskId} over in this window`;
   }
@@ -858,7 +858,7 @@ let handOff: { file: string; name: string; message?: string; taskId?: string } |
 
 /**
  * Whether this window's session carries on in the background after the
- * switch: when its oracle is at work (its cut-off turn is picked back up) or
+ * switch: when its orchestrator is at work (its cut-off turn is picked back up) or
  * it drives a task that is not finished (auto mode, messages and questions
  * keep reaching it there). Returns the hand-off, nothing to hand off, or why
  * the switch cannot happen.
@@ -869,7 +869,7 @@ function handOffFor(state: Runtime): { name: string } | string | undefined {
   const driving = Boolean(task && !TERMINAL_STATES.includes(task.state));
   if (!working && !driving) return undefined;
   const file = state.ctx.sessionManager.getSessionFile?.();
-  if (!file) return working ? "this window's session is not saved yet — stop the oracle, then switch" : undefined;
+  if (!file) return working ? "this window's session is not saved yet — stop the orchestrator, then switch" : undefined;
   const name = state.pi.getSessionName() ?? (task ? task.title : "this window's session");
   const message = !working
     ? undefined
@@ -887,7 +887,7 @@ export function carryHandOff(state: Runtime): void {
   handOff = undefined;
   if (!pending) return;
   if (state.ctx.sessionManager.getSessionFile?.() === pending.file) {
-    lobbyFeed.log("LOBBY", "the switch did not happen; the oracle was stopped — send a message to carry on", "warning");
+    lobbyFeed.log("LOBBY", "the switch did not happen; the orchestrator was stopped — send a message to carry on", "warning");
     return;
   }
   try {

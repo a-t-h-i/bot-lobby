@@ -44,7 +44,7 @@ export interface DrawerStep {
 function askerOf(prompt: WebPrompt): string {
   const from = prompt.from.trim()
   if (/panel|plann/i.test(from)) return "PLANNER"
-  if (/oracle|master|lobby/i.test(from) || !from) return "MASTER"
+  if (/oracle|orchestrator|master|lobby/i.test(from) || !from) return "MASTER"
   return from.split(/\s+/)[0]!.toUpperCase()
 }
 
@@ -61,7 +61,7 @@ function askerName(prompt: WebPrompt, header?: string): string {
   if (who !== askerOf(prompt)) return who === "DEV" || who === "BACKEND" ? "Dev" : who === "QA" ? "QA" : who.charAt(0) + who.slice(1).toLowerCase()
   const asker = askerOf(prompt)
   if (asker === "PLANNER") return "Panel"
-  if (asker === "MASTER") return "Oracle"
+  if (asker === "MASTER") return "Orchestrator"
   const from = prompt.from.trim().split(/\s+/)[0] ?? "Agent"
   return from.charAt(0).toUpperCase() + from.slice(1)
 }

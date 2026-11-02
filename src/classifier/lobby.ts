@@ -15,7 +15,7 @@ import { clip } from "./limits.ts";
 export type ChatRoute = ChatAgent | "knowledge";
 
 const ROUTES: Record<ChatRoute, string> = {
-  master: "The Master (the oracle): general conversation, the team's tasks and plans, anything across several areas of the project, or anything no single agent below clearly owns",
+  master: "The Master (the orchestrator): general conversation, the team's tasks and plans, anything across several areas of the project, or anything no single agent below clearly owns",
   designer: "DESIGN: the frontend, meaning pages, components, styling, layout, UX, on-screen copy and browser code, whether a question about it or a change to it",
   backend: "DEV: backend code, meaning APIs, data and databases, server logic, integrations, scripts, build and tooling, whether a question about it or a change to it",
   qa: "QA: tests, meaning writing, running or fixing them, test strategy, how to verify a change, or checking work for bugs",
