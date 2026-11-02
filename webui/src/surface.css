@@ -13,10 +13,10 @@
   --page: var(--background);
   --fill: var(--card);
   --edge: var(--border);
-  --faint: color-mix(in srgb, var(--muted-foreground) 62%, var(--background));
+  --faint: color-mix(in srgb, var(--muted-foreground) 78%, var(--background));
   --hover: color-mix(in srgb, var(--foreground) 5%, var(--card));
   --well: color-mix(in srgb, var(--foreground) 11%, var(--card));
-  --sunk: color-mix(in srgb, var(--page) 93%, #3d3929);
+  --sunk: color-mix(in srgb, var(--page) 94.5%, #3d3929);
   --ok: #17935a;
   --warn: #b26a00;
   --bad: #cc3838;
@@ -28,16 +28,16 @@
   --esh: rgb(40 40 70 / 0.26);
   --tdsh: rgb(30 30 70 / 0.16);
   --drop1: 0 1px 2px rgb(0 0 0 / 0.05);
-  --drop2: 0 4px 12px rgb(0 0 0 / 0.035);
+  --drop2: 0 8px 24px -6px rgb(60 45 30 / 0.09);
   /* Pressed in: the raised bevel turned inside out, a soft shade under the top edge and a faint light along the bottom, no hard ring. */
   --press: inset 0 1.5px 2.5px -0.5px rgb(40 40 70 / 0.14), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   --press-deep: inset 0 2px 3.5px -0.5px rgb(40 40 70 / 0.2), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(40 40 70 / 0.07);
   --inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   /* Raised (a button or card) and sunk (a well): a very light bevel, never a heavy one. */
-  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(40 40 70 / 0.1), 0 2px 5px -2px rgb(30 30 60 / 0.1);
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 1.5px rgb(60 45 30 / 0.06), 0 4px 10px -4px rgb(60 45 30 / 0.1);
   --ss: inset 0 1px 2px var(--tdsh), inset 0 0 0 1px rgb(40 40 70 / 0.05);
-  /* A faint paper grain over the page. */
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* A paper grain over the page, just at the edge of seeing: it warms the flat colour without reading as noise. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.028 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   /* The agents' colours: the oracle wears the accent. */
   --c-orc: var(--primary);
   --c-des: var(--source-design);
@@ -66,8 +66,8 @@
   --press: inset 0 1.5px 2.5px -0.5px rgb(0 0 0 / 0.5), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(0 0 0 / 0.14);
   --press-deep: inset 0 2px 3.5px -0.5px rgb(0 0 0 / 0.62), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.09), inset 0 0 0 1px rgb(0 0 0 / 0.18);
   --inset: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 0 0 1px rgb(0 0 0 / 0.2);
-  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 0 rgb(0 0 0 / 0.45), 0 2px 8px -2px rgb(0 0 0 / 0.3);
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  --rs: 0 0 0 1px var(--edge), inset 0 1.5px 1px -0.5px var(--hl), inset 0 -1.5px 1.5px -0.5px var(--sh), 0 1px 1.5px rgb(0 0 0 / 0.3), 0 4px 12px -4px rgb(0 0 0 / 0.35);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.018 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ---------------------------------------------------------------------------------------------------------------
@@ -194,12 +194,13 @@
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
 .cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: calc(var(--float-r) + 1px); background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 90ms ease, color 160ms ease; -webkit-tap-highlight-color: transparent; }
-.cs-tab:hover { background: var(--hover); color: var(--foreground); }
+.cs-tab:hover { background: color-mix(in srgb, var(--foreground) 3.5%, transparent); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
-/* The chosen tab's pill: pressed lightly into the bay (the shared --press bevel), a touch deeper at the top like a
- * real dent, with a faint accent hairline so it reads as chosen rather than as a hover.
+/* The chosen tab's pill: a soft, neutral dent in the bay. Its fill is the page's own warm grey (no accent tint, which
+ * read as muddy), a fine shade under the top rim, a hairline all round so its edge is crisp, and a faint lit lip at
+ * the bottom. The accent lives only in the chosen tab's icon.
  * Choosing another tab is the poof: the old pill shrinks and fades out while the new one grows in, both at once.
  * Each hidden pill waits shifted toward the chosen tab (data-side: a tab left of it leans right, and the reverse), so
  * the old pill drifts toward the new tab as it fades and the new one grows in from the old tab's side: one fluid
@@ -207,15 +208,15 @@
  * blur, no layout), so it stays on the compositor and never stutters. */
 .cs-tab::before {
   content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-  --pill: color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--fill) 88%, #000));
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 93%, #000), var(--pill) 60%);
-  /* A real indent, like the dark one: a shadow cast down from the top rim, a lit lip along the bottom, no outline. */
-  box-shadow: inset 0 2.5px 4px -1px rgb(40 30 20 / 0.3), inset 0 1px 1.5px rgb(40 30 20 / 0.14), inset 0 -1px 0 rgb(255 255 255 / 0.85);
+  --pill: color-mix(in srgb, var(--foreground) 6.5%, var(--page));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 97%, #000), var(--pill) 55%);
+  box-shadow: var(--pill-dent);
+  --pill-dent: inset 0 1px 2px rgb(60 45 30 / 0.13), inset 0 0 0 0.5px rgb(60 45 30 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.75);
   opacity: 0; transform: translateX(var(--px, 0px)) scale(0.9, 0.78);
   transition: opacity 150ms cubic-bezier(0.4, 0, 0.6, 1), transform 200ms var(--out);
   will-change: transform, opacity;
 }
-.dark .cs-tab::before { --pill: color-mix(in srgb, var(--primary) 6%, color-mix(in srgb, var(--fill) 70%, #000)); background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 85%, #000), var(--pill) 60%); box-shadow: inset 0 2.5px 4px -1px rgb(0 0 0 / 0.6), inset 0 1px 1.5px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.07), inset 0 0 0 1px rgb(255 255 255 / 0.03); }
+.dark .cs-tab::before { --pill: color-mix(in srgb, #000 30%, var(--fill)); --pill-dent: inset 0 1px 2.5px rgb(0 0 0 / 0.45), inset 0 0 0 0.5px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.06); }
 .cs-tab[data-side="l"]::before { --px: 9px; }
 .cs-tab[data-side="r"]::before { --px: -9px; }
 .cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; transition: opacity 120ms ease-out, transform 280ms cubic-bezier(0.3, 1.2, 0.5, 1); }
@@ -234,8 +235,8 @@
    it runs through a frosted band: blurred most at the window's edge, the blur thinning to nothing a little
    below the bays, so the text stays in view, only softened. Two stacked layers make the blur fade, not step. */
 .cs-body::before, .cs-body::after { content: ""; position: absolute; z-index: 38; left: 0; right: 0; top: 0; pointer-events: none; }
-.cs-body::before { height: 44px; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); }
-.cs-body::after { height: 76px; -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); background: linear-gradient(to bottom, color-mix(in srgb, var(--page) 38%, transparent), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); }
+.cs-body::before { height: 40px; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); }
+.cs-body::after { height: 58px; -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); background: linear-gradient(to bottom, color-mix(in srgb, var(--page) 38%, transparent), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
@@ -251,15 +252,17 @@
 /* An agent's turn starts at a small dot in its colour, so its name never reads as a heading inside a message. */
 .chat-name { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--who, var(--foreground)) 78%, var(--foreground)); }
 .chat-agent { gap: 2px; }
-.chat-prose { font-size: 14px; line-height: 1.5; }
-.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
+.chat-prose { font-size: 14px; line-height: 1.6; }
+.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 9px 15px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
 .cs-umsg :is(.cs-ue, .cs-uf) { position: absolute; inset: 0; display: block; pointer-events: none; }
 .cs-umsg .cs-ue { --shape: var(--bubble-line); }
 .cs-umsg .cs-uf { --shape: var(--bubble); }
-.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 12px 12px 8px 12px; background: var(--shape); }
+/* A plain soft fill, no outline: the colour alone sets it off from the page, as in the best chat apps. */
+.cs-umsg .cs-ue { display: none; }
+.cs-umsg .cs-ub { position: absolute; inset: 0; border-radius: 16px 16px 8px 16px; background: var(--shape); }
 /* The tail: an SVG curve that leaves the bubble's straight right edge tangentially and ends in a rounded tip. */
 .cs-umsg .cs-ut { position: absolute; right: -9px; bottom: 0; width: 22px; height: 16px; overflow: visible; pointer-events: none; }
-.cs-ut-edge { fill: none; stroke: var(--bubble-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: butt; }
+.cs-ut-edge { display: none; }
 .cs-ut-fill { fill: var(--bubble); }
 .cs-umsg .cs-ue .cs-ub { box-shadow: 0 0 0 1px var(--shape); }
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
@@ -276,7 +279,7 @@
 .cs-thread { transition: padding-left 255ms var(--out); }
 /* Room under the last message, so at the bottom it scrolls clear of the composer. */
 .cs-thread.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 28px); scroll-padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 28px); }
-.chat-column { gap: 18px; max-width: var(--chat-content-max-width); }
+.chat-column { gap: 24px; max-width: var(--chat-content-max-width); }
 
 /* The agents' work between the messages: one quiet row that opens into the steps. While a step runs, "Working"
    glints in the accent and its dots count up. */
@@ -525,7 +528,10 @@
 .cs-bdg[data-t="warn"] { color: var(--warn); }
 .cs-bdg[data-t="bad"] { color: var(--bad); }
 .cs-bdg[data-t="acc"] { color: var(--primary); }
-.cs-mk { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--sunk); color: #fff; }
+/* A status mark: an open hairline ring until there is something to show (done fills it, now and warn dot it). */
+.cs-mk { width: 18px; height: 18px; border-radius: 50%; flex: none; display: grid; place-items: center; background: transparent; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 16%, transparent); color: #fff; }
+.cs-mk:is([data-s="done"], [data-s="drop"], [data-s="skip"]) { box-shadow: none; }
+.cs-mk:is([data-s="drop"], [data-s="skip"]) { background: var(--sunk); }
 .cs-mk svg { display: none; width: 11px; height: 11px; }
 .cs-mk[data-s="done"] { background: var(--ok); }
 .dark .cs-mk[data-s="done"] { color: #0c2a1b; }
@@ -549,11 +555,11 @@
 .cs-rl.cs-first { margin-top: 0; }
 
 /* Page headings and the flat surfaces pages are built of. */
-.cs-pg { width: 100%; margin-inline: auto; padding: 48px 24px 0; box-sizing: border-box; line-height: normal; }
+.cs-pg { width: 100%; margin-inline: auto; padding: 68px 24px 0; box-sizing: border-box; line-height: normal; }
 .cs-pgh { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 0 0 18px; }
 /* With no count line under the title, the controls sit level with the title itself. */
 .cs-pgh:not(:has(.cs-hd2)) { align-items: center; }
-.cs-hd1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; color: var(--foreground); }
+.cs-hd1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; color: var(--foreground); }
 .cs-hd2 { margin: 4px 0 0; font-size: 13px; color: var(--muted-foreground); }
 .cs-card { background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); border-radius: var(--r-out); }
 .cs-sunk { background: var(--sunk); border-radius: var(--r-out); }
@@ -714,15 +720,15 @@
 .cs-tbh { height: 28px; padding: 0 12px; font-size: 11px; font-weight: 500; color: var(--faint); border-bottom: 1px solid var(--edge); }
 .cs-tbh span:nth-child(4), .cs-tbh span:nth-child(5), .cs-trw .cs-ttm, .cs-trw .cs-tag { text-align: right; }
 .cs-lst { list-style: none; margin: 0; padding: 0; }
-.cs-tsec { margin: 20px 0 4px; padding: 0 12px; font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: flex; gap: 8px; align-items: center; }
-.cs-tsec b { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 10px; display: inline-grid; place-items: center; box-sizing: border-box; background: var(--sunk); font-size: 10.5px; font-weight: 500; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.cs-tsec { margin: 24px 0 6px; padding: 0 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); display: flex; gap: 8px; align-items: center; }
+.cs-tsec b { letter-spacing: 0; min-width: 18px; height: 16px; padding: 0 5px; border-radius: 10px; display: inline-grid; place-items: center; box-sizing: border-box; background: var(--sunk); font-size: 10.5px; font-weight: 500; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 /* Rows sit apart on the page, no rules between them: a soft rounded light under the pointer, the open one tinted. */
 .cs-trw { appearance: none; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; height: 36px; padding: 0 12px; cursor: pointer; outline: none; transition: background 119ms ease, box-shadow 119ms ease; }
 .cs-lst li + li .cs-trw { margin-top: 1px; }
 .cs-trw:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
 .cs-trw:active { box-shadow: var(--press); }
 .cs-trw:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.cs-trw[aria-current="true"] { background: color-mix(in srgb, var(--primary) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent); }
+.cs-trw[aria-current="true"] { background: var(--well); box-shadow: var(--inset); }
 .cs-trw[aria-current="true"] .cs-t { font-weight: 500; }
 .cs-tshow .cs-cn { min-width: 18px; height: 16px; padding: 0 5px; border-radius: 10px; display: inline-grid; place-items: center; box-sizing: border-box; background: color-mix(in srgb, var(--foreground) 6%, transparent); font-size: 10.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .cs-tnone { padding: 28px 12px; text-align: center; font-size: 13px; color: var(--muted-foreground); }
@@ -742,7 +748,7 @@
 
 /* Tasks on a wide window: the list in a narrow pane on the left, a hairline, the chosen row's detail on the right.
    Each pane scrolls on its own under its fixed head; the title row and the action bar sit level with each other. */
-.cs-tsp { --t-dock: calc(var(--composer-h, 0px) + var(--dock-bar, 0px)); position: relative; flex: 1 1 auto; min-height: 0; display: flex; width: 100%; max-width: 1280px; margin-inline: auto; padding: 48px 24px 0; box-sizing: border-box; line-height: normal; }
+.cs-tsp { --t-dock: calc(var(--composer-h, 0px) + var(--dock-bar, 0px)); position: relative; flex: 1 1 auto; min-height: 0; display: flex; width: 100%; max-width: 1280px; margin-inline: auto; padding: 68px 24px 0; box-sizing: border-box; line-height: normal; }
 .cs-tsl { flex: 0 0 clamp(300px, 32%, 380px); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .cs-tsl .cs-tslh { min-height: 34px; padding: 0 0 0 12px; }
 .cs-tsd { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -970,7 +976,7 @@
 .cs-knri { appearance: none; display: flex; align-items: center; gap: 9px; width: 100%; height: 32px; padding: 0 10px; border: 0; border-radius: 10px; background: none; font: inherit; font-size: 13px; color: var(--foreground); cursor: pointer; text-align: left; outline: none; transition: background 85ms, box-shadow 85ms; }
 .cs-knri:hover { background: var(--hover); }
 .cs-knri:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.cs-knri[data-sel] { background: color-mix(in srgb, var(--primary) 9%, transparent); }
+.cs-knri[data-sel] { background: var(--well); box-shadow: var(--inset); font-weight: 500; }
 .cs-knri .cs-nm { flex: 1; min-width: 0; color: color-mix(in srgb, var(--c, var(--foreground)) 78%, var(--foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-knri .cs-ct { font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .cs-knri .cs-ovd { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
@@ -979,7 +985,7 @@
 .cs-ktg { appearance: none; border: 0; font: inherit; font-size: 11.5px; height: 22px; padding: 0 8px; border-radius: 9px; background: var(--sunk); color: var(--muted-foreground); cursor: pointer; white-space: nowrap; outline: none; }
 .cs-ktg:hover { color: var(--foreground); }
 .cs-ktg:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.cs-ktg[data-on] { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
+.cs-ktg[data-on] { background: var(--foreground); color: var(--background); }
 .cs-knhint { margin: 18px 10px 0; font-size: 12px; line-height: 1.5; color: var(--faint); }
 .cs-knt { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
 .cs-knt .cs-kc { height: 30px; }
@@ -1004,8 +1010,8 @@
 .cs-knask .cs-aact { display: flex; gap: 8px; margin-top: 12px; }
 .cs-kng { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
 .cs-kcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.cs-knc { position: relative; border-radius: var(--r-out); padding: 12px 14px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge); transition: box-shadow 119ms, opacity 119ms; animation: cs-knin 238ms var(--out) backwards; }
-.cs-knc:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 20%, var(--edge)); }
+.cs-knc { position: relative; border-radius: var(--r-out); padding: 14px 16px; background: var(--fill); box-shadow: inset 0 0 0 1px var(--edge), 0 1px 2px rgb(60 45 30 / 0.04); transition: box-shadow 119ms, opacity 119ms; animation: cs-knin 238ms var(--out) backwards; }
+.cs-knc:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 14%, var(--edge)), 0 6px 18px -8px rgb(60 45 30 / 0.16); }
 .cs-knc[data-sel] { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary) 55%, var(--edge)); }
 .cs-knc[data-drag] { opacity: 0.5; box-shadow: inset 0 0 0 1.5px var(--faint); }
 @keyframes cs-knin { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
@@ -1026,7 +1032,7 @@
 .cs-cod { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 5px; border-radius: 7px; background: var(--sunk); }
 .cs-knn { display: flex; gap: 7px; margin: 8px 0 0; font-size: 12.5px; color: var(--muted-foreground); line-height: 1.45; }
 .cs-knn svg { flex: none; margin-top: 2px; color: var(--primary); }
-.cs-knf3 { display: flex; flex-direction: column; gap: 8px; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.cs-knf3 { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .cs-knf3 .cs-tg { display: flex; flex-wrap: wrap; gap: 5px; }
 .cs-knf3 .cs-tg .cs-ktg { height: 20px; font-size: 11px; padding: 0 7px; }
 .cs-pv { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted-foreground); }
@@ -1103,8 +1109,9 @@
 .cs-secn .cs-seg .cs-thumb { display: none; }
 .cs-secn .cs-seg button { flex: 1 1 auto; height: 30px; font-size: 13px; padding: 0 10px; border-radius: 10px; transition: color 102ms ease, background 136ms ease, box-shadow 136ms ease; }
 .cs-secn .cs-seg button:hover:not([data-on]) { background: var(--hover); }
-.cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 92%, #000)); box-shadow: var(--press); }
-.dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--primary) 12%, color-mix(in srgb, var(--fill) 62%, #000)); }
+/* The current section wears the tab bar's pill. */
+.cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, var(--foreground) 6.5%, var(--page)); box-shadow: inset 0 1px 2px rgb(60 45 30 / 0.13), inset 0 0 0 0.5px rgb(60 45 30 / 0.1), inset 0 -1px 0 rgb(255 255 255 / 0.75); font-weight: 600; }
+.dark .cs-secn .cs-seg button[data-on] { background: color-mix(in srgb, #000 30%, var(--fill)); box-shadow: inset 0 1px 2.5px rgb(0 0 0 / 0.45), inset 0 0 0 0.5px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.06); }
 .cs-set section[data-slot="agent-row"] { gap: 11px; padding: 14px 16px 16px; border: 0; border-radius: var(--r-out); background: var(--fill); box-shadow: var(--rs); -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cs-set section[data-slot="agent-row"] h3 { font-size: 14.5px; gap: 9px; }
 .cs-set section[data-slot="agent-row"] h3 .cs-tile { width: 22px; height: 22px; border-radius: 9px; }
@@ -1160,7 +1167,7 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 .cs-knb.cs-pin[data-on="false"] { opacity: 0; }
 .cs-knc:hover .cs-knb.cs-pin[data-on="false"], .cs-knc[data-sel] .cs-knb.cs-pin[data-on="false"], .cs-knb.cs-pin:focus-visible { opacity: 1; }
 .cs-ubar { width: 34px; height: 4px; border-radius: 2px; background: var(--sunk); overflow: hidden; flex: none; }
-.cs-ubar i { display: block; height: 100%; border-radius: 2px; background: var(--primary); opacity: 0.8; }
+.cs-ubar i { display: block; height: 100%; border-radius: 2px; background: color-mix(in srgb, var(--foreground) 38%, transparent); }
 .cs-use { display: inline-flex; align-items: center; gap: 7px; }
 .cs-knfl { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 12px; color: var(--warn); line-height: 1.4; }
 .cs-knfl svg { flex: none; }
