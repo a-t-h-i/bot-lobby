@@ -22,6 +22,8 @@ export interface SessionEntry {
   sessionId?: string
   /** When it last changed (saved sessions). */
   at?: number
+  /** This window is switching to it (the sidebar marks it until the switch lands). */
+  switching?: boolean
 }
 
 function backgroundState(session: BackgroundSessionInfo): SessionState {

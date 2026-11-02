@@ -25,6 +25,7 @@ import { classifierSummary } from "./model-settings.ts";
 import { keyStatus } from "../classifier/instance.ts";
 import { kickoff, startPlannedTask, startTask } from "./start-task.ts";
 import { setAuto, toggleOwnAuto } from "./owner.ts";
+import { switchFailed } from "./switch-pending.ts";
 import { registerWebServer, webCommand } from "../webui/command.ts";
 import { modelRef, thinkingMismatches } from "./model-support.ts";
 import { describeRun, runFromLog } from "./run-summary.ts";
@@ -303,13 +304,30 @@ function showConfig(ctx: ExtensionCommandContext): void {
  * `/bot-lobby switch <file>`: run a saved session in this window. Only a
  * command context may replace the session, so the lobby's browser asks for a
  * switch through this command. The context is stale once the switch starts.
+ * The command never touches the stale context after a switch that landed.
  */
 async function switchCommand(ctx: ExtensionCommandContext, path: string): Promise<void> {
-  if (!existsSync(path)) return ctx.ui.notify(`bot-lobby: no session file at ${path}`, "warning");
-  if (ctx.sessionManager.getSessionFile() === path) return ctx.ui.notify("bot-lobby: this window already runs that session", "info");
-  if (!ctx.isIdle()) return ctx.ui.notify("bot-lobby: the oracle is working — stop it, then switch", "warning");
-  const result = await ctx.switchSession(path);
-  if (result.cancelled) ctx.ui.notify("bot-lobby: the switch was cancelled", "warning");
+  if (!existsSync(path)) {
+    switchFailed();
+    return ctx.ui.notify(`bot-lobby: no session file at ${path}`, "warning");
+  }
+  if (ctx.sessionManager.getSessionFile() === path) {
+    switchFailed();
+    return ctx.ui.notify("bot-lobby: this window already runs that session", "info");
+  }
+  // A turn at work is no reason to refuse: pi's switch stops it and saves it first, and the lobby has handed
+  // the session to the background (see switchTo in src/lobby/service.ts).
+  let result: { cancelled: boolean };
+  try {
+    result = await ctx.switchSession(path);
+  } catch (error) {
+    switchFailed();
+    throw error;
+  }
+  if (result.cancelled) {
+    switchFailed();
+    ctx.ui.notify("bot-lobby: the switch was cancelled", "warning");
+  }
 }
 
 /** `/bot-lobby auto [on|off]`: switch (or set) auto mode for this session's task. */

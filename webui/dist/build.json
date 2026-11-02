@@ -1,6 +1,6 @@
 {
-  "hash": "8b6ee5cdd02d3566ea44eebc1ff179159f228e5fcee4b148d84fdf4359850c43",
-  "builtAt": "2026-11-02T09:34:12.308Z",
+  "hash": "832aebe422b421a6a131d9a92d7db73e10aa8bd33a4bbf388d3b4d98d9c9a425",
+  "builtAt": "2026-11-02T09:40:47.996Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -56,7 +56,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "88f34aa9f450a53046f46cb0860fbf9387aa5e4dfa289f98ccdb5dbbbc7fcd21"
+      "sha256": "dca45251357dff49e4f2cf5d94106e6f6f8cb9d491202756a6dca5836ac7f4e2"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -168,7 +168,7 @@
     },
     {
       "path": "webui/src/app/sessionList.ts",
-      "sha256": "4d9157494116e28321027d1f4412f834c348761264e1268a4f230da8147e265d"
+      "sha256": "b6c8d8c65ba7763679ab0cdc1e8b599f859d2391be371d4b649a0f93c8609130"
     },
     {
       "path": "webui/src/app/sound.ts",
@@ -345,6 +345,10 @@
     {
       "path": "webui/src/lib/panePreference.ts",
       "sha256": "17843746bfcdacda114439a0297d8e6cca8ec52872c27e12ca39e747fab50a6a"
+    },
+    {
+      "path": "webui/src/lib/pendingSwitch.ts",
+      "sha256": "e26c849adc8c004ddad22ed57402d98f5bfb7049521ab18a9116946a1dbf60ed"
     },
     {
       "path": "webui/src/lib/phaseTiming.ts",

@@ -254,6 +254,24 @@ export function ownerTick(): void {
   }
 }
 
+/**
+ * Hold the owner's clock while this window switches sessions, so no comment,
+ * message or auto-mode nudge starts a turn in the session being left (its
+ * background copy delivers them instead). The returned function restarts the
+ * clock should the switch not happen; a switch that lands starts a new one.
+ */
+export function pauseOwner(): () => void {
+  const state = owner;
+  if (!state?.timer) return () => {};
+  clearInterval(state.timer);
+  state.timer = undefined;
+  return () => {
+    if (owner !== state || state.timer) return;
+    state.timer = setInterval(() => ownerTick(), OWNER_POLL_MS);
+    state.timer.unref?.();
+  };
+}
+
 function stop(): void {
   if (owner?.timer) clearInterval(owner.timer);
   if (owner) {
