@@ -1,6 +1,6 @@
 {
-  "hash": "7ee852dfdf15b0c4846c6692abf0fa94bef9fe61b355e644da6914a7c143b958",
-  "builtAt": "2026-11-01T11:46:48.749Z",
+  "hash": "0fdc7d5e41576141a36ae230750e0e6857cb2eec6665a2501e40fd212b43ae61",
+  "builtAt": "2026-11-02T08:17:10.981Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "0c1024fb204b8ee9910c1c8fb050ffb21b792c6db6c3d743a19e784f8b7ce91d"
+      "sha256": "366d9cc6068a2405862754211be695244e4b45bbc1dd2ce8475c36ef8ab0785d"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -436,7 +436,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "de64b014b8ca4258657a3a046b392c7c3f2254dbeb4014dedeb3628c5928caef"
+      "sha256": "8fcb5778e44c9ef08eb9054e99322ed9d7787b6d167ac1d819d14927476cdc44"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
