@@ -194,10 +194,12 @@
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
 .cs-main { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-y: auto; outline: none; background: var(--grain) fixed, var(--page); }
-/* A page's content fades out under the floating bays at the top instead of running beneath them. */
-.cs-main:has(.cs-pg) { -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); mask-image: linear-gradient(to bottom, transparent 0, transparent 10px, #000 60px); }
-/* A page's list also fades out above the composer, across the full width. */
-.cs-scroll:has(> .cs-pg) { --fade: linear-gradient(to bottom, #000 0, #000 calc(100% - var(--composer-h, 6.5rem) - var(--dock-bar, 0px) - 48px), transparent calc(100% - var(--composer-h, 6.5rem) - var(--dock-bar, 0px) - 6px)); -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+/* Content scrolls on under the floating bays at the top, and under the composer at the foot. Along the top edge
+   it runs through a frosted band: blurred most at the window's edge, the blur thinning to nothing a little
+   below the bays, so the text stays in view, only softened. Two stacked layers make the blur fade, not step. */
+.cs-body::before, .cs-body::after { content: ""; position: absolute; z-index: 38; left: 0; right: 0; top: 0; pointer-events: none; }
+.cs-body::before { height: 44px; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 35%, transparent); }
+.cs-body::after { height: 76px; -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px); background: linear-gradient(to bottom, color-mix(in srgb, var(--page) 38%, transparent), transparent); -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); mask-image: linear-gradient(to bottom, #000 0, #000 45%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   .cs-frame, .cs-frame *, .cs-frame *::before, .cs-frame *::after { transition-duration: 0ms !important; animation: none !important; }
@@ -232,13 +234,13 @@
 @keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
 .cs-umsg[data-new] .cs-ut { animation: cs-um-tail 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; transform-origin: 0 100%; }
 @keyframes cs-um-tail { 0%, 40% { transform: scale(0); } 75% { transform: scale(1.2); } 100% { transform: scale(1); } }
-/* Full-width fades at both ends: text is gone before it reaches the tab bar at the top or the composer at the bottom. */
-.cs-thread { --fade: linear-gradient(to bottom, transparent 0, transparent 46px, #000 72px, #000 calc(100% - var(--composer-h, 6.5rem) - var(--dock-bar, 0px) - 56px), transparent calc(100% - var(--composer-h, 6.5rem) - var(--dock-bar, 0px) - 6px)); padding-top: 72px; -webkit-mask-image: var(--fade); mask-image: var(--fade); }
+/* Room above the first message, so at the top it starts below the tab bar. */
+.cs-thread { padding-top: 72px; }
 /* With the sidebar pinned open, the conversation centres in the room to its right, so neither margin feels cramped. */
 @media (min-width: 1100px) { .cs-frame[data-sbpin] .cs-thread { padding-left: calc(var(--sb-room, 260px) + 20px); } }
 .cs-thread { transition: padding-left 255ms var(--out); }
-/* Room under the last message, so at the bottom it rests clear of the fade. */
-.cs-thread.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 64px); scroll-padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 64px); }
+/* Room under the last message, so at the bottom it scrolls clear of the composer. */
+.cs-thread.pb-dock { padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 28px); scroll-padding-bottom: calc(var(--composer-h, 0px) + var(--dock-bar, 0px) + 28px); }
 .chat-column { gap: 18px; max-width: var(--chat-content-max-width); }
 
 /* The agents' work between the messages: one quiet row that opens into the steps. While a step runs, "Working"
