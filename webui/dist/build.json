@@ -1,6 +1,6 @@
 {
-  "hash": "6cebc5a3c97a8b58510da32988af13c10a3f1e1c2f4959bbfd231df5e59489d8",
-  "builtAt": "2026-11-02T13:40:19.439Z",
+  "hash": "033d6f967190398b72a499a5ed785e6726dd36fbf1e477bae7c4b1cb118c1a88",
+  "builtAt": "2026-11-02T14:02:43.732Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "7c363f9b604626e56cc1e259d0e6f2ab2a973e2f8e66cca7ffd901bc365979fb"
+      "sha256": "3fed0440ca5c3e81f555c660f8e2fc8202d9aa59ef41a67157745592a0f7abb4"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
