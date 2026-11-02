@@ -195,6 +195,11 @@ export interface LobbyService {
   liveSessions(): readonly LiveSession[];
   /** Run another session in this window (stopping its background process first); resolves to a notice. */
   switchTo(target: SwitchTarget): Promise<string>;
+  /**
+   * Open a fresh, empty session in this window (this one carries on in the background if it is at work). Whether
+   * it opens one, and a notice only when there is something to say (why not, or what carries on in the background).
+   */
+  newSession?(): { opened: boolean; notice?: string };
   /** Archived tasks, most recently archived first. */
   archivedTasks(): Task[];
   /** Archive, restore or delete a task; each returns a notice. */

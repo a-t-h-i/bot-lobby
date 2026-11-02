@@ -461,3 +461,26 @@ test("a message sent while the oracle is busy shows at once, and its delivery la
   narrateEvent(feed, delivered as never, () => "");
   assert.equal(feed.chat.length, 2, "the same words sent again later are a new message");
 });
+
+test("New session asks pi for a fresh session in this window, and the first prompt names an unnamed one", async () => {
+  const { fake, ctx } = await start(false);
+  try {
+    const service = currentLobbyService()!;
+    assert.deepEqual(service.newSession!(), { opened: true });
+    assert.deepEqual(fake.sent.at(-1), { text: "/bot-lobby new", options: { expandPromptTemplates: true } });
+
+    // The fake window is named; an unnamed one takes its name from the first prompt, and a nudge names nothing.
+    let name: string | undefined;
+    const pi = fake.pi as unknown as { getSessionName: () => string | undefined; setSessionName: (next: string) => void };
+    pi.getSessionName = () => name;
+    pi.setSessionName = (next) => { name = next; };
+    await fake.emit("before_agent_start", { type: "before_agent_start", messageType: "user", prompt: "bot-lobby: carry on" }, ctx);
+    assert.equal(name, undefined);
+    await fake.emit("before_agent_start", { type: "before_agent_start", messageType: "user", prompt: "please fix the flaky login test" }, ctx);
+    assert.equal(name, "Fix the flaky login test");
+    await fake.emit("before_agent_start", { type: "before_agent_start", messageType: "user", prompt: "and the router too" }, ctx);
+    assert.equal(name, "Fix the flaky login test", "only the first prompt names it");
+  } finally {
+    await stop(fake, ctx);
+  }
+});

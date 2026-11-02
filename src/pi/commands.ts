@@ -57,16 +57,17 @@ const HELP = [
   "/bot-lobby carry-on <taskId>   Take over a task no running session drives, unpause it and have the orchestrator carry it on (the Tasks screen's Resume)",
   "/bot-lobby auto [on|off]    Auto mode: the orchestrator drives this session's task without asking (alt+g)",
   "/bot-lobby start-plan PLAN-… [auto]   Start a planned task here; its agreed plan needs no approval",
+  "/bot-lobby new                     Open a fresh session in this window (named after its first prompt)",
   "/bot-lobby switch <session.jsonl>   Run a saved session in this window (the web lobby's session browser uses it)",
   "/bot-lobby web [stop|link|reset]   Open the browser UI (it starts with pi, on this machine only), or stop it, print its link, reset its link",
   "/bot-lobby help             This help",
 ].join("\n");
 
 /** Subcommands only win when no free-form text follows (so tasks still start). */
-const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "knowledge", "config", "settings", "on", "off", "minimize", "restore", "claim", "carry-on", "auto", "start-plan", "switch", "web"]);
+const SUBCOMMANDS = new Set(["lobby", "help", "status", "runs", "tasks", "pause", "resume", "cancel", "approve", "amend", "decline", "accept", "knowledge", "config", "settings", "on", "off", "minimize", "restore", "claim", "carry-on", "auto", "start-plan", "switch", "new", "web"]);
 
 /** Subcommands that act on a task or open the lobby turn bot-lobby on first; the rest work while it is off. */
-const TURNS_ON = new Set(["lobby", "settings", "resume", "approve", "amend", "decline", "accept", "claim", "carry-on", "auto", "start-plan", "switch", "web"]);
+const TURNS_ON = new Set(["lobby", "settings", "resume", "approve", "amend", "decline", "accept", "claim", "carry-on", "auto", "start-plan", "switch", "new", "web"]);
 
 /** `Task-Change-Table-Font-27-09-2026`, or an older `TASK-add-login` id. */
 function isTaskId(value: string | undefined): boolean {
@@ -330,6 +331,24 @@ async function switchCommand(ctx: ExtensionCommandContext, path: string): Promis
   }
 }
 
+/**
+ * `/bot-lobby new`: open a fresh session in this window, as the lobby's New
+ * session asks. Like a switch, the context is stale once it lands.
+ */
+async function newCommand(ctx: ExtensionCommandContext): Promise<void> {
+  let result: { cancelled: boolean };
+  try {
+    result = await ctx.newSession();
+  } catch (error) {
+    switchFailed();
+    throw error;
+  }
+  if (result.cancelled) {
+    switchFailed();
+    ctx.ui.notify("bot-lobby: the new session was cancelled", "warning");
+  }
+}
+
 /** `/bot-lobby auto [on|off]`: switch (or set) auto mode for this session's task. */
 function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: string | undefined): void {
   if (!value) return ctx.ui.notify(`bot-lobby: ${toggleOwnAuto()}`, "info");
@@ -407,6 +426,8 @@ export function registerCommands(pi: ExtensionAPI, configDir: string): void {
           return autoCommand(ctx, configDir, rest[0]);
         case "switch":
           return switchCommand(ctx, restText);
+        case "new":
+          return newCommand(ctx);
         case "web":
           return webCommand(ctx, rest[0]);
         case "start-plan": {

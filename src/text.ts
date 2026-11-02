@@ -57,6 +57,28 @@ export function shortTitle(request: string, maxWords = 3): string {
   return (content.length > 0 ? content : words).slice(0, maxWords).join(" ").replace(/[:;,]+$/, "");
 }
 
+/**
+ * A session's name from its first prompt, read like a chat title: the prompt's
+ * opening words with polite lead-ins (`can you`, `please`) dropped, at most
+ * `maxWords` words and `maxChars` characters, cut between words, first letter
+ * capitalised (`Fix the flaky login test`). Empty when the prompt has no words.
+ */
+export function sessionTitle(prompt: string, maxWords = 7, maxChars = 48): string {
+  const words = titleText(prompt).split(/\s+/).filter((word) => /[\p{L}\p{N}]/u.test(word));
+  let start = 0;
+  // Polite lead-ins and leading @mentions (`@Design does…`) are not what the session is about.
+  while (start < words.length - 1 && (FILLER_WORDS.has(fillerKey(words[start]!)) || words[start]!.startsWith("@"))) start += 1;
+  const kept: string[] = [];
+  for (const word of words.slice(start, start + maxWords)) {
+    if ([...kept, word].join(" ").length > maxChars && kept.length > 0) break;
+    kept.push(word);
+  }
+  // A title ends on a word that matters, not on `and`, `the` or a comma.
+  while (kept.length > 1 && (NAME_CONNECTORS.has(fillerKey(kept.at(-1)!)) || FILLER_WORDS.has(fillerKey(kept.at(-1)!)))) kept.pop();
+  const title = kept.join(" ").replace(/[\s:;,.!?…-]+$/u, "").replace(/^[^\p{L}\p{N}]+/u, "");
+  return title.charAt(0).toLocaleUpperCase() + title.slice(1);
+}
+
 /** Words a task's name leaves out: they join the words that matter without being any of them. */
 const NAME_CONNECTORS = new Set(["and", "or", "but", "with", "without", "on", "in", "at", "of", "by", "from", "into", "so", "as", "is", "are", "be", "it", "its", "that", "this", "then", "also", "just", "some"]);
 

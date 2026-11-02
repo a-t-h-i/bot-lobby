@@ -151,14 +151,23 @@
 .cs-sact { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
 .cs-sact:hover { background: var(--fill); color: var(--foreground); }
 .cs-sact:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
-/* The sidebar's own New session button, at the end of the search field. */
-.cs-snew { display: grid; place-items: center; width: 22px; height: 22px; margin-right: -6px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; outline: none; }
-.cs-snew:hover, .cs-snew:focus-visible { color: var(--foreground); }
-.cs-snew:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
-/* The shelf's label and its Archive all are small buttons with room for the hover outline. */
-.cs-shb { min-width: 0; margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: inherit; cursor: pointer; outline: none; }
-.cs-shb:hover, .cs-shb:focus-visible { color: var(--foreground); }
-.cs-shb:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+/* New session: the sidebar's first row, an icon, the words and the key; it answers the click at once. */
+.cs-snew { gap: 9px; font-weight: 500; }
+.cs-snew > svg { flex: none; color: var(--primary); transition: transform 260ms var(--spring); }
+.cs-snew:hover > svg { transform: rotate(-8deg) scale(1.08); }
+.cs-snew:active > svg { transform: scale(.9); transition-duration: 90ms; }
+.cs-snew .cs-kbd-quiet { opacity: 0; transition: opacity 120ms ease; }
+.cs-snew:is(:hover, :focus-visible) .cs-kbd-quiet { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .cs-snew > svg { transition: none; } .cs-snew:is(:hover, :active) > svg { transform: none; } }
+/* A fresh session slides into the list top: the row it takes over grows in from nothing. */
+.cs-frame .cs-sbfull .cs-srow[data-fresh="true"] > .cs-sr { animation: cs-fresh 380ms var(--spring) both; }
+@keyframes cs-fresh { from { opacity: 0; transform: translateY(-6px) scale(0.92); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .cs-srow[data-fresh="true"] > .cs-sr { animation: none; } }
+/* The shelf's label and its Archive all are small buttons with room for the hover outline. (Its own class: the
+   sheets' body is .cs-shb, and sharing it padded and masked the shelf labels over the rows.) */
+.cs-shf { min-width: 0; margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: inherit; cursor: pointer; outline: none; }
+.cs-shf:hover, .cs-shf:focus-visible { color: var(--foreground); }
+.cs-shf:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
 
 /* Hover in the sidebar draws a simple 1px outline round the item under the pointer, on top of its usual fill: a
    session row (it stays outlined while its own buttons are hovered), a row's Rename / Archive / Delete, the search
@@ -166,7 +175,7 @@
 .cs-sbx { --hover-line: color-mix(in srgb, var(--foreground) 22%, transparent); }
 .cs-sbx .cs-sr:not(.cs-search, .cs-tools):hover, .cs-sbx .cs-srow:hover > .cs-sr { box-shadow: inset 0 0 0 1px var(--hover-line); }
 .cs-sbx .cs-srow:hover > .cs-sr:is([aria-current="true"], [data-active="true"]), .cs-sbx .cs-sr:is([aria-current="true"], [aria-current="page"]):hover { box-shadow: var(--inset), inset 0 0 0 1px var(--hover-line); }
-.cs-sbx :is(.cs-sact, .cs-snew, .cs-shb):hover { box-shadow: inset 0 0 0 1px var(--hover-line); }
+.cs-sbx :is(.cs-sact, .cs-shf):hover { box-shadow: inset 0 0 0 1px var(--hover-line); }
 .cs-sbx .cs-iconbtn:hover:not(:disabled) { box-shadow: var(--press), inset 0 0 0 1px var(--hover-line); }
 
 /* An embedded icon button or chip: pressed in on hover and while its menu is open, deeper while pressed. */
@@ -1143,7 +1152,6 @@
 @keyframes cs-gbb { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-2px, 2px) scale(1.18); } }
 @keyframes cs-gbc { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-15px, -5px) scale(1.35); } }
 @media (prefers-reduced-motion: reduce) { .cs-gb { animation: none; } }
-textarea[data-slot="textarea"].cs-nsta { border-radius: 10px; padding: 12px 14px; font-size: 13px; }
 
 /* The code viewer and the terminal: the code sits in a sunk well inside the raised card; tool groups are keycaps. */
 .code-pane { margin: 0 12px 12px; border-radius: var(--r-out); background: var(--sunk); overflow: hidden; }
@@ -1243,7 +1251,7 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 .cs-sunkbox, .cs-fpb, .cs-cmc, .cs-note, .cs-dform, .cs-dnote, .cs-kir .cs-rp, .cs-fi, .cs-ta2, .cs-sel, .cs-inp, .cs-knta, .cs-kns,
 .cs-mk3, .cs-mocks .cs-mk3f, .cs-mxbig, .code-rail form label, .cs-sunkbox [data-slot="button"], .cs-ab [data-slot="button"],
 [data-slot="alert-dialog-content"] [data-slot="button"], [data-slot="select-trigger"], input[data-slot="input"],
-textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg { border-radius: var(--r-mid); }
+textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 /* Round icon buttons become squared like the rest. */
 .cs-iconbtn { border-radius: var(--r-out); }
 
