@@ -89,3 +89,37 @@ export function useToast(): { item: ToastItem | undefined; waiting: number } {
   const count = useSyncExternalStore(subscribe, () => waiting.length, () => 0)
   return { item, waiting: count }
 }
+
+/*
+ * Where the toast comes from. A composer on screen hosts it: the toast rises out of the composer's top edge as one
+ * more bubble of its surface. With no composer on screen the Toaster draws it alone, rising from the window's foot.
+ */
+let hosts = 0
+const hostListeners = new Set<() => void>()
+
+/** A composer on screen takes the toast; call the returned function once it leaves. */
+export function hostToasts(): () => void {
+  hosts += 1
+  for (const listener of [...hostListeners]) listener()
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    hosts -= 1
+    for (const listener of [...hostListeners]) listener()
+  }
+}
+
+/** Whether a composer on screen draws the toast. */
+export function useToastHosted(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      hostListeners.add(listener)
+      return () => {
+        hostListeners.delete(listener)
+      }
+    },
+    () => hosts > 0,
+    () => false
+  )
+}

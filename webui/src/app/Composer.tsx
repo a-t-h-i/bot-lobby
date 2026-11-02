@@ -707,6 +707,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
         shrunk={shrunk}
         morphing={morphing}
         menu={menu}
+        toasts={visible}
         className="composer-shell pointer-events-auto"
         onKeyDown={(event) => {
           if (event.key !== "Escape" || event.defaultPrevented) return

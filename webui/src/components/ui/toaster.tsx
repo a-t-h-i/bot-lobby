@@ -1,25 +1,21 @@
-// Adapted from T3 Code (MIT), apps/web/src/components/ui/toast.tsx
 import { useEffect } from "react"
-import { AnimatePresence, motion } from "motion/react"
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react"
+import { BubbleFilters } from "@/app/composer/ComposerSurface"
+import { ToastBody, ToastShape, useToastBubble } from "@/app/composer/ToastBubble"
 import { useAnyOverlay } from "@/lib/overlay"
-import { dismissToast, useToast, type ToastKind } from "@/lib/toast"
-import { cn } from "@/lib/utils"
+import { dismissToast, useToast, useToastHosted, type ToastKind } from "@/lib/toast"
 
-const ICONS: Record<ToastKind, typeof Info> = { info: Info, success: CheckCircle2, warning: AlertTriangle, error: XCircle }
 const KIND_WORDS: Record<ToastKind, string> = { info: "Note:", success: "Done:", warning: "Warning:", error: "Error:" }
-const TONES: Record<ToastKind, string> = { info: "text-info", success: "text-success", warning: "text-warning", error: "text-destructive" }
 
 /**
- * The one toast on screen: it scales up with a bounce just above the composer and
- * centred on it, on a pane with a light blur behind it (the composer publishes its
- * height, left edge and width as `--composer-h`, `--composer-x` and `--composer-w`). It waits while a pop-up is
- * open and leaves sooner when more are queued.
+ * The one toast on screen. A composer on screen draws it as a bubble rising out of its top edge
+ * (app/composer/ToastBubble.tsx); with none, it rises alone from the window's foot, drawn here. Either way it
+ * waits while a pop-up is open and leaves sooner when more are queued, and a screen reader hears it from here.
  */
 export function Toaster() {
   const { item, waiting } = useToast()
   const blocked = useAnyOverlay()
-  const showing = item && !blocked
+  const hosted = useToastHosted()
+  const showing = item && !blocked ? item : undefined
 
   useEffect(() => {
     if (!item || blocked) return
@@ -28,45 +24,31 @@ export function Toaster() {
   }, [item, blocked, waiting])
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      className="pointer-events-none fixed z-[1050] flex justify-center px-4"
-      style={{ bottom: "calc(var(--composer-h, 0px) + var(--terminal-h, 0px) + 0.25rem)", left: "var(--composer-x, 0px)", width: "var(--composer-w, 100%)" }}
-    >
-      <AnimatePresence mode="wait">
-        {showing ? (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, scale: 0.55, y: 18 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 6, transition: { duration: 0.14, ease: "easeIn" } }}
-            transition={{ type: "spring", stiffness: 560, damping: 15, mass: 0.8 }}
-            className="pointer-events-auto flex max-w-[min(32rem,100%)] items-center gap-2.5 glass-toast rounded-lg px-3.5 py-2.5 text-sm"
-          >
-            <ToastIcon kind={item.kind} />
-            <span className="min-w-0 break-words"><span className="sr-only">{KIND_WORDS[item.kind]} </span>{item.message}</span>
-            {item.action ? (
-              <button aria-keyshortcuts="Enter Space" aria-describedby="focused-action-help"
-                type="button"
-                className="btn-outline -my-1.5 -mr-1 h-7 shrink-0 rounded-lg border px-2.5 text-xs font-medium text-foreground transition-[box-shadow,scale] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                onClick={() => {
-                  item.action?.onClick()
-                  dismissToast(item.id)
-                }}
-              >
-                {item.action.label}
-              </button>
-            ) : null}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
+    <>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {showing ? `${KIND_WORDS[showing.kind]} ${showing.message}` : ""}
+      </div>
+      <LoneToast enabled={!hosted} />
+    </>
   )
 }
 
-function ToastIcon({ kind }: { kind: ToastKind }) {
-  const Icon = ICONS[kind]
-  return <Icon aria-hidden="true" className={cn("size-4 shrink-0", TONES[kind])} />
+/** The toast with no composer to rise from: the same bubble, coming up from below the window's foot. */
+function LoneToast({ enabled }: { enabled: boolean }) {
+  const toast = useToastBubble(enabled, "floor")
+  if (!toast.item) return null
+  return (
+    <div className="bubble toast-lone" style={toast.vars}>
+      <BubbleFilters id="toast" />
+      <div className="bubble-layer bubble-edge" aria-hidden="true">
+        <ToastShape t={toast} />
+      </div>
+      <div className="bubble-layer bubble-fill" aria-hidden="true">
+        <ToastShape t={toast} />
+      </div>
+      <div className="bubble-real">
+        <ToastBody t={toast} />
+      </div>
+    </div>
+  )
 }
