@@ -12,14 +12,16 @@
  * curves. Ghost and real menus share `--w`/`--h` and the composer `--ch` on the bubble, so they move together.
  */
 import { useEffect, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react"
+import { hostToasts } from "@/lib/toast"
 import { cn } from "@/lib/utils"
+import { ToastBody, ToastShape, useToastBubble, type ToastBubble } from "./ToastBubble"
 
-/** The goo filters, once per page. Light falls from the top left. */
-function BubbleFilters() {
+/** The goo filters, once per bubble surface (`id` keeps a second surface's apart). Light falls from the top left. */
+export function BubbleFilters({ id = "bubble" }: { id?: string }) {
   return (
     <svg width="0" height="0" className="absolute" aria-hidden="true" focusable="false">
       <defs>
-        <filter id="bubble-goolit" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+        <filter id={`${id}-goolit`} x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
@@ -40,7 +42,7 @@ function BubbleFilters() {
             <feMergeNode in="hl" />
           </feMerge>
         </filter>
-        <filter id="bubble-gooedge" x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
+        <filter id={`${id}-gooedge`} x="-10%" y="-10%" width="120%" height="120%" colorInterpolationFilters="sRGB">
           <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b" />
           <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" result="shape" />
           <feOffset in="shape" dx="0" dy="1.5" result="dn" />
@@ -67,9 +69,10 @@ function BubbleFilters() {
 }
 
 /** One ghost layer: the menu's shape over the composer's, painted in the layer's colour. */
-function Ghost({ kind }: { kind: "edge" | "fill" }) {
+function Ghost({ kind, toast }: { kind: "edge" | "fill"; toast: ToastBubble }) {
   return (
     <div className={cn("bubble-layer", kind === "edge" ? "bubble-edge" : "bubble-fill")} aria-hidden="true">
+      <ToastShape t={toast} />
       <div className="bubble-menu">
         <div className="bubble-menu-clip" />
       </div>
@@ -81,6 +84,7 @@ function Ghost({ kind }: { kind: "edge" | "fill" }) {
 /**
  * The bubble: `menu` is what grows out of the top (shown while `open`, sized `size`), `children` the composer box.
  * `shrunk` folds it to the slim pill; `morphing` is set for the length of a fold or unfold, which then eases slowly.
+ * With `toasts` on (the composer is on screen), the toasts rise out of its top edge, above any open menu.
  */
 export function ComposerBubble({
   open,
@@ -89,6 +93,7 @@ export function ComposerBubble({
   morphing,
   menu,
   children,
+  toasts = false,
   className,
   style,
   ...props
@@ -99,7 +104,10 @@ export function ComposerBubble({
   morphing: boolean
   menu: ReactNode
   children: ReactNode
+  toasts?: boolean
 }) {
+  useEffect(() => (toasts ? hostToasts() : undefined), [toasts])
+  const toast = useToastBubble(toasts, "composer")
   // A closing menu keeps its content while it falls away, then lets it go (the page reads an open list box or menu as a pop-up).
   const [lingering, setLingering] = useState(open)
   useEffect(() => {
@@ -114,13 +122,14 @@ export function ComposerBubble({
       data-shrunk={shrunk || undefined}
       data-morphing={morphing || undefined}
       className={cn("bubble", className)}
-      style={{ ...style, "--w": `${size.w}px`, "--h": `${open ? size.h : 0}px` } as CSSProperties}
+      style={{ ...style, ...toast.vars, "--w": `${size.w}px`, "--h": `${open ? size.h : 0}px` } as CSSProperties}
       {...props}
     >
       <BubbleFilters />
-      <Ghost kind="edge" />
-      <Ghost kind="fill" />
+      <Ghost kind="edge" toast={toast} />
+      <Ghost kind="fill" toast={toast} />
       <div className="bubble-real">
+        <ToastBody t={toast} />
         <div className="bubble-menu" inert={!open}>
           <div className="bubble-menu-clip">
             <div className="bubble-menu-body">{open || lingering ? menu : null}</div>

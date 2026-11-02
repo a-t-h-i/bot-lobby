@@ -1,6 +1,6 @@
 {
-  "hash": "6cebc5a3c97a8b58510da32988af13c10a3f1e1c2f4959bbfd231df5e59489d8",
-  "builtAt": "2026-11-02T13:40:19.439Z",
+  "hash": "fcf49ff1ff2eaa98925c9f3c424348b0711bb282f27a87766c9d3516d48f0164",
+  "builtAt": "2026-11-02T14:25:05.819Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "7c363f9b604626e56cc1e259d0e6f2ab2a973e2f8e66cca7ffd901bc365979fb"
+      "sha256": "4c11507ba19910fe59dae41ed566e04c6e0731acdca8e9fa89980e9a588c85f2"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -120,11 +120,15 @@
     },
     {
       "path": "webui/src/app/composer/ComposerSurface.tsx",
-      "sha256": "4863a4cd278a962cf251ff32c87577c59237cf8bee38979331540968e7f8dd68"
+      "sha256": "6cfa810825b20de666020cd930d679e0b84fc61468bb9e81e94ee30998c3681f"
     },
     {
       "path": "webui/src/app/composer/MarkdownMirror.tsx",
       "sha256": "f4cd0abef2a8658152f702236ace99785d384ee627e7746068f3eab05de6be7e"
+    },
+    {
+      "path": "webui/src/app/composer/ToastBubble.tsx",
+      "sha256": "9a9cacadbc590f3f851ac2f786075f3f67cf0b1014134fb5d80421277ba4dcce"
     },
     {
       "path": "webui/src/app/composer/markdownMirror.ts",
@@ -284,7 +288,7 @@
     },
     {
       "path": "webui/src/components/ui/toaster.tsx",
-      "sha256": "1741376a3a4109647c3cab18d958ea1d767f33b7ec76b63ac7cb5a234d9fec2e"
+      "sha256": "e8a6289782988b8ae0ca9a95e77f131b96d2ce05a2d2ca2599436680038211e5"
     },
     {
       "path": "webui/src/fonts.css",
@@ -292,7 +296,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3f9b789973d69d140e8e4d2b5f0c8ca275fbcf93d9e27780528d4fc5f5acfa35"
+      "sha256": "a27e18492a4328b142067dfb5e398150912c2c92e6616adf81a922765c332ef1"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -376,7 +380,7 @@
     },
     {
       "path": "webui/src/lib/toast.ts",
-      "sha256": "1c2449893cfda1b01c3b908a88925c96e15fdc6ede295f6ff0749eb9d85716e6"
+      "sha256": "eb121746713cac91bf2969a3f8d67a5a10b4c16d64b45600134c767e83618762"
     },
     {
       "path": "webui/src/lib/uploads.ts",
