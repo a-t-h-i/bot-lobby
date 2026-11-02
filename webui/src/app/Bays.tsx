@@ -158,7 +158,10 @@ export function TabGlyph({ id }: { id: string }) {
 /**
  * The tab navigator: every tab, always showing, with the active one pressed into the bay (a light inset bevel).
  * Changing tabs is a quick "poof": the old highlight shrinks and fades away while the new one grows in on the
- * chosen tab, both at once (CSS, `.cs-tab::before`). Arrow keys follow the WAI-ARIA tabs pattern with a roving tabindex.
+ * chosen tab, both at once (CSS, `.cs-tab::before`). Each hidden pill waits shifted toward the chosen tab (`data-side`),
+ * so the old one drifts toward the new tab as it goes and the new one arrives from the old tab's side: the highlight
+ * reads as one pill handed over rather than two unrelated blinks. Arrow keys follow the WAI-ARIA
+ * tabs pattern with a roving tabindex.
  */
 export function useTabNavigator({ tabs, activeId, onSelect }: {
   tabs: TabInfo[]
@@ -172,6 +175,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
   // Each time a tab becomes the chosen one, its icon plays its own little animation (never on hover or first load).
   const [plays, setPlays] = useState<Record<string, number>>({})
   const seen = useRef(activeId)
+  const activeIndex = tabs.findIndex((tab) => tab.id === activeId)
   useEffect(() => {
     if (seen.current === activeId) return
     seen.current = activeId
@@ -231,10 +235,11 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
               title={`${tab.label} · ${tab.key.replace("+", " ")}`}
               tabIndex={tab.id === activeId || (!activeId && index === 0) ? 0 : -1}
               className="cs-tab"
+              data-side={activeIndex < 0 || index === activeIndex ? undefined : index < activeIndex ? "l" : "r"}
               style={{ "--i": index } as CSSProperties}
             >
               <span className="cs-ti"><TabIcon id={tab.id} play={plays[tab.id] ?? 0} className="size-[15px]" /></span>
-              {/* The bold copy holds the width, so the bar never shifts when the chosen tab's label turns bolder. */}
+              {/* The bold copy holds the width, so the bar never shifts while the chosen tab's label eases bolder. */}
               <span className="cs-tl" data-t={tab.label}>{tab.label}</span>
             </a>
           ))}
