@@ -22,7 +22,7 @@ interface Fresh {
 }
 
 /** How long typed text keeps its own span: a little over the fade in the stylesheet (.md-new), so a fade is never cut. */
-const FADE_MS = 520
+const FADE_MS = 260
 
 function insertion(before: string, after: string): { start: number; end: number } | undefined {
   if (after.length <= before.length) return undefined

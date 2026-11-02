@@ -1,6 +1,6 @@
 {
-  "hash": "6cebc5a3c97a8b58510da32988af13c10a3f1e1c2f4959bbfd231df5e59489d8",
-  "builtAt": "2026-11-02T13:40:19.439Z",
+  "hash": "782603ad87eed2511e6f103e5d49791f91e3b0ba18f94b3f7323635faa9e8da3",
+  "builtAt": "2026-11-02T14:31:49.434Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "7c363f9b604626e56cc1e259d0e6f2ab2a973e2f8e66cca7ffd901bc365979fb"
+      "sha256": "1b6f1543d9b651f5b6a44a963fcfecafd9aaddc205989a05c553a4ae80bfbcbe"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -123,8 +123,12 @@
       "sha256": "4863a4cd278a962cf251ff32c87577c59237cf8bee38979331540968e7f8dd68"
     },
     {
+      "path": "webui/src/app/composer/GlideCaret.tsx",
+      "sha256": "191d3050cb5e36b09a03e464369409eb8f333549d2ea522e2e690758c08ae10a"
+    },
+    {
       "path": "webui/src/app/composer/MarkdownMirror.tsx",
-      "sha256": "f4cd0abef2a8658152f702236ace99785d384ee627e7746068f3eab05de6be7e"
+      "sha256": "83c6124fdd505cfca5044de07b7d3d908381752e367008be21cf510575e537c4"
     },
     {
       "path": "webui/src/app/composer/markdownMirror.ts",
@@ -292,7 +296,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3f9b789973d69d140e8e4d2b5f0c8ca275fbcf93d9e27780528d4fc5f5acfa35"
+      "sha256": "af44db21762c96a8ba4feff46759e983871487e2ebb207c6e2131be5b7cd93a6"
     },
     {
       "path": "webui/src/lib/act.ts",
