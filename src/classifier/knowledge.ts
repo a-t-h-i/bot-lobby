@@ -124,6 +124,24 @@ export function isProtectedKnowledge(content: string): boolean {
   return content.includes(PINNED_MARKER);
 }
 
+/** The user's own annotations: `> Note from the user…` lines and their quoted continuation lines. */
+export function userNoteLines(content: string): string[] {
+  const out: string[] = [];
+  let inNote = false;
+  for (const line of content.split("\n")) {
+    if (/^> Note from the user\b/.test(line)) inNote = true;
+    else if (!line.startsWith(">")) inNote = false;
+    if (inNote) out.push(line);
+  }
+  return out;
+}
+
+/** The user notes a trimmed or left-out section would lose, kept with the entry they annotate named by the note itself. */
+function notesLeftOut(whole: string, kept: string): string {
+  const lost = userNoteLines(whole).filter((line) => !kept.includes(line));
+  return lost.length ? `\n\nUser notes on the part left out (never trimmed):\n${lost.join("\n")}` : "";
+}
+
 /** `(1.2k chars)` — the size note each injected section header carries. */
 export function sectionSizeNote(chars: number): string {
   return chars >= 1000 ? `${(Math.round(chars / 100) / 10).toFixed(1)}k chars` : `${chars} chars`;
@@ -146,7 +164,8 @@ export interface StartupBudgetResult {
 
 /**
  * One combined budget across every injected knowledge section of a prompt.
- * Protected content (pinned rules, user annotations) is never truncated: when
+ * Protected content (pinned rules) is never truncated, and user annotations
+ * (`> Note from the user`) in a trimmed or left-out section are carried whole: when
  * it alone exceeds the budget it is kept whole and a diagnostic names the
  * file and its size. Anything else is kept whole while it fits, clipped once,
  * then left out with a note saying where the whole content is. The same
@@ -179,7 +198,7 @@ export function applyStartupBudget(sections: readonly StartupSection[], budget: 
     if (!section.content) return section;
     if (section.protected) return { ...section, content: withSize(section.content) };
     if (remaining <= 0) {
-      return { ...section, content: `_Left out to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._` };
+      return { ...section, content: `_Left out to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._${notesLeftOut(section.content, "")}` };
     }
     if (section.content.length <= remaining) {
       remaining -= section.content.length;
@@ -187,7 +206,7 @@ export function applyStartupBudget(sections: readonly StartupSection[], budget: 
     }
     const clipped = clip(section.content, remaining).trimEnd();
     remaining = 0;
-    return { ...section, content: `${withSize(clipped)}\n\n_Trimmed to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._` };
+    return { ...section, content: `${withSize(clipped)}\n\n_Trimmed to hold the startup knowledge budget; the whole content is ${section.path ?? `in ${section.name}`}._${notesLeftOut(section.content, clipped)}` };
   });
   return { sections: budgeted, diagnostics };
 }

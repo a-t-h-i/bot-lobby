@@ -140,14 +140,14 @@ structured assignment there, so send that step as a prose `task`. Fields:
 - Optional `discoveryLimit` (default two, never reset by a retry or
   revision; raising it needs an explicit allowance decision).
 - Optional `contextPack`: the exact context the worker needs on turn one —
-  `{version: 1, files: [{path, ranges: [[start, end]], fingerprint,
-  snippet}], invariants, priorWork, verification}`. Give exact paths with
-  line ranges, bounded snippets (at most 2,000 characters each; 24,000 for
-  the whole pack), content fingerprints from your own reads, the invariants
-  that must hold, prior work already landed, and the verification you expect.
-  The engine validates the pack before launch and refreshes stale
-  fingerprints at dispatch, so the worker never re-discovers what you already
-  know. Batch it instead of sending a scout or making the worker re-read
+  `{version: 1, files: [{path, ranges: [[start, end]], snippet}],
+  invariants, priorWork, verification}`. Give exact paths with line ranges,
+  bounded snippets copied verbatim from your own reads (file text only, no
+  line-number prefixes; at most 2,000 characters each; 24,000 for the whole
+  pack), the invariants that must hold, prior work already landed, and the
+  verification you expect. Leave `fingerprint` out: the engine fingerprints
+  each file at dispatch, keeps a snippet that still matches, and re-reads one
+  that went stale, so the worker never re-discovers what you already know. Batch it instead of sending a scout or making the worker re-read
   everything.
 
 The engine validates every brief before a batch starts; fix a rejected one,

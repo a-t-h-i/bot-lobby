@@ -577,20 +577,29 @@ export function packFingerprint(content: string): string {
   return createHash("sha1").update(content).digest("hex").slice(0, 16);
 }
 
-/** A stale entry's refreshed form: new fingerprint, re-read snippet for its range, ranges clamped into the file as it is. */
+/** A stale entry's refreshed form: new fingerprint, ranges clamped into the file as it is, and a snippet re-read across every range. */
 function refreshedEntry(file: ContextPackFile, content: string): ContextPackFile {
   const lines = content.replace(/\r?\n$/, "").split("\n");
   const clamp = (value: number): number => Math.min(Math.max(1, value), Math.max(1, lines.length));
   const ranges = file.ranges?.map(([start, end]): [number, number] => { const from = clamp(start); const to = clamp(end); return from <= to ? [from, to] : [to, from]; });
-  const [start, end] = ranges?.[0] ?? [1, Math.min(lines.length, 60)];
-  const snippet = file.snippet === undefined && !ranges?.length ? undefined : lines.slice(Math.max(0, start - 1), Math.max(0, end)).join("\n").slice(0, CONTEXT_SNIPPET_MAX_CHARS);
+  const read = (ranges?.length ? ranges : [[1, Math.min(lines.length, 60)] as [number, number]]).map(([start, end]) => lines.slice(Math.max(0, start - 1), Math.max(0, end)).join("\n"));
+  const snippet = file.snippet === undefined && !ranges?.length ? undefined : read.join("\n…\n").slice(0, CONTEXT_SNIPPET_MAX_CHARS);
   return { ...file, ...(ranges ? { ranges } : {}), fingerprint: packFingerprint(content), ...(snippet !== undefined ? { snippet } : {}) };
 }
 
+/** The 1-based line a snippet starts on in the file as it is, when the snippet is still there verbatim. */
+function snippetLine(content: string, snippet: string): number | undefined {
+  const at = snippet.trim() ? content.indexOf(snippet) : -1;
+  return at < 0 ? undefined : content.slice(0, at).split("\n").length;
+}
+
 /**
- * Stale-context refresh at dispatch. A fingerprint that no longer matches
- * the file refreshes that entry (new fingerprint plus a re-read snippet and
- * clamped range); a path that no longer exists drops its entry. The pack is
+ * Stale-context refresh at dispatch. The engine fingerprints every entry
+ * itself, so an orchestrator never has to compute a hash: a missing or
+ * mismatched fingerprint is checked against the file. A snippet still in the
+ * file verbatim is kept (its ranges follow it if lines moved); otherwise the
+ * entry is refreshed (new fingerprint, ranges clamped, snippet re-read across
+ * every range). A path that no longer exists drops its entry. The pack is
  * never delivered silently stale, and the returned notes say exactly what
  * changed so the worker knows which entries are newer than the rest.
  */
@@ -598,20 +607,28 @@ export async function refreshContextPack(pack: ContextPack, root: string): Promi
   const notes: string[] = [];
   const files: ContextPackFile[] = [];
   for (const file of pack.files) {
-    if (!file.fingerprint) {
-      files.push(file);
-      continue;
-    }
     const content = await readFile(join(root, file.path), "utf8").catch(() => undefined);
     if (content === undefined) {
       notes.push(`dropped ${file.path} (the file no longer exists)`);
       continue;
     }
     const fingerprint = packFingerprint(content);
-    if (fingerprint === file.fingerprint) files.push(file);
-    else {
+    if (fingerprint === file.fingerprint) {
+      files.push(file);
+      continue;
+    }
+    const line = file.snippet === undefined ? undefined : snippetLine(content, file.snippet);
+    if (file.snippet === undefined && !file.ranges?.length) {
+      // Path only: nothing to go stale, the engine's fingerprint is all it needs.
+      files.push({ ...file, fingerprint });
+    } else if (line !== undefined) {
+      const shift = file.ranges?.[0] ? line - file.ranges[0][0] : 0;
+      const ranges = file.ranges?.map(([start, end]): [number, number] => [Math.max(1, start + shift), Math.max(1, end + shift)]);
+      files.push({ ...file, ...(ranges ? { ranges } : {}), fingerprint });
+      if (shift !== 0) notes.push(`moved ${file.path} ranges by ${shift > 0 ? "+" : ""}${shift} lines (the snippet is unchanged)`);
+    } else {
       files.push(refreshedEntry(file, content));
-      notes.push(`refreshed ${file.path} (content had changed; new fingerprint ${fingerprint})`);
+      notes.push(`refreshed ${file.path} (${file.fingerprint ? "content had changed" : "the snippet no longer matches the file"}; new fingerprint ${fingerprint})`);
     }
   }
   pack.files = files;

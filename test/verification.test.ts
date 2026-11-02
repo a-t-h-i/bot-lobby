@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, utimesSync, write
 import { tmpdir } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { join } from "node:path";
-import { checkFingerprint, finalChecks, runVerification, verificationSummary, type VerifyCheck, type VerifyExec } from "../src/execution/verification.ts";
+import { checkFingerprint, finalChecks, runVerification, staleVerification, verificationSummary, type VerifyCheck, type VerifyExec } from "../src/execution/verification.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task, type TaskState } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
@@ -111,6 +111,63 @@ test("concurrent verification of the same check shares one execution", async () 
   assert.equal(exec.calls, 1, "single-flight: one execution serves both callers");
   assert.equal(a.state, "passing");
   assert.equal(b.state, "passing");
+});
+
+test("one caller's cancellation never cancels another caller sharing the same check", async () => {
+  const top = fixtureRepo();
+  let calls = 0;
+  let aborted = false;
+  let finish!: () => void;
+  const exec: VerifyExec = (_command, _args, options) => new Promise((resolve) => {
+    calls += 1;
+    options.signal?.addEventListener("abort", () => { aborted = true; resolve({ code: null, output: "", timedOut: false }); }, { once: true });
+    finish = () => resolve({ code: 0, output: "", timedOut: false });
+  });
+  const chat = new AbortController();
+  const task = new AbortController();
+  const first = runVerification({ top, checks: [check("typecheck")], exec, signal: chat.signal });
+  const second = runVerification({ top, checks: [check("typecheck")], exec, signal: task.signal });
+  await delay(10);
+  chat.abort();
+  assert.equal((await first).results[0]!.state, "cancelled", "the caller that aborted sees its own cancellation");
+  assert.equal(aborted, false, "the shared run keeps going while another caller still waits");
+  finish();
+  assert.equal((await second).state, "passing", "the other caller still gets the real result");
+  assert.equal(calls, 1);
+});
+
+test("the shared run stops only once every waiting caller has aborted, and is never joined again", async () => {
+  const top = fixtureRepo();
+  let calls = 0;
+  let aborts = 0;
+  const exec: VerifyExec = (_command, _args, options) => new Promise((resolve) => {
+    calls += 1;
+    options.signal?.addEventListener("abort", () => { aborts += 1; resolve({ code: null, output: "", timedOut: false }); }, { once: true });
+    if (calls > 1) resolve({ code: 0, output: "", timedOut: false });
+  });
+  const a = new AbortController();
+  const b = new AbortController();
+  const runs = [runVerification({ top, checks: [check("typecheck")], exec, signal: a.signal }), runVerification({ top, checks: [check("typecheck")], exec, signal: b.signal })];
+  await delay(10);
+  a.abort();
+  b.abort();
+  for (const report of await Promise.all(runs)) assert.equal(report.results[0]!.state, "cancelled");
+  assert.equal(aborts, 1, "the last caller leaving stops the run");
+  assert.equal((await runVerification({ top, checks: [check("typecheck")], exec })).state, "passing", "a later caller starts a fresh run");
+  assert.equal(calls, 2);
+});
+
+test("typecheck evidence covers test files, and a pass goes stale once its inputs change", async () => {
+  const top = fixtureRepo();
+  writeFileSync(join(top, "package.json"), JSON.stringify({ scripts: { typecheck: "tsc --noEmit" } }));
+  const [typecheck] = finalChecks(top);
+  assert.ok(typecheck!.inputs.includes("test"), "tsconfig includes test/**, so test files key the typecheck pass");
+  mkdirSync(join(top, "test"), { recursive: true });
+  writeFileSync(join(top, "test", "a.test.ts"), "export const a: number = 1;\n");
+  const report = await runVerification({ top, checks: [typecheck!], exec: countingExec([0]) });
+  assert.deepEqual(staleVerification(top, [typecheck!], report), [], "nothing changed since the run");
+  writeFileSync(join(top, "test", "a.test.ts"), "export const a: number = 'x';\n");
+  assert.deepEqual(staleVerification(top, [typecheck!], report), ["typecheck"], "an edit to a test file after the pass makes it stale");
 });
 
 test("a cancelled or unavailable check is never a pass, and a failed dependency makes the dependent unavailable", async () => {

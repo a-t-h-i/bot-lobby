@@ -113,6 +113,25 @@ on the engine's checks with no QA agent, and a small one gets a light check. One
 security, data, concurrency or orchestration gets a deep, adversarial review. The test budget is a
 ceiling, never a quota, and the Tasks tab shows the classifier's read and why. With it off, the engine's rules decide.
 
+### Final verification
+
+At completion, after lint, the engine runs the project's own `typecheck`, `test`, `web:build` and
+`web:check` scripts, whichever `package.json` defines. Fast tasks run them too. Nothing is committed
+or marked complete until every one of them passes. A failed, cancelled, timed-out or unavailable
+check is never a pass. The task gets the one-line summary and the tail of the output, and the same
+worker fixes it.
+
+Results are cached by fingerprint. A fingerprint covers the check's input files (by content), its
+command, the Node version, the platform and a digest of the environment. Values are never stored.
+A completion attempt reuses a recorded pass while its inputs are unchanged, so after a fix only the
+checks that depend on what changed run again. `web:check` depends on `web:build` and keys on the
+built `webui/dist/build.json`. Playwright's global setup also refuses to start the browser
+fixtures when the built assets are stale. Concurrent callers share one run of the same check, and
+each caller can cancel only its own wait. The run stops, along with its whole process tree, only
+once every caller has gone. Right before the commit, the engine re-keys the passes, so an edit
+made after the checks ran is refused, never committed on old evidence. `node scripts/verify-final.ts`
+runs the same checks from a checkout.
+
 ## Composer and removed pages
 
 The composer is available only on **Lobby**, **Tasks**, **Plan** and **Knowledge**,
@@ -292,6 +311,19 @@ When the oracle compacts, its checkpoint also lists what it learned that is
 worth keeping, tagged by agent, and those lines go into the knowledge base: the
 oracle's own files, and the designer's, backend's and QA's where they concern
 them. Duplicates are skipped.
+
+### Knowledge maintenance
+
+Oversized knowledge files no longer hold completion. Completion schedules maintenance for them,
+which runs after the response. It archives only exact duplicate sections, completed-task logs and
+sections explicitly marked superseded (a `Superseded` heading or a `Status: superseded` line).
+Pinned rules, user notes and anything ambiguous stay. Before the active file is replaced, the
+whole previous version is appended to permanent history under `history/`, which is searchable
+and never pruned (the rotating `archive/` backups are separate). The replacement is atomic, keeps
+the file's mode and owner, and shares the file lock with ordinary knowledge writes. If the file
+changed during maintenance, the run fails closed and leaves the newer content active. The lobby
+reports every outcome (maintained, busy, failed or nothing to archive). A failed or busy run is
+retried at the next completion.
 
 ## Tools and skills
 

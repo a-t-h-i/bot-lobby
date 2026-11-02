@@ -31,8 +31,8 @@ import { loadTask, ownerlessTask, readTaskArtifact, removeTaskScratchpads, saveT
 import { dataRoot, readDataRoots } from "../state/project.ts";
 import { appendCompletedTask, appendDecision, applyKnowledge, readFileOr, writeFileEnsured, type KnowledgeKind } from "../knowledge/store.ts";
 import { proposalParts, propose } from "../knowledge/ledger.ts";
-import { compactKnowledgeFile, overThreshold, scheduleKnowledgeMaintenance } from "../knowledge/compactor.ts";
-import { finalChecks, runVerification, verificationSummary } from "../execution/verification.ts";
+import { compactKnowledgeFile, overThreshold, scheduleKnowledgeMaintenance, type MaintenanceSchedule } from "../knowledge/compactor.ts";
+import { finalChecks, runVerification, staleVerification, verificationSummary } from "../execution/verification.ts";
 import { oracleBookmarkOp, retireBookmarks, type OracleBookmarkOp } from "../knowledge/bookmarks.ts";
 import { knowledgeDir, type KnowledgeAgent } from "../knowledge/paths.ts";
 import { lobbyTopics } from "../lobby/topics.ts";
@@ -1895,6 +1895,17 @@ function handleCompact(task: Task | undefined, params: OrchestrateParams, deps: 
 }
 
 /** §63: record history, drop scratchpads, then mark the task completed. */
+/** Scheduled knowledge maintenance reports back: a failed or busy run is visible and says what to do, never dropped. */
+function reportMaintenance(deps: WorkflowDeps, schedule: MaintenanceSchedule): void {
+  void schedule.done.then((result) => {
+    const file = `${result.agent}/${result.file}`;
+    if (result.status === "unchanged") deps.notify(`Knowledge maintenance: ${file} has nothing clearly duplicate or historical to archive, so it stays over the compaction threshold. Rewrite it with action=compact if it should shrink.`, "info");
+    if (result.status === "maintained") deps.notify(`Knowledge maintenance: ${file} archived ${result.before - result.after} characters to ${result.history}.`, "info");
+    else if (result.status === "busy") deps.notify(`Knowledge maintenance: ${file} was already being maintained; it is retried at the next completion.`, "warning");
+    else if (result.status === "failed") deps.notify(`Knowledge maintenance failed for ${file}: ${result.error ?? "unknown error"} Maintenance left the active file as it was; it is retried at the next completion, or rewrite it with action=compact.`, "warning");
+  }).catch(() => undefined);
+}
+
 async function handleComplete(task: Task, params: OrchestrateParams, deps: WorkflowDeps): Promise<string> {
   // The fast track (and a plan QA sat out) completes straight from its work; the full workflow from review.
   requireState(task, onFastTrack(task) || !qaRequired(task) ? ["implementing", "reviewing", "blocked"] : ["reviewing", "blocked"]);
@@ -1915,20 +1926,24 @@ async function handleComplete(task: Task, params: OrchestrateParams, deps: Workf
   // fast tasks included) must pass on the tree as it stands before anything is committed. Recorded
   // passes are reused while their inputs are unchanged; missing, stale, failed, cancelled and
   // unavailable results are not passes. Heavy checks run here only, never between worker steps.
-  const verification = await runVerification({ top: deps.cwd, checks: finalChecks(deps.cwd), previous: task.verification, ...(deps.signal ? { signal: deps.signal } : {}) });
+  const checks = finalChecks(deps.cwd);
+  const verification = await runVerification({ top: deps.cwd, checks, previous: task.verification, ...(deps.signal ? { signal: deps.signal } : {}) });
   deps.signal?.throwIfAborted();
   task.verification = verification;
   saveTask(deps.root, deps.configDir, task);
-  appendMetrics(deps.root, deps.configDir, [{ id: randomUUID(), kind: "master", agent: "ORACLE", status: "success", startedAt: verification.at, durationMs: verification.results.reduce((total, result) => total + result.ms, 0), purpose: `final verification (${verification.results.length} checks)`, cacheHits: verification.results.filter((result) => result.reused).length, ...(task.id ? { taskId: task.id } : {}) }]);
+  appendMetrics(deps.root, deps.configDir, [{ id: randomUUID(), kind: "master", agent: "MASTER", status: "success", startedAt: verification.at, durationMs: verification.results.reduce((total, result) => total + result.ms, 0), purpose: `final verification (${verification.results.length} checks)`, cacheHits: verification.results.filter((result) => result.reused).length, ...(task.id ? { taskId: task.id } : {}) }]);
   if (verification.state !== "passing") throw new Error(`cannot complete: final verification failed — ${verificationSummary(verification)}. Fix the failing checks and call complete again; unchanged passes are kept.`);
   // The gate refuses before any side effect, so a refusal leaves the task untouched. Oversized knowledge no
   // longer holds completion: automatic maintenance is scheduled and runs after this response.
   const oversized = overThreshold(readDataRoots(deps.root, deps.configDir), deps.config.knowledge.compactionThreshold);
-  for (const entry of oversized) {
-    scheduleKnowledgeMaintenance({ dataRoot: dataRoot(deps.root, deps.configDir), agent: entry.agent, file: entry.file, backupCount: deps.config.knowledge.backupCount });
-  }
   const maintenance = oversized.length > 0 ? ` Automatic knowledge maintenance scheduled for ${oversized.map((entry) => `${entry.agent}/${entry.file}`).join(", ")}; it archives duplicate and historical material after this response.` : "";
   deps.signal?.throwIfAborted();
+  // An edit made after the checks ran never inherits their success: re-key the passes right before the commit.
+  const stale = staleVerification(deps.cwd, checks, verification);
+  if (stale.length > 0) throw new Error(`cannot complete: ${stale.join(", ")} inputs changed after final verification passed; call complete again to verify the current tree.`);
+  for (const entry of oversized) {
+    reportMaintenance(deps, scheduleKnowledgeMaintenance({ dataRoot: dataRoot(deps.root, deps.configDir), agent: entry.agent, file: entry.file, backupCount: deps.config.knowledge.backupCount }));
+  }
   const committed = await commitTaskWork(task, params, deps);
   deps.signal?.throwIfAborted();
   const summary = params.text?.trim() || task.proposal || task.title;

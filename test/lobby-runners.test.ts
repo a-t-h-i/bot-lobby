@@ -519,7 +519,7 @@ test("a failed oracle keeps the conversation and reports the error", async () =>
   const runner: ProcessRunner = async () => ({ exitCode: 1, stdout: "", stderr: "boom", killed: false });
   const session = new PlanningSession({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "high" }), panel: [], runProcess: runner });
   await session.send("idea");
-  assert.match(session.error!, /the oracle's part of the round failed — boom/);
+  assert.match(session.error!, /the orchestrator's part of the round failed — boom/);
   assert.equal(session.status, "idle");
   assert.deepEqual(session.messages.map((message) => message.role), ["you"]);
   assert.throws(() => session.save(), /no draft plan/);
@@ -572,7 +572,7 @@ test("a round that fails after you answered never puts the answered questions ba
   // The user answers, and the next round crashes: the questions they answered stay answered.
   answers.ORACLE = undefined;
   await session.send("1. [DEV] REST or RPC?\n   → REST", [{ from: "DEV", question: "REST or RPC?", answer: "REST" }]);
-  assert.match(session.error!, /the oracle's part of the round failed/);
+  assert.match(session.error!, /the orchestrator's part of the round failed/);
   assert.deepEqual(session.questions, [], "nothing is left open");
   assert.equal(session.awaitingAnswers, false, "the lobby has nothing to ask, so the questionnaire does not open again");
   assert.deepEqual(rounds, [true, false], "the lobby hears that the failed round left no questions");
