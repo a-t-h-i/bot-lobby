@@ -1178,8 +1178,8 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 .cs-kih { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 8px; min-height: 30px; }
 .cs-kih p { margin: 0; font-size: 13px; color: var(--muted-foreground); }
 .cs-kib { display: flex; flex-direction: column; border-top: 1px solid var(--edge); }
-.cs-kir { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 14px; padding: 16px 2px; border-bottom: 1px solid var(--edge); animation: cs-knin 221ms ease both; }
-.cs-kir .cs-kat { width: 26px; height: 26px; border-radius: 10px; font-size: 12.5px; margin-top: 1px; }
+/* No agent tile any more (.cs-kat is hidden below), so a row is just the proposal and its actions. */
+.cs-kir { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; padding: 16px 2px; border-bottom: 1px solid var(--edge); animation: cs-knin 221ms ease both; }
 .cs-kir .cs-tx { margin: 0; font-size: 14px; line-height: 1.55; color: var(--foreground); }
 .cs-kir .cs-mt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 7px; font-size: 12.5px; color: var(--muted-foreground); }
 .cs-kcf { font-weight: 600; }
