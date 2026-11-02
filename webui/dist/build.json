@@ -1,6 +1,6 @@
 {
-  "hash": "ed7d8096363321511484b4cd308a5f9efd0a871f8069dd8e64f5d54330aacc62",
-  "builtAt": "2026-11-02T14:42:41.817Z",
+  "hash": "da79bb8234a3c37f3c413d1906234c485d850a4f07a5a594dc149b9153eeee9b",
+  "builtAt": "2026-11-02T19:51:58.680Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "191e065434efc7084dfe98541ed3e410f5c387913c1c2dfa3c8d700559f97082"
+      "sha256": "a510cd51c515ca73228931ac382adc73234c51f80dac91c1dd1079b73c7d505d"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -56,7 +56,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "7ad0197d1c4008c25e7b57ae3160f1bd10cb9ee5bf0a8ce72c9731a28ca93d8a"
+      "sha256": "fc2762fd4702ca4a3d980911587bfe392fb6fea8de155d86352acb187f2b27ea"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -196,7 +196,7 @@
     },
     {
       "path": "webui/src/app/typeface.ts",
-      "sha256": "77eb782099b5e51c6e62c890577233191aacad5b3ed37042182e2a36e9422ca9"
+      "sha256": "b654a170085555dd777e4088551f57e8e4c7338ca6d6b0585669f27b6d1e9813"
     },
     {
       "path": "webui/src/app/useApiRead.ts",
@@ -304,7 +304,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "c4d72b1a9115992f36814018cbb16ec11a209b7b918a14b9a53201ec1a8e180e"
+      "sha256": "ff14d7666d8e5e2a3d82f531b8f25803de9f5d32e2d8bc41ff02e4347d992e18"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "8a86a2b781b57c2bec7e3af20fa63790938e82eced4c22bedf9507ce0e3c26e0"
+      "sha256": "1c58adab76da819d7d03d8daa4908ed0d9897dd9d4b77246417dc115d292ef55"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -492,7 +492,7 @@
     },
     {
       "path": "webui/src/tabs/lobby/ChatParts.tsx",
-      "sha256": "a5f5d52ce41aa815d3d81fbbdba137092f2d8a37afc51b7e760467128f8fb966"
+      "sha256": "05b936159366a0092851ddc63cfb1bb07ab2eab88916c4106ae78b7c3debfbee"
     },
     {
       "path": "webui/src/tabs/lobby/Conversation.tsx",
@@ -756,7 +756,7 @@
     },
     {
       "path": "webui/vite.config.ts",
-      "sha256": "d91b3fd165f7a0cc85dd15dc9b22dfa142fdacbb9944debdcaaf4fa4ad634069"
+      "sha256": "49cb36978a6c52fa343b3142864bf7e92a6f259cef1094e1aecb9f2df038e892"
     }
   ]
 }
