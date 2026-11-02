@@ -1,11 +1,6 @@
 {
-<<<<<<< HEAD
-  "hash": "da79bb8234a3c37f3c413d1906234c485d850a4f07a5a594dc149b9153eeee9b",
-  "builtAt": "2026-11-02T19:51:58.680Z",
-=======
-  "hash": "97c60cc259eee5eee6bad637abcf76fb1cead0ad7c123c7488aeb33c936105e6",
-  "builtAt": "2026-11-02T19:28:38.057Z",
->>>>>>> origin/lobby-sounds
+  "hash": "4c3c32596e5e756b9bac7ae58ee440b3a0589f36ba9ba72c7bfec187993514a2",
+  "builtAt": "2026-11-02T20:03:49.369Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -13,7 +8,7 @@
     },
     {
       "path": "src/webui/protocol.ts",
-      "sha256": "46da740c40830b51c9bc21e5650777eb981761d8506be22947f30063f60ae756"
+      "sha256": "d6615e22cef2b43310430f0d416366acf10efbf34453a4f47ab0ac2153f77cef"
     },
     {
       "path": "webui/components.json",
@@ -44,10 +39,6 @@
       "sha256": "fdb1cc7e22f5ce17d4e39966241eea1f8034ebfa7dcd6043f95284feefd42e33"
     },
     {
-      "path": "webui/src/app/NewSessionDialog.tsx",
-      "sha256": "07a88e7bb6590e8d204588d2c06eace600d3c96950722a655338e3cc164e8a68"
-    },
-    {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
       "sha256": "6633c504887166defaf21e64c878ee0f4f1785b81c173c00329190c5182a8766"
     },
@@ -57,11 +48,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "a4a6e4ae9a5f93bbde2d1f16775642db11a5ec4587d0b4d6aa935e5f6316091f"
+      "sha256": "6996316126e6e29b048c92744a5def1c3069fc1d99ad3be571af42edd6530f93"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "fc2762fd4702ca4a3d980911587bfe392fb6fea8de155d86352acb187f2b27ea"
+      "sha256": "3fbaae724734253bef8d883de3024303ad97e88593d7a56b26dbd8af26403554"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -185,7 +176,7 @@
     },
     {
       "path": "webui/src/app/sessionList.ts",
-      "sha256": "b6c8d8c65ba7763679ab0cdc1e8b599f859d2391be371d4b649a0f93c8609130"
+      "sha256": "0a56e916244ebfcd8cfc1cac16faf6bb4b41e095cb6b2270c42c5fca1dd33541"
     },
     {
       "path": "webui/src/app/sound.ts",
@@ -457,7 +448,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "1c58adab76da819d7d03d8daa4908ed0d9897dd9d4b77246417dc115d292ef55"
+      "sha256": "9cad357b4381cffe3e831008be9148471864eccff31089275a98ef08e36e4fa5"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
