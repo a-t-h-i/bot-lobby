@@ -169,22 +169,38 @@
 .cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
 .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
-.cs-ti { display: flex; width: 15px; height: 15px; flex: none; color: var(--muted-foreground); transition: color 76ms ease; }
+.cs-ti { display: flex; width: 15px; height: 15px; flex: none; color: var(--muted-foreground); transition: color 160ms ease; }
 .cs-tab[aria-selected="true"] .cs-ti { color: var(--primary); }
 .cs-tab:hover .cs-ti { color: var(--foreground); }
 .cs-tab[aria-selected="true"]:hover .cs-ti { color: var(--primary); }
-.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-tab { position: relative; z-index: 1; white-space: nowrap; flex: none; height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 10px; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted-foreground); text-decoration: none; cursor: pointer; outline: none; transition: background 90ms ease, color 160ms ease; -webkit-tap-highlight-color: transparent; }
 .cs-tab:hover { background: var(--hover); color: var(--foreground); }
 .cs-tab[aria-selected="true"], .cs-tab[aria-selected="true"]:hover { background: transparent; color: var(--foreground); }
 .cs-tab:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-/* The indicator under the active tab: a dent pressed into the bay and a goo-softened tint over it. */
 .cs-track { position: relative; display: flex; align-items: center; gap: 2px; height: 100%; }
-/* The chosen tab's highlight, pressed lightly into the bay. Choosing another tab is a quick poof: the old one
- * shrinks and fades out (150ms) while the new one grows in with a small spring (240ms), at the same time. */
-.cs-tab::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--r-in); background: color-mix(in srgb, var(--primary) 7%, color-mix(in srgb, var(--fill) 94%, #000)); box-shadow: var(--press); opacity: 0; transform: scale(0.55); filter: blur(2px); transition: opacity 150ms ease-in, transform 150ms cubic-bezier(0.4, 0, 1, 1), filter 150ms ease-in; pointer-events: none; }
-.dark .cs-tab::before { background: color-mix(in srgb, var(--primary) 14%, color-mix(in srgb, var(--fill) 62%, #000)); }
-.cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; filter: none; transition: opacity 120ms ease-out, transform 240ms cubic-bezier(0.34, 1.45, 0.5, 1), filter 160ms ease-out; }
-.cs-tl { display: inline-grid; }
+/* The chosen tab's pill: pressed lightly into the bay (the shared --press bevel), a touch deeper at the top like a
+ * real dent, with a faint accent hairline so it reads as chosen rather than as a hover.
+ * Choosing another tab is the poof: the old pill shrinks and fades out while the new one grows in, both at once.
+ * Each hidden pill waits shifted toward the chosen tab (data-side: a tab left of it leans right, and the reverse), so
+ * the old pill drifts toward the new tab as it fades and the new one grows in from the old tab's side: one fluid
+ * hand-off rather than two blinks. Only opacity and transform move (no
+ * blur, no layout), so it stays on the compositor and never stutters. */
+.cs-tab::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: var(--r-in); pointer-events: none;
+  --pill: color-mix(in srgb, var(--primary) 11%, color-mix(in srgb, var(--fill) 91%, #000));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 95%, #000), var(--pill) 55%);
+  /* A deeper dent than --press (a darker shade under the top edge, a lit lip at the bottom) and a very thin outline. */
+  box-shadow: inset 0 2px 4px -1px rgb(40 40 70 / 0.24), inset 0 1px 1px rgb(40 40 70 / 0.1), inset 0 -1.5px 1px -0.5px rgb(255 255 255 / 0.95), 0 0 0 0.5px color-mix(in srgb, var(--primary) 45%, rgb(40 40 70 / 0.35)), inset 0 0 0 0.5px color-mix(in srgb, var(--primary) 35%, transparent);
+  opacity: 0; transform: translateX(var(--px, 0px)) scale(0.9, 0.78);
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.6, 1), transform 200ms var(--out);
+  will-change: transform, opacity;
+}
+.dark .cs-tab::before { --pill: color-mix(in srgb, var(--primary) 20%, color-mix(in srgb, var(--fill) 55%, #000)); background: linear-gradient(to bottom, color-mix(in srgb, var(--pill) 86%, #000), var(--pill) 55%); box-shadow: inset 0 2px 4px -1px rgb(0 0 0 / 0.6), inset 0 1px 1px rgb(0 0 0 / 0.3), inset 0 -1.5px 1px -0.5px rgb(255 255 255 / 0.1), 0 0 0 0.5px color-mix(in srgb, var(--primary) 50%, rgb(0 0 0 / 0.5)), inset 0 0 0 0.5px color-mix(in srgb, var(--primary) 40%, transparent); }
+.cs-tab[data-side="l"]::before { --px: 9px; }
+.cs-tab[data-side="r"]::before { --px: -9px; }
+.cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; transition: opacity 120ms ease-out, transform 280ms cubic-bezier(0.3, 1.2, 0.5, 1); }
+/* The label eases to its bolder weight (smooth on variable system fonts); the hidden bold copy holds the width. */
+.cs-tl { display: inline-grid; transition: font-weight 180ms ease; }
 .cs-tl::after { content: attr(data-t); font-weight: 600; height: 0; overflow: hidden; visibility: hidden; }
 .cs-tab[aria-selected="true"] .cs-tl { font-weight: 600; }
 

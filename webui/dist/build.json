@@ -1,6 +1,6 @@
 {
-  "hash": "567f01f36c28d7c3c1626bf321e154da686ec64f47aed655ebc498085666bce2",
-  "builtAt": "2026-11-02T08:33:30.578Z",
+  "hash": "8b6ee5cdd02d3566ea44eebc1ff179159f228e5fcee4b148d84fdf4359850c43",
+  "builtAt": "2026-11-02T09:34:12.308Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "0c1024fb204b8ee9910c1c8fb050ffb21b792c6db6c3d743a19e784f8b7ce91d"
+      "sha256": "366d9cc6068a2405862754211be695244e4b45bbc1dd2ce8475c36ef8ab0785d"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -68,7 +68,7 @@
     },
     {
       "path": "webui/src/app/TabIcons.tsx",
-      "sha256": "1bca7973a29d89fb2f12fdb2ccefc434eb5c14d432a6ab333c52068ed7e1ee4c"
+      "sha256": "198b9c10b59b56f83e5200975d9ca2a541f1ab994dfabbafce80d644a15476fd"
     },
     {
       "path": "webui/src/app/TerminalDrawer.tsx",
@@ -436,7 +436,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "929a1fb44d7203747b8b6988905eef448f563e15cd390c4d8aa5d984a7592b2e"
+      "sha256": "a2202e2d95f57a61fa5d4ada3ce3ff8387733dcbf69d05850fde516194dbfcba"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",

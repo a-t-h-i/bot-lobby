@@ -1,7 +1,7 @@
 /**
  * The tab pills' icons, drawn part by part from Lucide's own shapes so each
  * can play a little animation of its own: the Lobby's bubble talks, Tasks
- * ticks its boxes, Plan draws its route and Knowledge claps its book.
+ * ticks its boxes, Plan draws its route and Knowledge turns its pages.
  * A play is numbered: each new number plays once
  * (the parts remount and run from the start), and before the first the icon
  * simply rests. Every animation ends on the icon exactly as Lucide draws it.
@@ -87,12 +87,45 @@ function Plan({ play }: { play: number }) {
   )
 }
 
+/** How long Knowledge's play lasts: its three pages need a little longer than the other icons. */
+const BOOK_SECONDS = 1.05
+
+/** One page of Knowledge's book turning from right to left over the spine, starting at `from` of the play. */
+function turn(play: number, from: number) {
+  const at = (t: number) => Math.min(from + t, 0.999)
+  const times = [0, Math.max(from, 0.001), at(0.17), at(0.34), at(0.4), 1]
+  return part(play, {
+    // Folding flat over the spine and opening out on the left: a page seen edge-on half way, curling as it goes.
+    scaleX: [1, 1, 0.02, -1, -1, -1],
+    skewY: [0, 0, -14, 0, 0, 0],
+    y: [0, 0, -1.2, 0, 0, 0],
+    strokeOpacity: [0, 0, 1, 0.9, 0, 0],
+    fillOpacity: [0, 0, 0.22, 0.14, 0, 0],
+  }, { duration: BOOK_SECONDS, times, ease: "easeInOut" })
+}
+
 function Knowledge({ play }: { play: number }) {
   return (
-    <motion.g style={about()} {...part(play, { scaleX: [1, 0.55, 1.08, 1], y: [0, -1, 0, 0] }, { times: [0, 0.35, 0.65, 1], ease: "easeInOut" })}>
-      <motion.path d="M12 5v16" style={about()} {...part(play, { scaleY: [1, 1.12, 1, 1] }, { times: [0, 0.35, 0.65, 1] })} />
-      <path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" />
-    </motion.g>
+    <>
+      {/* The book opens a touch wider as the pages go, and settles. */}
+      <motion.g style={about()} {...part(play, { scaleX: [1, 1.08, 1.06, 1], y: [0, -0.6, -0.4, 0] }, { duration: BOOK_SECONDS, times: [0, 0.15, 0.8, 1], ease: "easeInOut" })}>
+        <path d="M12 5v16" />
+        <path d="M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z" />
+      </motion.g>
+      {/* Three pages flip from right to left, one after another, each turning about the spine. */}
+      {play
+        ? [0.06, 0.26, 0.46].map((from) => (
+            <motion.path
+              key={from}
+              d="M12 6.4C13.6 5 15.6 4.4 18.6 4.5V16.6C15.6 16.5 13.6 17 12 18.4z"
+              fill="currentColor"
+              strokeWidth={1.4}
+              style={about(0, 0.5)}
+              {...turn(play, from)}
+            />
+          ))
+        : null}
+    </>
   )
 }
 
