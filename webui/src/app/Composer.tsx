@@ -33,6 +33,7 @@ import { OPEN_PROJECTS, ProjectChip, ProjectsPane, projectsSize, type Projects }
 import { FOLDER_SIZE, FolderPane } from "./ProjectFolderDialog"
 import { taskRoute } from "./taskRoute"
 import { ComposerBubble } from "./composer/ComposerSurface"
+import { GlideCaret } from "./composer/GlideCaret"
 import { MarkdownMirror } from "./composer/MarkdownMirror"
 import { ComposerSendButton, ComposerStopButton } from "./composer/ComposerPrimaryActions"
 import { ComposerCommandMenu, composerItems, composerSuggestionOptionId, composerTrigger, suggestionHeight, suggestionWidth, type ComposerCommandItem } from "./composer/ComposerCommandMenu"
@@ -777,6 +778,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
                 rows={1}
                 className="bubble-text bubble-input"
               />
+              <GlideCaret field={field} mirror={mirror} text={text} />
             </div>
 
             <div data-chat-composer-footer="true" className="bubble-tools composer-tools">
