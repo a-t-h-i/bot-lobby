@@ -156,6 +156,9 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
   )
 }
 
+/** The open composer's last measured height (box plus its gap to the window's foot), held while it is folded. */
+let openHeight = 0
+
 /**
  * The composer gets out of the way while you read: a scroll of the page under it (by wheel, touch or the
  * scroll keys, not the page following a reply) shrinks it to a slim pill, and focus, or a press on it, opens
@@ -424,9 +427,12 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
       const rect = el.getBoundingClientRect()
       const bottom = dock.getBoundingClientRect().bottom
       // Folded or mid-fold, the page keeps the open box's room: it never shifts while the composer folds and unfolds.
+      // That room is the last open height measured, kept across remounts, so a composer that is already folded
+      // when this runs (a reply ends, the tab changes) still leaves the page room to scroll its end clear.
       const folding = dock.hasAttribute("data-shrunk") || el.closest(".bubble")?.hasAttribute("data-morphing")
-      if (folding && visible && !blocked) return
-      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${Math.ceil(bottom - rect.top)}px`)
+      const height = Math.ceil(bottom - rect.top)
+      if (!folding) openHeight = height
+      root.style.setProperty("--composer-h", blocked || !visible ? "0px" : `${folding ? Math.max(openHeight, height) : height}px`)
       // A hidden composer measures 0 wide: the toasts then centre on the window instead of shrinking to nothing.
       if (!visible || rect.width === 0) {
         root.style.removeProperty("--composer-x")
