@@ -114,7 +114,7 @@ export interface FinalCheckSpec {
 
 /** The checks a project's own scripts define, in run order; absent scripts are not applicable. */
 export const FINAL_CHECK_SPECS: readonly FinalCheckSpec[] = [
-  { script: "typecheck", check: { id: "typecheck", timeoutMs: 10 * 60_000, inputs: ["package.json", "package-lock.json", "tsconfig.json", "src", "webui/tsconfig.json", "webui/src"] } },
+  { script: "typecheck", check: { id: "typecheck", timeoutMs: 10 * 60_000, inputs: ["package.json", "package-lock.json", "tsconfig.json", "src", "test", "webui/tsconfig.json", "webui/src"] } },
   { script: "test", check: { id: "test", timeoutMs: 60 * 60_000, inputs: ["package.json", "package-lock.json", "tsconfig.json", "src", "test"] } },
   { script: "web:build", check: { id: "web:build", timeoutMs: 10 * 60_000, inputs: ["package.json", "package-lock.json", "webui", "src/lobby/prompts.ts", "src/webui/protocol.ts"] } },
   { script: "web:check", check: { id: "web:check", timeoutMs: 60 * 60_000, inputs: ["package.json", "package-lock.json", "playwright.config.ts", "test/web", "webui/dist/build.json", "src"], dependsOn: ["web:build"] } },
@@ -134,32 +134,72 @@ export function finalChecks(top: string): VerifyCheck[] {
   });
 }
 
-const inFlight = new Map<string, Promise<VerifyResult>>();
+/**
+ * One shared execution per fingerprint. It runs under its own controller, so
+ * one caller's cancellation never cancels another caller's wait: the shared
+ * run is aborted only once every caller waiting on it has aborted.
+ */
+interface SharedRun {
+  result: Promise<VerifyResult>;
+  controller: AbortController;
+  waiters: number;
+}
+
+const inFlight = new Map<string, SharedRun>();
 
 function resultOf(id: string, state: VerifyState, summary: string, fingerprint: string, ms = 0, output?: string, reused = false): VerifyResult {
   return { id, state, at: new Date().toISOString(), ms, fingerprint, summary, ...(output ? { output } : {}), ...(reused ? { reused: true } : {}) };
 }
 
-/** Run one check: single-flight per fingerprint, so concurrent callers share the work. */
-function runCheck(top: string, check: VerifyCheck, exec: VerifyExec, signal: AbortSignal | undefined): Promise<VerifyResult> {
-  const fingerprint = checkFingerprint(top, check);
-  const key = `${top}:${check.id}:${fingerprint}`;
-  const existing = inFlight.get(key);
-  if (existing) return existing;
+function cancelledResult(check: VerifyCheck, fingerprint: string, ms = 0): VerifyResult {
+  return resultOf(check.id, "cancelled", `${check.id} was cancelled; a cancelled check is not a pass — complete again to re-run it`, fingerprint, ms);
+}
+
+function startShared(top: string, check: VerifyCheck, exec: VerifyExec, fingerprint: string, key: string): SharedRun {
+  const controller = new AbortController();
   const started = Date.now();
-  const run = exec(check.command, check.args, { cwd: top, timeoutMs: check.timeoutMs, ...(signal ? { signal } : {}) })
+  const result = exec(check.command, check.args, { cwd: top, timeoutMs: check.timeoutMs, signal: controller.signal })
     .then((outcome): VerifyResult => {
       const ms = Date.now() - started;
-      if (signal?.aborted) return resultOf(check.id, "cancelled", `${check.id} was cancelled; a cancelled check is not a pass — complete again to re-run it`, fingerprint, ms);
+      if (controller.signal.aborted) return cancelledResult(check, fingerprint, ms);
       if (outcome.timedOut) return resultOf(check.id, "fail", `${check.id} timed out after ${Math.round(check.timeoutMs / 60_000)} min`, fingerprint, ms, outcome.output.slice(-4_000));
       if (outcome.code === 0) return resultOf(check.id, "pass", `${check.id} passed`, fingerprint, ms);
       if (outcome.code === null) return resultOf(check.id, "unavailable", `${check.id} could not run (command not found or terminated); an unavailable check is not a pass`, fingerprint, ms, outcome.output.slice(-4_000));
       return resultOf(check.id, "fail", `${check.id} failed with exit ${outcome.code}`, fingerprint, ms, outcome.output.slice(-4_000));
     })
     .catch((error: unknown) => resultOf(check.id, "unavailable", `${check.id} could not run: ${error instanceof Error ? error.message : String(error)}`, fingerprint, Date.now() - started))
-    .finally(() => { if (inFlight.get(key) === run) inFlight.delete(key); });
-  inFlight.set(key, run);
-  return run;
+    .finally(() => { if (inFlight.get(key) === shared) inFlight.delete(key); });
+  const shared: SharedRun = { controller, waiters: 0, result };
+  inFlight.set(key, shared);
+  return shared;
+}
+
+/** Run one check: single-flight per fingerprint, so concurrent callers share the work, each under its own cancellation. */
+function runCheck(top: string, check: VerifyCheck, exec: VerifyExec, signal: AbortSignal | undefined): Promise<VerifyResult> {
+  const fingerprint = checkFingerprint(top, check);
+  if (signal?.aborted) return Promise.resolve(cancelledResult(check, fingerprint));
+  const key = `${top}:${check.id}:${fingerprint}`;
+  const shared = inFlight.get(key) ?? startShared(top, check, exec, fingerprint, key);
+  shared.waiters += 1;
+  if (!signal) return shared.result;
+  return new Promise<VerifyResult>((resolve) => {
+    const started = Date.now();
+    const onAbort = () => {
+      shared.waiters -= 1;
+      // The last waiter leaving stops the shared run (and its process tree); earlier ones just stop waiting.
+      if (shared.waiters <= 0) {
+        // A stopped run is never joined again: the next caller starts a fresh one.
+        if (inFlight.get(key) === shared) inFlight.delete(key);
+        shared.controller.abort();
+      }
+      resolve(cancelledResult(check, fingerprint, Date.now() - started));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    shared.result.then((result) => {
+      signal.removeEventListener("abort", onAbort);
+      resolve(signal.aborted ? cancelledResult(check, fingerprint, result.ms) : result);
+    });
+  });
 }
 
 export interface VerificationInput {
@@ -196,6 +236,18 @@ export async function runVerification(input: VerificationInput): Promise<Verific
   const state = results.length === 0 || results.every((result) => result.state === "pass") ? "passing" : "failing";
   const fingerprint = createHash("sha256").update(results.map((result) => `${result.id}:${result.fingerprint}:${result.state}`).join("\n")).digest("hex").slice(0, 24);
   return { at: (input.now ?? (() => new Date()))().toISOString(), state, fingerprint, results, ...(results.length === 0 ? { note: "no applicable checks: the project defines none of typecheck, test, web:build, web:check" } : {}) };
+}
+
+/**
+ * The passing checks whose inputs no longer match the report: what changed
+ * since verification finished. Completion calls this again right before it
+ * commits, so an edit made after the run never inherits its success.
+ */
+export function staleVerification(top: string, checks: readonly VerifyCheck[], report: VerificationReport): string[] {
+  return report.results.flatMap((result) => {
+    const check = checks.find((entry) => entry.id === result.id);
+    return check && result.state === "pass" && result.fingerprint !== checkFingerprint(top, check) ? [result.id] : [];
+  });
 }
 
 /** Checks cannot pass on inputs that changed while this run was in flight. */

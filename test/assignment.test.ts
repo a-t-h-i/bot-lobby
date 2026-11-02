@@ -75,6 +75,20 @@ test("all four roles omit duplicate history and retain protected startup content
   }
 });
 
+test("user notes in a trimmed or left-out startup section are carried whole", () => {
+  const note = "> Note from the user: keep the legacy alias";
+  const result = applyStartupBudget([
+    { name: "standards", content: "s".repeat(120) },
+    { name: "knowledge", content: `${"k".repeat(200)}\n${note}\n> it is still used by older installs` },
+    { name: "decisions", content: `old decision\n${note.replace("legacy alias", "MASTER key")}` },
+  ], 150);
+  assert.ok(result.sections[1]!.content.includes("Trimmed"));
+  assert.ok(result.sections[1]!.content.includes(note), "a trimmed section keeps the user's note");
+  assert.ok(result.sections[1]!.content.includes("> it is still used by older installs"), "with its quoted continuation");
+  assert.ok(result.sections[2]!.content.includes("Left out"));
+  assert.ok(result.sections[2]!.content.includes("MASTER key"), "a left-out section still carries the user's note");
+});
+
 test("malformed assignment fields fail actionably rather than defaulting", async (t) => {
   const root = await fixture(t);
   const invalid = [

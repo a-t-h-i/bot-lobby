@@ -31,7 +31,7 @@ export const ContextPackSchema = Type.Object({
   files: Type.Array(Type.Object({
     path: Type.String({ minLength: 1 }),
     ranges: Type.Optional(Type.Array(Type.Tuple([Type.Integer({ minimum: 1 }), Type.Integer({ minimum: 1 })]), { description: "[start, end] line ranges with 1 <= start <= end" })),
-    fingerprint: Type.Optional(Type.String({ minLength: 1, description: "content hash at pack-build time; dispatch refreshes stale entries" })),
+    fingerprint: Type.Optional(Type.String({ minLength: 1, description: "optional; leave it out — the engine fingerprints each file at dispatch and refreshes stale snippets" })),
     snippet: Type.Optional(Type.String({ maxLength: 2000, description: "bounded excerpt, current at pack-build time" })),
   }, { additionalProperties: false })),
   invariants: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),

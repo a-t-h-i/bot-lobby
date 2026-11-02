@@ -1108,7 +1108,7 @@ export class PlanningSession {
     const seated = eligible.filter((member) => this.pins.has(member) || decision.seat.has(member));
     for (const member of open) if (!decision.seat.has(member)) this.satOut.set(member, decision.probabilities.get(member) ?? 0);
     const out = [...this.satOut].map(([member, probability]) => `${MEMBER_LABELS[member]} sat out (${probability.toFixed(2)})`);
-    this.deps.feed?.log("CLASSIFIER", [`seated ${seated.length > 0 ? seated.map((member) => MEMBER_LABELS[member]).join(", ") : "nobody (the oracle plans alone)"}`, ...out, `${decision.ms} ms`].join(" · "), "info");
+    this.deps.feed?.log("CLASSIFIER", [`seated ${seated.length > 0 ? seated.map((member) => MEMBER_LABELS[member]).join(", ") : "nobody (the orchestrator plans alone)"}`, ...out, `${decision.ms} ms`].join(" · "), "info");
     return seated;
   }
 
@@ -1183,7 +1183,7 @@ export class PlanningSession {
       }
       this.reply = { ...reply, status: ready ? "ready" : "grilling", ...(mode !== "normal" ? { questions: [] } : {}), ...(plan ? { plan } : {}) };
     } else {
-      this.error = `the oracle's part of the round failed — ${lead.error ?? lead.status}`;
+      this.error = `the orchestrator's part of the round failed — ${lead.error ?? lead.status}`;
     }
     if (!reply && seatQuestions.length === 0) return;
     this.questions = ready ? [] : questions;

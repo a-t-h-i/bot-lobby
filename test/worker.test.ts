@@ -327,3 +327,22 @@ test("a stale pack range refreshes clamped into the file as it is, with the line
   assert.notEqual(entry.fingerprint, "stale");
   assert.equal(notes.length, 1, "the refresh says what changed");
 });
+
+test("pack entries without an engine fingerprint keep verbatim snippets, follow moved lines, and re-read every range when stale", async () => {
+  const root = mkdtempSync(join(tmpdir(), "pack-own-"));
+  writeFileSync(join(root, "a.ts"), "zero\none\ntwo\nthree\nfour\n");
+  const pack: ContextPack = { version: 1, files: [
+    { path: "a.ts", ranges: [[1, 2]], snippet: "one\ntwo" },
+    { path: "a.ts", ranges: [[1, 1], [4, 4]], fingerprint: "model-made", snippet: "not in the file" },
+  ], verification: ["npm test"] };
+  const notes = await refreshContextPack(pack, root);
+  const [kept, stale] = pack.files;
+  assert.equal(kept!.snippet, "one\ntwo", "a snippet still in the file is kept as written");
+  assert.deepEqual(kept!.ranges, [[2, 3]], "its range follows the snippet to where it now starts");
+  assert.ok(kept!.fingerprint && kept!.fingerprint.length === 16, "the engine fingerprints it");
+  assert.equal(stale!.snippet, "zero\n…\nthree", "a stale snippet is re-read across every range, not just the first");
+  assert.equal(notes.length, 2);
+  assert.match(notes[1]!, /refreshed a.ts/);
+  const again = await refreshContextPack(pack, root);
+  assert.deepEqual(again, [], "fingerprints now match: nothing refreshes twice");
+});
