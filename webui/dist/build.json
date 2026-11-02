@@ -1,6 +1,6 @@
 {
-  "hash": "7ee852dfdf15b0c4846c6692abf0fa94bef9fe61b355e644da6914a7c143b958",
-  "builtAt": "2026-11-01T11:46:48.749Z",
+  "hash": "33d7f693963a3e10bc3ac8d8bd3cefd1bc5ceed5eea5acc9519c524a6640f7b4",
+  "builtAt": "2026-11-02T08:56:23.914Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -436,7 +436,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "de64b014b8ca4258657a3a046b392c7c3f2254dbeb4014dedeb3628c5928caef"
+      "sha256": "ec5aef9e092586a71177c3c0c068d895a3e8e8c00e7bf3bac39133366f3879a8"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -624,11 +624,11 @@
     },
     {
       "path": "webui/src/tabs/tasks/TaskList.tsx",
-      "sha256": "b03ffcc21716973e90eb48724bf3127f2ed91c8d299f6db40dbdcc6be8fc59a5"
+      "sha256": "d0f1cbb0c3f53cddfc05679df2ceb3b3dd64c0d02963a3c05273e377ad7f6b92"
     },
     {
       "path": "webui/src/tabs/tasks/TasksTab.tsx",
-      "sha256": "f8bd5cb7afc887e5a44515e348c92c7577e77c3207c8fc330a06e04726dd15e4"
+      "sha256": "49902551c8dc0e6e7664e8d544490e62697cda9a35a986808d05e9fe3265a67d"
     },
     {
       "path": "webui/src/tabs/tasks/words.ts",
