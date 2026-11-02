@@ -96,3 +96,16 @@ export function setTerminalPopup(next: boolean): void {
 export function useTerminalPopup(): boolean {
   return useSyncExternalStore(subscribe, inPopup, () => false)
 }
+
+let requested: { id: string; at: number } | undefined
+
+/** Open the drawer (or pop-up) on terminal `id`, one just started elsewhere on the page. */
+export function showTerminal(id: string): void {
+  requested = { id, at: (requested?.at ?? 0) + 1 }
+  setTerminalOpen(true)
+}
+
+/** The terminal the page last asked to show, with a counter so asking twice still switches to it. */
+export function useRequestedTerminal(): { id: string; at: number } | undefined {
+  return useSyncExternalStore(subscribe, () => requested, () => undefined)
+}

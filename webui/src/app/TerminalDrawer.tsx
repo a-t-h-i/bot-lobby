@@ -21,7 +21,7 @@ import { call } from "@/lib/api"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
-import { setTerminalHeight, setTerminalOpen, setTerminalPopup, TERMINAL_HEIGHT, toggleTerminal, useTerminalHeight, useTerminalOpen, useTerminalPopup } from "./terminalStore"
+import { setTerminalHeight, setTerminalOpen, setTerminalPopup, TERMINAL_HEIGHT, toggleTerminal, useRequestedTerminal, useTerminalHeight, useTerminalOpen, useTerminalPopup } from "./terminalStore"
 
 const TerminalView = lazy(() => import("./TerminalView"))
 
@@ -112,6 +112,13 @@ export function TerminalDrawer({ toggleKey }: { toggleKey: string }) {
   const [max, setMax] = useState(() => Math.round(window.innerHeight * 0.7))
   const terminals = list?.terminals ?? []
   const shown = terminals.find((terminal) => terminal.id === active) ?? terminals.at(-1)
+  // A terminal started elsewhere on the page (Settings' linting wizard runs its commands in one) comes to the front.
+  const requested = useRequestedTerminal()
+  useEffect(() => {
+    if (!requested) return
+    setActive(requested.id)
+    void reload()
+  }, [requested, reload])
 
   useEffect(() => {
     const onResize = () => setMax(Math.round(window.innerHeight * 0.7))

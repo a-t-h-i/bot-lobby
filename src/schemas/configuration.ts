@@ -124,6 +124,9 @@ export function isLintMode(value: unknown): value is LintMode {
   return typeof value === "string" && (LINT_MODES as readonly string[]).includes(value);
 }
 
+export const LINT_RULE_LEVELS = ["off", "warn", "error"] as const;
+export type LintRuleLevel = (typeof LINT_RULE_LEVELS)[number];
+
 export interface LintConfig {
   mode: LintMode;
   /** A command of your own, run without a shell from the repository's top; `{files}` stands for the touched files (they are appended when it is absent). Empty: the project's own linters are found (ESLint, Biome, Oxlint, Ruff). */
@@ -132,6 +135,8 @@ export interface LintConfig {
   extensions: string[];
   /** Time limit for one linter run. */
   timeoutMs: number;
+  /** ESLint rules the gate adds on top of the project's config (`--rule name: level`), set in Settings' linting wizard. ESLint's config is code, so it is never rewritten. */
+  eslintRules: Record<string, LintRuleLevel>;
 }
 
 export interface KnowledgeConfig {
@@ -289,7 +294,7 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     cleanReview: true,
     knowledgeStartupBudget: 8000,
   },
-  lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000 },
+  lint: { mode: "advise", command: "", extensions: [], timeoutMs: 2 * 60 * 1000, eslintRules: {} },
   knowledge: {
     compactionThreshold: 20000,
     backupCount: 1,
@@ -474,7 +479,15 @@ function normalizeLint(value: unknown): LintConfig {
     command: text(source.command, defaults.command),
     extensions: [...new Set(extensions)],
     timeoutMs: timeout ? Math.min(30 * 60 * 1000, Math.round(timeout)) : defaults.timeoutMs,
+    eslintRules: eslintRules(source.eslintRules),
   };
+}
+
+/** Rule names as ESLint writes them (`no-console`, `@typescript-eslint/no-explicit-any`), each with a level; at most 200. */
+function eslintRules(value: unknown): Record<string, LintRuleLevel> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const entries = Object.entries(value as Record<string, unknown>).filter((entry): entry is [string, LintRuleLevel] => /^[@\w][\w@/.-]{0,120}$/.test(entry[0]) && (LINT_RULE_LEVELS as readonly unknown[]).includes(entry[1]));
+  return Object.fromEntries(entries.slice(0, 200));
 }
 
 function normalizeClassifier(value: unknown): ClassifierConfig {

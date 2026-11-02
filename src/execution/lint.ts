@@ -65,6 +65,8 @@ interface Linter {
   /** The installed binary as `[command, ...leading args]`, looked for from `folder` up to the repository's top. */
   binary(folder: string, top: string): string[] | undefined;
   args(files: readonly string[]): string[];
+  /** Flags from Settings that go before the files (ESLint's `--rule`s). */
+  extra?(config: Pick<LintConfig, "eslintRules">): string[];
   read(result: LintExecResult, folder: string, top: string): Parsed | undefined;
 }
 
@@ -220,6 +222,7 @@ export const LINTERS: readonly Linter[] = [
     extensions: JS,
     binary: nodeBin("eslint", "eslint"),
     args: (files) => ["--format", "json", ...files],
+    extra: (config) => Object.entries(config.eslintRules ?? {}).flatMap(([rule, level]) => ["--rule", `${rule}: ${level}`]),
     read: eslintRead,
   },
   {
@@ -352,7 +355,7 @@ export function planLint(top: string, files: readonly string[], config: Pick<Lin
 }
 
 /** Run one planned linter over its files. */
-export async function runPlan(plan: LintPlan, top: string, config: Pick<LintConfig, "command" | "timeoutMs">, exec: LintExec = execLint, signal?: AbortSignal): Promise<LintRun> {
+export async function runPlan(plan: LintPlan, top: string, config: Pick<LintConfig, "command" | "timeoutMs"> & Partial<Pick<LintConfig, "eslintRules">>, exec: LintExec = execLint, signal?: AbortSignal): Promise<LintRun> {
   const started = Date.now();
   const folder = repoPath(top, plan.folder);
   const files = plan.files;
@@ -373,7 +376,7 @@ export async function runPlan(plan: LintPlan, top: string, config: Pick<LintConf
   }
   const binary = plan.linter.binary(plan.folder, top);
   if (!binary) return unavailable(plan.tool, folder, files, `${plan.tool} is configured${folder ? ` in ${folder}/` : ""} but not installed: install the project's dependencies there.`);
-  const result = await exec(binary[0]!, [...binary.slice(1), ...plan.linter.args(files.map((file) => argument(plan.folder, top, file)))], { cwd: plan.folder, timeoutMs: config.timeoutMs, ...(signal ? { signal } : {}) });
+  const result = await exec(binary[0]!, [...binary.slice(1), ...(plan.linter.extra?.({ eslintRules: config.eslintRules ?? {} }) ?? []), ...plan.linter.args(files.map((file) => argument(plan.folder, top, file)))], { cwd: plan.folder, timeoutMs: config.timeoutMs, ...(signal ? { signal } : {}) });
   const ms = Date.now() - started;
   if (result.code === null) return unavailable(plan.tool, folder, files, why(result, plan.tool, config.timeoutMs), ms);
   const parsed = plan.linter.read(result, plan.folder, top);
@@ -382,20 +385,29 @@ export async function runPlan(plan: LintPlan, top: string, config: Pick<LintConf
 }
 
 /** A key for the touched files as they stand and the settings that lint them: equal keys, equal results. */
-export function lintFingerprint(top: string, files: readonly string[], config: Pick<LintConfig, "command" | "extensions">): string {
+export function lintFingerprint(top: string, files: readonly string[], config: Pick<LintConfig, "command" | "extensions"> & Partial<Pick<LintConfig, "eslintRules">>): string {
   const hash = createHash("sha256");
-  hash.update(JSON.stringify([config.command, config.extensions]));
-  for (const file of [...files].sort()) {
-    let stamp = "gone";
-    try {
-      const stat = statSync(join(top, file));
-      stamp = `${stat.size}:${stat.mtimeMs}`;
-    } catch {
-      // A deleted file keys as gone.
-    }
-    hash.update(`\0${file}\0${stamp}`);
+  hash.update(JSON.stringify([config.command, config.extensions, config.eslintRules ?? {}]));
+  for (const file of [...files].sort()) hash.update(`\0${file}\0${stamp(join(top, file))}`);
+  // The linters' own configs above the files too: a rule switched in Settings (or by hand) lints again.
+  const folders = new Set<string>();
+  for (const file of files) for (const folder of upward(dirname(join(top, file)), top)) folders.add(folder);
+  const names = [...new Set([...LINTERS.flatMap((linter) => linter.configs), "package.json", "pyproject.toml"])];
+  for (const folder of [...folders].sort()) for (const name of names) {
+    const path = join(folder, name);
+    if (existsSync(path)) hash.update(`\0${relative(top, path)}\0${stamp(path)}`);
   }
   return hash.digest("hex").slice(0, 24);
+}
+
+function stamp(path: string): string {
+  try {
+    const stat = statSync(path);
+    return `${stat.size}:${stat.mtimeMs}`;
+  } catch {
+    // A deleted file keys as gone.
+    return "gone";
+  }
 }
 
 /** A linter the project configures, where, and whether its binary is there to run. */

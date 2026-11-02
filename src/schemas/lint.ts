@@ -53,3 +53,53 @@ export interface LintReport {
   /** The touched files as they stood and the settings: an equal key means an equal result. */
   fingerprint: string;
 }
+
+// The Settings page's linting wizard (`settings.lintSetup`).
+
+export type LintRuleLevel = "off" | "warn" | "error";
+/** A rule's level as the page shows it: `default` is whatever the project's config (or the linter) already says. */
+export type RuleChoice = "default" | LintRuleLevel;
+
+export interface LintRuleInfo {
+  id: string;
+  label: string;
+  help: string;
+  level: RuleChoice;
+}
+
+export interface LintSetupLinter {
+  tool: string;
+  /** Repository-relative ("" at the top). */
+  folder: string;
+  installed: boolean;
+  /** The file the rules are read from and written to, repository-relative, when there is one. */
+  config?: string;
+  /** file: switches edit `config`; gate: they are the lint gate's `--rule` flags; read: shown, not switchable (see `note`). */
+  rulesAt: "file" | "gate" | "read";
+  /** The levels a rule can take: Ruff has no warnings, so its rules are on (error) or off. */
+  levels: LintRuleLevel[];
+  rules: LintRuleInfo[];
+  /** Commands that install it in its folder, when it is not installed. */
+  install: string[];
+  note?: string;
+}
+
+/** A step of setting up a linter the project does not have yet: a command to run, or a starter config the page writes. */
+export interface LintSetupStep {
+  label: string;
+  command?: string;
+  /** The config file the page creates for this step (`ruff.toml`). */
+  create?: string;
+}
+
+export interface LintSetupOffer {
+  tool: string;
+  blurb: string;
+  steps: LintSetupStep[];
+}
+
+export interface LintSetup {
+  linters: LintSetupLinter[];
+  offers: LintSetupOffer[];
+}
+
