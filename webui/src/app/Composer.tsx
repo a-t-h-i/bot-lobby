@@ -41,6 +41,7 @@ import { DrawerPane, MockupLightbox, type Drawer } from "@/prompts/Drawer"
 import { setPutAway } from "@/prompts/putAway"
 import { hasMockup } from "@/prompts/MockupViewer"
 import { KNOWLEDGE_ASKED, useViewPlan } from "@/lib/composerBubbles"
+import { playSound } from "@/app/sound"
 
 type TargetId = "oracle" | "knowledge" | "panel" | "comment"
 
@@ -514,6 +515,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
       } else if (target.id === "panel") done = (await act("planner.send", body)) !== undefined
       else done = (await act("tasks.comment", { taskId: target.taskId!, ...body })) !== undefined
       if (done) {
+        playSound("sent")
         setText("")
         for (const entry of filesRef.current) if (entry.image) URL.revokeObjectURL(entry.image)
         setFiles([])

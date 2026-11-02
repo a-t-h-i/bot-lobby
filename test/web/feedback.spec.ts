@@ -230,14 +230,14 @@ test("droplet snapshots quiet, same-count new IDs once, rerenders quiet and mute
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => window.tones)).toBe(2);
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Mute prompt sounds", exact: true }).click();
+  await page.getByRole("button", { name: "Mute sounds", exact: true }).click();
   expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.prompt-sound-muted"))).toBe("on");
   const notificationPreference = await page.evaluate(() => window.localStorage.getItem("bot-lobby.notifications"));
   await page.reload();
   expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.prompt-sound-muted"))).toBe("on");
   await expect(page.getByRole("dialog", { name: "Question from the lobby" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Unmute prompt sounds", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unmute sounds", exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.tones)).toBe(0);
   expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.notifications"))).toBe(notificationPreference);
 });

@@ -13,7 +13,7 @@ import { useStoreVersion } from "./hooks"
 import { useApiRead } from "./useApiRead"
 import { selectedProject } from "@/lib/project"
 import { PromptSeen, promptIdentity, dialogIdentity, deliveryIdentity } from "@/lib/promptSeen"
-import { droplet, useSoundUnlock } from "./sound"
+import { playSound, useSoundUnlock } from "./sound"
 import type { WebPrompt } from "@protocol"
 import { toast } from "@/lib/toast"
 import { go } from "./router"
@@ -122,7 +122,7 @@ function announce(context: NotificationContext, channel: string, ids: string[], 
   const fresh = seen.current.observe(`${project}:${channel}`, ids, quiet.current.has(channel))
   quiet.current.delete(channel)
   if (!fresh.length) return
-  fresh.forEach(() => droplet())
+  playSound(channel === "prompts" ? "question" : "attention")
   if (enabled && canNotify()) show(body)
   if (channel === "delivery") toast.info(body, { action: { label: "Review tasks", onClick: () => go("#/tasks") } })
 }
@@ -147,7 +147,10 @@ function updateNotifications(context: NotificationContext) {
   }
   announcePrompts(context)
   const state = lobby?.task?.state ?? "", done = outcome(state)
-  if (previousState.current && done && state !== previousState.current && enabled && canNotify()) show(`${lobby?.task?.title ?? "The task"} ${done}.`)
+  const changed = Boolean(previousState.current) && state !== previousState.current
+  if (changed && state === "completed") playSound("done")
+  else if (changed && (state === "abandoned" || state === "blocked")) playSound("error")
+  if (changed && done && enabled && canNotify()) show(`${lobby?.task?.title ?? "The task"} ${done}.`)
   previousState.current = state
 }
 

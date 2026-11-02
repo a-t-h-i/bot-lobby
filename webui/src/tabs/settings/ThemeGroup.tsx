@@ -9,8 +9,6 @@ import { useRef, useState, type KeyboardEvent } from "react"
 import { Check, ExternalLink, Pencil, Trash2, Upload, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useTheme } from "@/components/theme-provider"
-import { Switch } from "@/components/ui/switch"
-import { setSoundMuted, useSoundMuted } from "@/app/sound"
 import { Textarea } from "@/components/ui/textarea"
 import { usePalette } from "@/app/palette"
 import { MAX_THEME_BYTES, parseTheme, swatch, type Palette } from "@palette"
@@ -21,6 +19,7 @@ import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Section } from "@/ui/Section"
 import { TypefacePicker } from "@/ui/TypefacePicker"
 import { Choice, Field, Rows } from "./parts"
+import { SoundFields } from "./SoundFields"
 import { GROUP_TITLES, PAGE } from "./words"
 
 const TWEAKCN = "https://tweakcn.com/editor/theme"
@@ -239,13 +238,9 @@ export { ThemePicker }
 
 export function ThemeGroup() {
   const { theme, setTheme } = useTheme()
-  const muted = useSoundMuted()
   return (
     <Section prominent title={GROUP_TITLES.appearance}>
       <Rows>
-        <Field label="Prompt sounds" help="A droplet for each new actionable prompt or delivery review. Kept in this browser; sound starts after interaction. Desktop notifications remain separate.">
-          <Switch checked={!muted} onCheckedChange={(on) => setSoundMuted(!on)} aria-label="Prompt sounds" />
-        </Field>
         <Field label={PAGE.themeLabel} help={PAGE.appearanceHelp}>
           <Choice value={theme} items={PAGE.themeItems.map((item) => ({ value: item.id, label: item.label }))} label={PAGE.themeLabel} onChange={(value) => setTheme(value as "light" | "dark" | "system")} />
         </Field>
@@ -264,6 +259,9 @@ export function ThemeGroup() {
         <Field label="Import a theme" stacked>
           <ImportTheme />
         </Field>
+      </Rows>
+      <Rows>
+        <SoundFields />
       </Rows>
     </Section>
   )
