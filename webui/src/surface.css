@@ -148,8 +148,26 @@
 .cs-srow .cs-sacts { position: absolute; right: 4px; top: 0; bottom: 0; display: none; align-items: center; gap: 2px; }
 .cs-srow:hover .cs-sacts, .cs-srow:focus-within .cs-sacts { display: flex; }
 .cs-srow:hover .cs-sstate, .cs-srow:focus-within .cs-sstate { visibility: hidden; }
-.cs-sact { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+.cs-sact { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
 .cs-sact:hover { background: var(--fill); color: var(--foreground); }
+.cs-sact:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+/* The sidebar's own New session button, at the end of the search field. */
+.cs-snew { display: grid; place-items: center; width: 22px; height: 22px; margin-right: -6px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; outline: none; }
+.cs-snew:hover, .cs-snew:focus-visible { color: var(--foreground); }
+.cs-snew:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+/* The shelf's label and its Archive all are small buttons with room for the hover outline. */
+.cs-shb { min-width: 0; margin: 0 -4px; padding: 1px 4px; border: 0; border-radius: 6px; background: transparent; font: inherit; color: inherit; cursor: pointer; outline: none; }
+.cs-shb:hover, .cs-shb:focus-visible { color: var(--foreground); }
+.cs-shb:focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+
+/* Hover in the sidebar draws a simple 1px outline round the item under the pointer, on top of its usual fill: a
+   session row (it stays outlined while its own buttons are hovered), a row's Rename / Archive / Delete, the search
+   field's New session, a shelf's label or Archive all, Settings and the tool icons. */
+.cs-sbx { --hover-line: color-mix(in srgb, var(--foreground) 22%, transparent); }
+.cs-sbx .cs-sr:not(.cs-search, .cs-tools):hover, .cs-sbx .cs-srow:hover > .cs-sr { box-shadow: inset 0 0 0 1px var(--hover-line); }
+.cs-sbx .cs-srow:hover > .cs-sr:is([aria-current="true"], [data-active="true"]), .cs-sbx .cs-sr:is([aria-current="true"], [aria-current="page"]):hover { box-shadow: var(--inset), inset 0 0 0 1px var(--hover-line); }
+.cs-sbx :is(.cs-sact, .cs-snew, .cs-shb):hover { box-shadow: inset 0 0 0 1px var(--hover-line); }
+.cs-sbx .cs-iconbtn:hover:not(:disabled) { box-shadow: var(--press), inset 0 0 0 1px var(--hover-line); }
 
 /* An embedded icon button or chip: pressed in on hover and while its menu is open, deeper while pressed. */
 .cs-iconbtn, .cs-chip { display: inline-flex; flex: none; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--muted-foreground); font: inherit; cursor: pointer; outline: none; transition: background 76ms ease, box-shadow 76ms ease, color 76ms ease; }
@@ -212,7 +230,6 @@
 .chat-speaker { display: flex; align-items: baseline; gap: 8px; }
 /* An agent's turn starts at a small dot in its colour, so its name never reads as a heading inside a message. */
 .chat-name { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--who, var(--foreground)) 78%, var(--foreground)); }
-.chat-name::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--who, var(--primary)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--who, var(--primary)) 16%, transparent); }
 .chat-agent { gap: 2px; }
 .chat-prose { font-size: 14px; line-height: 1.5; }
 .chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 8px 14px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 14px; line-height: 1.5; }
@@ -758,8 +775,7 @@
 .cs-knri:hover { background: var(--hover); }
 .cs-knri:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-knri[data-sel] { background: color-mix(in srgb, var(--primary) 9%, transparent); }
-.cs-knri .cs-kd { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c, var(--faint)); }
-.cs-knri .cs-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-knri .cs-nm { flex: 1; min-width: 0; color: color-mix(in srgb, var(--c, var(--foreground)) 78%, var(--foreground)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-knri .cs-ct { font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .cs-knri .cs-ovd { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 .cs-knri[data-drop] { background: color-mix(in srgb, var(--c) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--c); }
@@ -786,7 +802,7 @@
 .cs-bsr { appearance: none; border: 0; display: flex; align-items: center; gap: 9px; height: 28px; padding: 0 8px; margin: 0 -8px; border-radius: 10px; background: none; font: inherit; font-size: 12.5px; color: var(--foreground); cursor: pointer; text-align: left; }
 .cs-bsr:hover { background: var(--hover); }
 .cs-bsr .cs-n { flex: none; font-size: 10.5px; font-weight: 700; color: var(--primary); width: 14px; }
-.cs-bsr .cs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.cs-bsr .cs-f b { font-weight: 600; }
 .cs-bsr .cs-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-bsr .cs-f { flex: none; font-size: 11.5px; color: var(--muted-foreground); }
 .cs-knask .cs-aact { display: flex; gap: 8px; margin-top: 12px; }
@@ -1015,8 +1031,6 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
  * A history timeline keeps a small dot in the agent's colour as its marker. */
 .cs-kat { display: none; }
 .cs-kwi .cs-kat { display: block; width: 8px; height: 8px; margin: 6px 5px 0; border-radius: 50%; font-size: 0; background: var(--c); }
-.cs-kdot { flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
-.cs-kdot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--k); }
 .cs-sq .cs-sqt { font-size: 11px; font-weight: 650; letter-spacing: -0.01em; color: currentColor; }
 
 /* ---------------------------------------------------------------------------------------------------------------
@@ -1040,8 +1054,6 @@ textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg 
 /* The composer menus' type, a step smaller to match their 30px rows. */
 .bubble-row .text-sm { font-size: 13px; line-height: 18px; }
 .bubble-row .text-\[13px\] { font-size: 12px; }
-.bubble-row .cs-kdot { width: 18px; height: 18px; }
-.bubble-row .cs-kdot::before { width: 7px; height: 7px; }
 .bubble-row .cs-ktag { font-size: 10.5px; padding-left: 10px; }
 .cs-pbar .bubble-row { padding: 0 12px; }
 
@@ -1060,17 +1072,18 @@ textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg 
 .cs-outage .cs-banner .cs-wi { width: 22px; height: 22px; }
 @keyframes cs-outage-in { from { opacity: 0; } to { opacity: 1; } }
 
-/* Tooltips, one look everywhere (the data-tip labels and the Radix ones): a compact muted label, 8px corners, centred
-   on its button 6px away, sliding 3px in from that side. Drawn over the page by ui/TipLayer.tsx. */
-.tipbox { z-index: 1100; pointer-events: none; max-width: 260px; width: max-content; padding: 4px 8px; border-radius: 8px; background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11.5px; font-weight: 500; line-height: 1.35; letter-spacing: 0; box-shadow: 0 4px 12px -3px rgb(0 0 0 / 0.18); opacity: 0; }
+/* Tooltips, one look everywhere: every label is a `data-tip` drawn by ui/TipLayer.tsx (one engine, so one size,
+   one gap and one placement). A compact muted label with --r-in corners, centred on its button 6px away, sliding 3px
+   in from that side. A key the button answers to follows the words as small caps on one line. */
+.tipbox { z-index: 1100; pointer-events: none; max-width: 260px; width: max-content; display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: var(--r-in); background: var(--fill); border: 1px solid var(--edge); color: var(--muted-foreground); font-size: 11.5px; font-weight: 500; line-height: 16px; letter-spacing: 0; box-shadow: 0 4px 12px -3px rgb(0 0 0 / 0.18); opacity: 0; }
+.tipbox:has(.tipk) { padding-right: 4px; }
+.tipbox .tipt { min-width: 0; overflow-wrap: anywhere; }
+.tipbox .tipk { flex: none; display: inline-flex; gap: 2px; white-space: nowrap; }
+.tipbox .tipk [data-slot="kbd"] { height: 16px; min-width: 16px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--edge); background: var(--hover); color: var(--muted-foreground); font: 500 10.5px/1 var(--font-sans); }
 .tipbox[data-ready] { animation: tip-in 130ms var(--out) both; }
 .tipbox[data-side="top"] { --tx: 0; --ty: 3px; }
 .tipbox[data-side="bottom"] { --tx: 0; --ty: -3px; }
 .tipbox[data-side="left"] { --tx: 3px; --ty: 0; }
 .tipbox[data-side="right"] { --tx: -3px; --ty: 0; }
 @keyframes tip-in { from { opacity: 0; transform: translate(var(--tx), var(--ty)); } to { opacity: 1; transform: none; } }
-.tipbox[data-slot="tooltip-content"] { opacity: 1; display: inline-flex; align-items: center; gap: 6px; }
-.tipbox[data-slot="tooltip-content"][data-state$="open"] { animation: tip-in 130ms var(--out) both; }
-.tipbox[data-slot="tooltip-content"][data-state="closed"] { animation: tip-out 80ms ease both; }
-@keyframes tip-out { to { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .tipbox[data-ready], .tipbox[data-slot] { animation: none !important; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .tipbox[data-ready] { animation: none !important; opacity: 1; } }

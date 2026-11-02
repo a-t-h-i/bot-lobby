@@ -175,7 +175,6 @@ export function KnowledgeTab({ rest }: { rest: string[] }) {
                       onDragLeave={() => setDropOn((now) => (now === who ? undefined : now))}
                       onDrop={drop(who)}
                     >
-                      <span className="cs-kd" aria-hidden="true" />
                       <span className="cs-nm">{AGENT_LABELS[who]}</span>
                       {data.files.some((info) => info.agent === who && info.over) ? <span className="cs-ovd" title="A file is over the compaction threshold" /> : null}
                       <span className="cs-ct">{data.notes.filter((note) => note.agent === who).length}</span>
@@ -213,7 +212,7 @@ export function KnowledgeTab({ rest }: { rest: string[] }) {
                   <button type="button" className="cs-kc cs-sm" data-on={filter === "pinned" ? "true" : undefined} aria-pressed={filter === "pinned"} onClick={() => flip("pinned")}><Pin aria-hidden="true" className="size-3.5" />Pinned <span className="cs-mut">{pinned}</span></button>
                   <button type="button" className="cs-kc cs-sm" data-on={filter === "stale" ? "true" : undefined} aria-pressed={filter === "stale"} onClick={() => flip("stale")}>Stale <span className="cs-mut">{count("stale")}</span></button>
                   <button type="button" className="cs-kc cs-sm" data-on={filter === "conflict" ? "true" : undefined} aria-pressed={filter === "conflict"} onClick={() => flip("conflict")}>Conflicts <span className="cs-mut">{count("conflict")}</span></button>
-                  <button type="button" className="cs-kc cs-sm" title="Change the order" onClick={() => setByUse((now) => !now)}>{byUse ? "Most used" : "Pinned first"}</button>
+                  <button type="button" className="cs-kc cs-sm" data-tip="Change the order" onClick={() => setByUse((now) => !now)}>{byUse ? "Most used" : "Pinned first"}</button>
                   <button type="button" className="cs-kc cs-sm cs-pri" disabled={writing} onClick={() => setWriting(true)}><Plus aria-hidden="true" className="size-3.5" />New note</button>
                 </div>
                 <AnswerCard notes={data.notes} onOpen={setOpenKey} onSaved={data.reload} />

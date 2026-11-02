@@ -64,11 +64,11 @@ export function SlideOver({ open, onClose, label, head, children, className, onE
             <div className="cs-shh">
               <div className="min-w-0 flex-1">{last.current.head}</div>
               {closeText ? (
-                <Dialog.Close className="cs-kc cs-sm" title="Close · Esc">
+                <Dialog.Close className="cs-kc cs-sm" data-tip="Close" data-tip-keys="Esc">
                   Close <span className="cs-kb">Esc</span>
                 </Dialog.Close>
               ) : (
-                <Dialog.Close className="cs-kc cs-sm cs-ib" aria-label="Close" title="Close · Esc">
+                <Dialog.Close className="cs-kc cs-sm cs-ib" aria-label="Close" data-tip="Close" data-tip-keys="Esc">
                   <X aria-hidden="true" className="size-3.5" />
                 </Dialog.Close>
               )}

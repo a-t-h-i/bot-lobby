@@ -141,12 +141,11 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
             className="bubble-row"
             style={{ "--delay": `${Math.max(0, shown - 1 - index) * 22}ms` } as CSSProperties}
           >
-            {item.agent ? (
-              <span className="cs-kdot" aria-hidden="true" style={{ "--k": itemColor(item) } as CSSProperties} />
-            ) : (
+            {item.agent ? null : (
               <span className="bubble-glyph cs-kg" aria-hidden="true" style={{ "--k": itemColor(item) } as CSSProperties}>{item.label.charAt(1).toUpperCase()}</span>
             )}
-            <span className="shrink-0 text-sm font-medium text-(--bubble-ink)">{item.label.slice(1)}</span>
+            {/* An agent is named in its own colour, with no dot before it. */}
+            <span className="shrink-0 text-sm font-medium text-(--bubble-ink)" style={item.agent ? { color: itemColor(item) } : undefined}>{item.label.slice(1)}</span>
             <span className="min-w-0 truncate text-[13px] text-(--bubble-muted)">{item.description}</span>
             <span className="cs-ktag" style={{ "--k": itemColor(item) } as CSSProperties}>{item.tag}</span>
           </div>

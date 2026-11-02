@@ -112,7 +112,7 @@ export function NoteCard({ note, selected, dragging, activeTags, onOpen, onTag, 
               <CircleAlert aria-hidden="true" className="size-3.5" />
               <span>{note.flag.kind === "stale" ? `Not used in ${note.flag.days} days` : "A newer proposal in the Inbox disagrees with this"}</span>
               {note.flag.kind === "stale" ? (
-                <button type="button" className="cs-kc cs-sm" title="Takes it out of the file; the version before is archived" onClick={onDelete}>Archive</button>
+                <button type="button" className="cs-kc cs-sm" data-tip="Takes it out of the file; the version before is archived" onClick={onDelete}>Archive</button>
               ) : (
                 <button type="button" className="cs-kc cs-sm" onClick={onReview}>Review</button>
               )}

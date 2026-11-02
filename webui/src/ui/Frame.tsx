@@ -33,7 +33,9 @@ export function Frame({ title, note, className, children, collapsed, onToggle, s
                 type="button"
                 aria-expanded={!collapsed}
                 aria-label={collapsed ? `Expand ${name}` : `Minimize ${name}`}
-                title={`${collapsed ? "Expand" : "Minimize"}${shortcut ? ` · ${shortcut}` : ""}`}
+                data-tip={collapsed ? "Expand" : "Minimize"}
+                data-tip-keys={shortcut}
+                data-tip-keep=""
                 aria-keyshortcuts={shortcut ? `${shortcut} Enter Space` : "Enter Space"}
                 aria-describedby="focused-action-help"
                 onClick={onToggle}

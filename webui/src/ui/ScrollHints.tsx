@@ -123,7 +123,7 @@ export function ScrollHints({ target, up: showUp = true, down: showDown = true, 
         tabIndex={-1}
         data-shown={shown || undefined}
         data-direction={direction === 1 ? "down" : "up"}
-        title={direction === 1 ? "Scroll down · hold to keep going" : "Scroll up · hold to keep going"}
+        data-tip={direction === 1 ? "Scroll down, hold to keep going" : "Scroll up, hold to keep going"}
         onPointerDown={(event) => {
           if (event.button !== 0) return
           event.preventDefault()

@@ -71,9 +71,8 @@ export function AnswerCard({ notes, onOpen, onSaved }: { notes: readonly Note[];
           {cited.map((note, index) => (
             <button key={note.key} type="button" className="cs-bsr" onClick={() => onOpen(note.key)}>
               <span className="cs-n">{index + 1}</span>
-              <span className="cs-dot" style={{ background: AGENT_COLORS[note.agent] }} />
               <span className="cs-t">{note.text}</span>
-              <span className="cs-f">{AGENT_LABELS[note.agent]} · {note.file}</span>
+              <span className="cs-f"><b style={{ color: AGENT_COLORS[note.agent] }}>{AGENT_LABELS[note.agent]}</b> · {note.file}</span>
             </button>
           ))}
         </div>

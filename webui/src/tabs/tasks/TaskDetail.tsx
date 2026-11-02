@@ -16,7 +16,7 @@ import { useTopic } from "@/app/hooks"
 import { useApiRead } from "@/app/useApiRead"
 import { Keys } from "@/components/ui/kbd"
 import { Switch } from "@/components/ui/switch"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { tip } from "@/ui/TipLayer"
 import { act } from "@/lib/act"
 import { useHotkey } from "@/lib/hotkeys"
 import { ActionBar, ActionButton } from "@/ui/Actions"
@@ -121,17 +121,12 @@ function ArchiveButton({ row, archive }: { row: TaskRow; archive: () => Promise<
 function AutoMode({ on, toggle }: { on: boolean; toggle: () => void }) {
   useHotkey("a", toggle)
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <label className="cs-autol">
-          <RefreshCw aria-hidden="true" className="size-3.5" />
-          <span>Auto</span>
-          <Switch small checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />
-          <Keys chord="A" className="kbd-hint" />
-        </label>
-      </TooltipTrigger>
-      <TooltipContent>Auto mode: the oracle decides without asking</TooltipContent>
-    </Tooltip>
+    <label className="cs-autol" {...tip("Auto mode: the oracle decides without asking")}>
+      <RefreshCw aria-hidden="true" className="size-3.5" />
+      <span>Auto</span>
+      <Switch small checked={on} onCheckedChange={toggle} aria-label="Auto mode" aria-keyshortcuts="A" />
+      <Keys chord="A" className="kbd-hint" />
+    </label>
   )
 }
 

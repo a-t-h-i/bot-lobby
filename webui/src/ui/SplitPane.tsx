@@ -63,7 +63,7 @@ function DetailSheet({ open, onClose, describe, children }: Pick<SplitPaneProps,
           <SheetTitle className="text-sm">Detail</SheetTitle>
           <SheetDescription className="sr-only">{describe}</SheetDescription>
           <SheetClose asChild>
-            <Button variant="ghost" size="sm" aria-label="Close detail" title="Close · Esc" className="gap-2">
+            <Button variant="ghost" size="sm" aria-label="Close detail" data-tip="Close" data-tip-keys="Esc" className="gap-2">
               <X aria-hidden="true" />
               Close
               <Keys chord="Esc" className="kbd-hint" />

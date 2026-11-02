@@ -11,7 +11,7 @@ import { useRef, type ComponentProps, type KeyboardEvent, type ReactNode } from 
 import type { LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Keys } from "@/components/ui/kbd"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { tip } from "@/ui/TipLayer"
 import { isHotkey, useHotkey } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
 
@@ -35,7 +35,7 @@ export interface ActionButtonProps extends Omit<ComponentProps<typeof Button>, "
   pressed?: boolean
   /** The word printed on the button, when shorter than `label`. */
   text?: string
-  /** Just the icon, the word in a tooltip. */
+  /** Just the icon, the word in a tooltip (`text` when given, else `label`). */
   iconOnly?: boolean
   /** Where an icon-only button's tooltip opens. */
   side?: "top" | "right" | "bottom" | "left"
@@ -64,8 +64,10 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       {shortcut ? <Keys chord={shortcut} className="kbd-hint ml-1" /> : null}
     </>
   )
+  // An icon-only button names itself in a tooltip, with its key when it has one.
+  const tipped = iconOnly ? tip(text ?? label, { keys: shortcut, side, keep: true }) : {}
   const button = href ? (
-    <Button asChild ref={node} variant={variant} size={size} data-tone={tone} className={look}>
+    <Button asChild ref={node} variant={variant} size={size} data-tone={tone} className={look} {...tipped}>
       <a href={href} target="_blank" rel="noreferrer noopener" aria-label={label} aria-keyshortcuts={bound ? shortcut : undefined}>
         {body}
       </a>
@@ -82,21 +84,13 @@ export function ActionButton({ label, icon: Icon, tone = "neutral", shortcut, hr
       aria-keyshortcuts={bound ? shortcut : undefined}
       disabled={disabled}
       className={look}
+      {...tipped}
       {...props}
     >
       {body}
     </Button>
   )
-  if (!iconOnly) return button
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent {...(side ? { side } : {})}>
-        {label}
-        <Keys chord={shortcut ?? (href ? "Enter" : "Enter / Space")} />
-      </TooltipContent>
-    </Tooltip>
-  )
+  return button
 }
 
 /** The bar of a detail: a row of keycaps at the top of its slide-over, beside the close button. */

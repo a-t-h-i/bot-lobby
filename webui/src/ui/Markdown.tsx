@@ -71,7 +71,7 @@ function useCopy(text: string) {
 function CopyableCode({ text, children, block = false }: { text: string; children: ReactNode; block?: boolean }) {
   const { copy } = useCopy(text)
   const pointer = useRef<{ x: number; y: number; moved: boolean } | undefined>(undefined)
-  return <code role="button" tabIndex={0} aria-label="Copy code" aria-keyshortcuts="Enter Space" title="Copy code · Enter / Space" className="cursor-copy focus-visible:outline-2 focus-visible:outline-ring"
+  return <code role="button" tabIndex={0} aria-label="Copy code" aria-keyshortcuts="Enter Space" data-tip="Copy code" className="cursor-copy focus-visible:outline-2 focus-visible:outline-ring"
     onPointerDown={(e) => { pointer.current = { x: e.clientX, y: e.clientY, moved: false } }}
     onPointerMove={(e) => { const p = pointer.current; if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) p.moved = true }}
     onClick={(e) => { e.stopPropagation(); if (shouldCopy(window.getSelection()?.toString() ?? "", pointer.current?.moved ?? false)) void copy(); pointer.current = undefined }}

@@ -89,7 +89,7 @@ export function FolderPane({ tab, onClose }: { tab: string; onClose: () => void 
   return (
     <div role="group" aria-label="Open project folder" className="bubble-pane flex flex-col gap-1 p-1" style={{ height: FOLDER_SIZE.h }}>
       <div className="bubble-wellbar flex h-9 shrink-0 items-center gap-0.5 px-1">
-        <button type="button" aria-label="Parent folder" title="Parent folder (Backspace)" disabled={busy || !read.data?.parent} onClick={() => read.data?.parent && go(read.data.parent, "back")}
+        <button type="button" aria-label="Parent folder" data-tip="Parent folder" data-tip-keys="Backspace" disabled={busy || !read.data?.parent} onClick={() => read.data?.parent && go(read.data.parent, "back")}
           className="bubble-iconbtn size-7">
           <ArrowUp aria-hidden="true" className="size-4" strokeWidth={1.8} />
         </button>
@@ -119,7 +119,7 @@ export function FolderPane({ tab, onClose }: { tab: string; onClose: () => void 
         {read.data?.folders.map((folder) => {
           const hidden = folder.name.startsWith(".")
           return (
-            <button key={folder.path} type="button" data-folder disabled={project.opening} onClick={() => go(folder.path, "fwd")} title={folder.path}
+            <button key={folder.path} type="button" data-folder disabled={project.opening} onClick={() => go(folder.path, "fwd")} data-tip={folder.path}
               className={cn("bubble-frow", hidden && "text-(--bubble-muted)")}>
               <span className="bubble-ftile"><Folder aria-hidden="true" className="size-3.5 text-(--bubble-muted)" strokeWidth={1.8} /></span>
               <span className="min-w-0 flex-1 truncate">{folder.name}</span>

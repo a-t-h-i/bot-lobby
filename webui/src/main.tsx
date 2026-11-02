@@ -12,18 +12,15 @@ import "./surface.css"
 import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 import { Toaster } from "@/components/ui/toaster"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import { TipLayer } from "./ui/TipLayer.tsx"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <MotionConfig reducedMotion="user">
-        <TooltipProvider>
-          <App />
-          <Toaster />
-          <TipLayer />
-        </TooltipProvider>
+        <App />
+        <Toaster />
+        <TipLayer />
       </MotionConfig>
     </ThemeProvider>
   </StrictMode>

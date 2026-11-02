@@ -20,7 +20,6 @@ naming the file it came from.
 | `webui/src/components/ui/button.tsx` | `apps/web/src/components/ui/button.tsx` |
 | `webui/src/components/ui/input.tsx` | `apps/web/src/components/ui/input.tsx` |
 | `webui/src/components/ui/textarea.tsx` | `apps/web/src/components/ui/textarea.tsx` |
-| `webui/src/components/ui/tooltip.tsx` | `apps/web/src/components/ui/tooltip.tsx` |
 | `webui/src/components/ui/kbd.tsx` | `apps/web/src/components/ui/kbd.tsx` |
 | `webui/src/components/ui/checkbox.tsx` | `apps/web/src/components/ui/checkbox.tsx` |
 | `webui/src/components/ui/switch.tsx` | `apps/web/src/components/ui/switch.tsx` |

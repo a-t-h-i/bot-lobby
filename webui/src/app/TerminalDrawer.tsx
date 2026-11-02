@@ -15,9 +15,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, PictureInPicture2, Plus, SquareTerminal, Trash2, X } from "lucide-react"
 import type { TerminalInfo } from "@protocol"
-import { Keys } from "@/components/ui/kbd"
 import { Popup } from "@/components/ui/popup"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tip } from "@/ui/TipLayer"
 import { call } from "@/lib/api"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { toast } from "@/lib/toast"
@@ -29,22 +28,12 @@ const TerminalView = lazy(() => import("./TerminalView"))
 const TOOL =
   "inline-flex size-6 items-center justify-center text-foreground/80 outline-none transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 aria-pressed:bg-accent aria-pressed:text-foreground"
 
-function Tip({ label, hint, children }: { label: string; hint?: string | undefined; children: React.ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side="top">
-        {label} {hint ? <Keys chord={hint} /> : null}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
 
 /** The bar's button that opens and hides the drawer. */
 export function TerminalToggle({ hint, className }: { hint?: string | undefined; className: string }) {
   const open = useTerminalOpen()
   return (
-    <Tip label={open ? "Hide terminal" : "Terminal"} hint={hint}>
+    <Tip side="top" label={open ? "Hide terminal" : "Terminal"} hint={hint}>
       <button type="button" aria-label="Terminal" aria-pressed={open} aria-controls={open ? "terminal-drawer" : undefined} aria-keyshortcuts={hint} onClick={toggleTerminal} className={className}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8" /></svg>
       </button>
@@ -261,25 +250,25 @@ function TerminalPanes({
 }) {
   const tools = (
     <div className="terminal-tools pointer-events-auto inline-flex items-center overflow-hidden rounded-md border border-border/80 bg-background shadow-xs">
-      <Tip label="New terminal">
+      <Tip side="top" label="New terminal">
         <button type="button" aria-label="New terminal" disabled={busy || list?.available === false} onClick={onStart} className={TOOL}>
           <Plus aria-hidden="true" className="size-3.5" />
         </button>
       </Tip>
       <span aria-hidden="true" className="h-4 w-px bg-border/80" />
-      <Tip label="End this terminal">
+      <Tip side="top" label="End this terminal">
         <button type="button" aria-label="End this terminal" disabled={!shown} onClick={() => shown && onEnd(shown.id)} className={TOOL}>
           <Trash2 aria-hidden="true" className="size-3.5" />
         </button>
       </Tip>
       <span aria-hidden="true" className="h-4 w-px bg-border/80" />
-      <Tip label={popup ? "Back to the drawer" : "Open in a pop-up"}>
+      <Tip side="top" label={popup ? "Back to the drawer" : "Open in a pop-up"}>
         <button type="button" aria-label="Pop out terminal" aria-pressed={popup} onClick={() => setTerminalPopup(!popup)} className={TOOL}>
           <PictureInPicture2 aria-hidden="true" className="size-3.5" />
         </button>
       </Tip>
       <span aria-hidden="true" className="h-4 w-px bg-border/80" />
-      <Tip label="Hide terminal" hint={toggleKey}>
+      <Tip side="top" label="Hide terminal" hint={toggleKey}>
         <button type="button" aria-label="Hide terminal" onClick={() => setTerminalOpen(false)} className={TOOL}>
           {popup ? <X aria-hidden="true" className="size-3.5" /> : <ChevronDown aria-hidden="true" className="size-3.5" />}
         </button>

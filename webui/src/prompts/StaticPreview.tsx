@@ -57,7 +57,7 @@ export function StaticPreview({ preview, label, className, frameWidth, minWidth,
           data-compact=""
           onClick={onOpen}
           aria-label={`Expand the mockup: ${label}`}
-          title="Expand"
+          data-tip="Expand"
           className="cs-mxb outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Maximize2 aria-hidden="true" className="size-3" />
