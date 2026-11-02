@@ -461,16 +461,25 @@
 .cs-asks .bubble-glyph { width: 20px; height: 20px; border-radius: 8px; font-size: 11px; }
 .cs-askf { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-askn { font-variant-numeric: tabular-nums; color: var(--bubble-faint); }
-.cs-askq { margin: 0; font-size: 15.5px; line-height: 1.35; font-weight: 500; color: var(--bubble-ink); letter-spacing: -0.005em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cs-askq { margin: 0; font-size: 15.5px; line-height: 1.4; font-weight: 500; color: var(--bubble-ink); letter-spacing: -0.005em; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30vh; overflow-y: auto; }
 .cs-askx { appearance: none; border: 0; background: none; font: inherit; font-size: 12px; color: var(--bubble-faint); cursor: pointer; padding: 2px 6px; border-radius: 10px; }
 .cs-askx:hover { background: var(--bubble-hover); color: var(--bubble-ink); }
 .cs-askx[data-confirm] { color: var(--bad); }
-.cs-askopts { max-height: 216px; overflow-y: auto; }
-.cs-askm { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 6px 4px; }
+.cs-askopts { max-height: min(52vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+/* An option row: its label, then its explanation in full, wrapping under it (never cut off). */
+.bubble-row.cs-aro { height: auto; min-height: 34px; align-items: flex-start; padding: 7px 10px 8px 8px; }
+.bubble-row.cs-aro > .bubble-glyph { margin-top: 1px; flex: none; }
+.bubble-row.cs-aro > .cs-cb { margin-top: 1px; }
+.cs-arot { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-top: 1px; }
+.cs-arod { font-size: 13px; line-height: 1.45; color: var(--bubble-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Mockup thumbnails: two or three a row (two for 2 or 4 options), as wide as the widened drawer allows. */
+.cs-askm { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 10px; padding: 0 6px 6px; max-height: min(70vh, 900px); overflow-y: auto; }
+.cs-mkd { font-size: 12.5px; line-height: 1.45; color: var(--bubble-muted); padding: 0 2px; overflow-wrap: anywhere; }
 .cs-mko { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 7px; padding: 6px; border-radius: 10px; text-align: left; min-width: 0; animation: bubble-row-pop 204ms var(--out) backwards; outline: none; }
 .cs-mko:hover, .cs-mko:focus-visible, .cs-mko[data-on] { background: var(--bubble-hover); }
 .cs-mkl { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; font-weight: 500; color: var(--bubble-ink); }
-.cs-mkl > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-mkl { align-items: flex-start; }
+.cs-mkl > span:last-child { min-width: 0; overflow-wrap: anywhere; padding-top: 1px; line-height: 1.4; }
 .cs-mkl .bubble-glyph { width: 20px; height: 20px; border-radius: 8px; font-size: 11px; }
 .cs-mk3 { position: relative; aspect-ratio: 16 / 11; border-radius: 10px; background: var(--sunk); overflow: hidden; }
 .cs-mk3 > :is(img, iframe, .cs-mktext) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -1074,3 +1083,8 @@ textarea[data-slot="textarea"], textarea[data-slot="textarea"].cs-nsta, .cs-bdg 
 .tipbox[data-slot="tooltip-content"][data-state="closed"] { animation: tip-out 80ms ease both; }
 @keyframes tip-out { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tipbox[data-ready], .tipbox[data-slot] { animation: none !important; opacity: 1; } }
+
+/* While the questionnaire shows, the bubble widens so its options have room: to 54rem for text options, to 76rem for
+   mockups (each then reads as a page). It eases there with the bubble's own width transition, and back after. */
+.bubble[data-ask="text"] { max-width: clamp(54rem, var(--cg, 0px), 64rem); }
+.bubble[data-ask="mockups"] { max-width: 76rem; }

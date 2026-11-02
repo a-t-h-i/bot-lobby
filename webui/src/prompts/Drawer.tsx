@@ -251,10 +251,10 @@ export function DrawerPane({ drawer, onExpand }: { drawer: Drawer; onExpand: (op
             {confirming ? "Dismiss it?" : "Dismiss"}
           </button>
         </div>
-        <p className="cs-askq" title={step.question}>{step.question}</p>
+        <p className="cs-askq">{step.question}</p>
       </div>
       {mockups ? (
-        <div className="cs-askm">
+        <div className="cs-askm" style={{ "--cols": rows <= 2 || rows === 4 ? 2 : 3 } as CSSProperties}>
           {step.options.map((option, index) => (
             <button key={option.label} type="button" className="cs-mko" data-on={drawer.picks.includes(index) || isWas(drawer.was, option.label) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ animationDelay: `${index * 30}ms` }}>
               <div className="cs-mk3">
@@ -267,16 +267,19 @@ export function DrawerPane({ drawer, onExpand }: { drawer: Drawer; onExpand: (op
                 </span>
               </div>
               <span className="cs-mkl"><Glyph color={color}>{index + 1}</Glyph><span>{plainLabel(option.label)}</span></span>
+              {option.description ? <span className="cs-mkd">{option.description}</span> : null}
             </button>
           ))}
         </div>
       ) : (
         <div className="cs-askopts">
           {step.options.map((option, index) => (
-            <button key={option.label} type="button" className="bubble-row" data-active={drawer.picks.includes(index) || isWas(drawer.was, option.label) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ "--delay": `${(rows - 1 - index) * 22}ms` } as CSSProperties}>
+            <button key={option.label} type="button" className="bubble-row cs-aro" data-active={drawer.picks.includes(index) || isWas(drawer.was, option.label) || undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => drawer.choose(index)} style={{ "--delay": `${(rows - 1 - index) * 22}ms` } as CSSProperties}>
               <Glyph color={color}>{index + 1}</Glyph>
-              <span className="shrink-0 text-sm font-medium text-(--bubble-ink)">{plainLabel(option.label)}</span>
-              {option.description ? <span className="min-w-0 truncate text-[13px] text-(--bubble-muted)" title={option.description}>{option.description}</span> : null}
+              <span className="cs-arot">
+                <span className="text-sm font-medium text-(--bubble-ink)">{plainLabel(option.label)}</span>
+                {option.description ? <span className="cs-arod">{option.description}</span> : null}
+              </span>
               {step.multi ? <span className="cs-cb cs-sm" data-on={drawer.picks.includes(index)}><Check aria-hidden="true" strokeWidth={3} /></span> : null}
             </button>
           ))}

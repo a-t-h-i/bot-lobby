@@ -203,7 +203,7 @@ function Kbd({ children }: { children: string }) {
 }
 
 /** A pane that sizes its bubble from its own content: its width (bar) or its height (drawer), measured after each render. */
-/** `wide` is the drawer's width when its question shows mockups (the composer's own); otherwise it is 580px. */
+/** `wide` is the drawer's width when set (the questionnaire asks for all the room the bubble's stylesheet allows); otherwise it is 580px. */
 function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>, wide?: number): { w: number; h: number } {
   const [size, setSize] = useState({ w: 250, h: 38 })
   useLayoutEffect(() => {
@@ -337,9 +337,10 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const shownSize = useRef({ w: 320, h: 0 })
   const pane: Pane = panel ?? (ask ? "ask" : menuOpen ? "suggest" : bar ? "bar" : shownPane.current)
   const paneRef = useRef<HTMLDivElement>(null)
-  // Mockups need room: the drawer then takes the composer's width (up to 960px), so each one reads as a page.
+  // The questionnaire needs room: the bubble widens while it shows (more still for mockups, so each reads as a page)
+  // and the drawer takes all of it the stylesheet allows, so long options wrap in full instead of being cut off.
   const mockupAsk = pane === "ask" && Boolean(drawer.step?.options.some(hasMockup))
-  const measured = useMeasured(pane, paneRef, mockupAsk ? Math.max(580, Math.min(960, (box.current?.clientWidth ?? 740) - 12)) : undefined)
+  const measured = useMeasured(pane, paneRef, pane === "ask" ? 4000 : undefined)
   if (open) {
     shownPane.current = pane
     const family = field.current ? getComputedStyle(field.current).fontFamily : "system-ui, sans-serif"
@@ -694,6 +695,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
         ref={bubble}
         open={open}
         size={shownSize.current}
+        data-ask={ask ? (mockupAsk ? "mockups" : "text") : undefined}
         shrunk={shrunk}
         morphing={morphing}
         menu={menu}

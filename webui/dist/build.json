@@ -1,6 +1,6 @@
 {
-  "hash": "7ee852dfdf15b0c4846c6692abf0fa94bef9fe61b355e644da6914a7c143b958",
-  "builtAt": "2026-11-01T11:46:48.749Z",
+  "hash": "567f01f36c28d7c3c1626bf321e154da686ec64f47aed655ebc498085666bce2",
+  "builtAt": "2026-11-02T08:33:30.578Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "f9f00aa56c675c9f2a500dd9215001399ac7c4acaf25eda3e6b1a5fa3e8ab4e9"
+      "sha256": "84c8d12d8410e5982f7dd2781f44153558cd4aa44abfe8869c822509cef6931d"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -408,7 +408,7 @@
     },
     {
       "path": "webui/src/prompts/Drawer.tsx",
-      "sha256": "5b3c3fc77f9bb427a915ab56f47d7142aabe39ea170d8756ed1919b3f2d81cf9"
+      "sha256": "a55649f318ab5206603979953e99c1127dcc2a260b9c8c430ca7d5fe41b7c839"
     },
     {
       "path": "webui/src/prompts/MockupViewer.tsx",
@@ -436,7 +436,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "de64b014b8ca4258657a3a046b392c7c3f2254dbeb4014dedeb3628c5928caef"
+      "sha256": "929a1fb44d7203747b8b6988905eef448f563e15cd390c4d8aa5d984a7592b2e"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
