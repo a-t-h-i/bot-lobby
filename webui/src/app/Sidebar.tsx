@@ -17,6 +17,7 @@ import { act } from "@/lib/act"
 import { endSwitch, pendingNow, sawSession, startSwitch, usePendingSwitch } from "@/lib/pendingSwitch"
 import { toggleCollapsed, useCollapsed } from "@/lib/collapsed"
 import { toast } from "@/lib/toast"
+import { rem } from "@/lib/uiScale"
 import { cn } from "@/lib/utils"
 import { FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
 import { useTopic } from "./hooks.ts"
@@ -37,8 +38,8 @@ export const SIDEBAR_KEY = "app.sidebar.pinned"
 
 export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 
-/** The open sidebar's size: 244px wide, 520px tall where the window has room. */
-const OPEN = { w: 244, h: "min(600px, calc(100vh - 40px))" }
+/** The open sidebar's size: 244px wide, 600px tall where the window has room (drawn at the 15px root; see lib/uiScale). */
+const OPEN = { w: 244, h: `min(${rem(600)}, calc(100vh - ${rem(40)}))` }
 
 const TOOL = "cs-iconbtn cs-sm"
 
@@ -375,7 +376,7 @@ export function useSidebar(props: SidebarProps) {
   const [query, setQuery] = useState("")
   const [starting, setStarting] = useState(false)
   const open = pinned || bay.open || starting
-  const vars = { "--wL": `${open ? OPEN.w : 122}px`, "--hL": open ? OPEN.h : "40px", "--sb-open-h": OPEN.h } as CSSProperties
+  const vars = { "--wL": rem(open ? OPEN.w : 122), "--hL": open ? OPEN.h : rem(40), "--sb-open-h": OPEN.h } as CSSProperties
   const newSession = useCallback(() => setStarting(true), [])
   return {
     open,

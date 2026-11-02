@@ -17,6 +17,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useHotkey } from "@/lib/hotkeys"
 import { call } from "@/lib/api"
 import { act } from "@/lib/act"
+import { rem, ui, uiSize } from "@/lib/uiScale"
 import { useComposerContext } from "@/lib/composerContext"
 import { useAnyOverlay } from "@/lib/overlay"
 import { focusTab } from "@/prompts/nav"
@@ -213,7 +214,7 @@ function useMeasured(pane: Pane, ref: RefObject<HTMLDivElement | null>, wide?: n
     const el = ref.current
     if (!el) return
     const measure = () => {
-      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth), h: 38 } : { w: wide ?? 580, h: Math.ceil(el.scrollHeight) }
+      const next = pane === "bar" ? { w: Math.ceil(el.scrollWidth), h: ui(38) } : { w: wide ?? ui(580), h: Math.ceil(el.scrollHeight) }
       setSize((now) => (now.w === next.w && now.h === next.h ? now : next))
     }
     measure()
@@ -291,7 +292,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   // The pill bar's room (Answer questions, View plan) stays reserved while the box folds, so the page never jumps.
   useEffect(() => {
     const root = document.documentElement
-    root.style.setProperty("--dock-bar", barWanted ? "44px" : "0px")
+    root.style.setProperty("--dock-bar", barWanted ? rem(44) : "0px")
     return () => root.style.setProperty("--dock-bar", "0px")
   }, [barWanted])
 
@@ -347,11 +348,12 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   if (open) {
     shownPane.current = pane
     const family = field.current ? getComputedStyle(field.current).fontFamily : "system-ui, sans-serif"
-    shownSize.current = pane === "suggest" ? { w: suggestionWidth(menuItems, family), h: suggestionHeight(menuItems.length) }
-      : pane === "attach" ? ATTACH_SIZE
-        : pane === "projects" ? projectsSize(projects)
+    // Fixed sizes are drawn at the 15px root and follow the UI's scale; measured ones already do.
+    shownSize.current = pane === "suggest" ? uiSize({ w: suggestionWidth(menuItems, family), h: suggestionHeight(menuItems.length) })
+      : pane === "attach" ? uiSize(ATTACH_SIZE)
+        : pane === "projects" ? uiSize(projectsSize(projects))
           : pane === "bar" || pane === "ask" ? measured
-            : FOLDER_SIZE
+            : uiSize(FOLDER_SIZE)
   }
   // The suggestions as they last showed, so the closing bubble keeps its rows.
   const lastMenu = useRef<{ items: ComposerCommandItem[]; kind: NonNullable<typeof trigger>["kind"]; lit?: string }>({ items: [], kind: "slash-command" })
@@ -409,7 +411,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     const style = getComputedStyle(el)
     measure.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
     const longest = Math.max(...text.split("\n").map((line) => measure.measureText(line).width))
-    host.style.setProperty("--cg", `${Math.ceil((longest + 44) / 48) * 48}px`)
+    host.style.setProperty("--cg", `${Math.ceil((longest + ui(44)) / ui(48)) * ui(48)}px`)
   }, [text, shrunk])
 
   // The styled layer behind the text keeps to the box's scroll.

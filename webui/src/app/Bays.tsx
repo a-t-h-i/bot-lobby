@@ -9,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import type { TabInfo } from "@protocol"
 import { focusPage, tabWalk } from "@/prompts/nav"
 import { cn } from "@/lib/utils"
+import { rem } from "@/lib/uiScale"
 import { TabIcon } from "./TabIcons.tsx"
 
 /** The bays' goo filters, once per page: the edge with its light and shade, the lit fill, the tab dent and its tint. */
@@ -215,7 +216,7 @@ export function useTabNavigator({ tabs, activeId, onSelect }: {
     cells.current[next.id]?.focus({ preventScroll: true })
   }
 
-  const vars = { "--wT": `${width}px`, "--hT": "40px" } as CSSProperties
+  const vars = { "--wT": `${width}px`, "--hT": rem(40) } as CSSProperties
   return { vars, ghost: <BayGhost className="cs-gt" style={vars} />, bay: (
     <div className="cs-tbwrap" style={vars}>
       <div className="cs-tbx">

@@ -354,9 +354,19 @@
     position: relative;
   }
   /* The page never scrolls: the shell is fixed to the screen and only its panes scroll. */
+  /*
+   * The UI's scale: every size follows the root, px ones too (the build turns
+   * them into rem, see vite.config.ts). A desktop draws at 90% of the touch
+   * size, which reads right at 100% browser zoom on a normal-density screen.
+   * Touch screens keep the larger size so tap targets stay roomy.
+   */
   html {
-    /* A compact scale: every rem-based size (type, spacing, controls) follows this. */
-    font-size: 93.75%;
+    font-size: 84.375%;
+  }
+  @media (pointer: coarse) {
+    html {
+      font-size: 93.75%;
+    }
   }
   html,
   body {
