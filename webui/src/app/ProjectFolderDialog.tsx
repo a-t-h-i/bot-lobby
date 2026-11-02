@@ -9,6 +9,7 @@ import { ArrowUp, ChevronRight, Folder } from "lucide-react"
 import { call } from "@/lib/api"
 import { rememberProjects, switchProject } from "@/lib/project"
 import { cn } from "@/lib/utils"
+import { rem } from "@/lib/uiScale"
 import { useApiRead } from "./useApiRead"
 
 /** The folder browser's bubble size. */
@@ -87,7 +88,7 @@ export function FolderPane({ tab, onClose }: { tab: string; onClose: () => void 
       : count === 0 ? "No subfolders"
         : `${count.toLocaleString()} ${count === 1 ? "folder" : "folders"}${read.data?.truncated ? " (first 2,000)" : ""}`
   return (
-    <div role="group" aria-label="Open project folder" className="bubble-pane flex flex-col gap-1 p-1" style={{ height: FOLDER_SIZE.h }}>
+    <div role="group" aria-label="Open project folder" className="bubble-pane flex flex-col gap-1 p-1" style={{ height: rem(FOLDER_SIZE.h) }}>
       <div className="bubble-wellbar flex h-9 shrink-0 items-center gap-0.5 px-1">
         <button type="button" aria-label="Parent folder" data-tip="Parent folder" data-tip-keys="Backspace" disabled={busy || !read.data?.parent} onClick={() => read.data?.parent && go(read.data.parent, "back")}
           className="bubble-iconbtn size-7">

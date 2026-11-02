@@ -1,6 +1,6 @@
 {
-  "hash": "6cebc5a3c97a8b58510da32988af13c10a3f1e1c2f4959bbfd231df5e59489d8",
-  "builtAt": "2026-11-02T13:40:19.439Z",
+  "hash": "82e5784f051e3ac44e7c4f2d1297a149803e3904f05fc48341268a1545c30dd8",
+  "builtAt": "2026-11-02T14:20:05.685Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,11 +32,11 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "8261a1e701d4c9147e61abead4c8d08a087c3f28363c09de428aeb6300d9212a"
+      "sha256": "191e065434efc7084dfe98541ed3e410f5c387913c1c2dfa3c8d700559f97082"
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "7c363f9b604626e56cc1e259d0e6f2ab2a973e2f8e66cca7ffd901bc365979fb"
+      "sha256": "37a3fc1b230b40442e21f35bc2082490567c66f931d65929a87b734924278363"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -44,11 +44,11 @@
     },
     {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
-      "sha256": "22d4b371657dbb7c995e7451ccac320d0d6a461990f7b9389d9788378852b9ae"
+      "sha256": "6633c504887166defaf21e64c878ee0f4f1785b81c173c00329190c5182a8766"
     },
     {
       "path": "webui/src/app/ProjectSwitcher.tsx",
-      "sha256": "7905dd74cb290b0ab52ad5325106db2696516a7cae8a0624c1055c4815a64a1a"
+      "sha256": "245c492ce64bb21fdee058da171c9cfc0a267626a542c3dc5ad5df079b6db222"
     },
     {
       "path": "webui/src/app/Shell.tsx",
@@ -56,7 +56,7 @@
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "50962e709eb2b25b5f4a9b93094a5d1dd73677e3b679348b888938df99142fbf"
+      "sha256": "7ad0197d1c4008c25e7b57ae3160f1bd10cb9ee5bf0a8ce72c9731a28ca93d8a"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -292,7 +292,7 @@
     },
     {
       "path": "webui/src/index.css",
-      "sha256": "3f9b789973d69d140e8e4d2b5f0c8ca275fbcf93d9e27780528d4fc5f5acfa35"
+      "sha256": "023cc7f2b5538e779321da10d0637745f029453bb88e6a4a3289ce5026113811"
     },
     {
       "path": "webui/src/lib/act.ts",
@@ -377,6 +377,10 @@
     {
       "path": "webui/src/lib/toast.ts",
       "sha256": "1c2449893cfda1b01c3b908a88925c96e15fdc6ede295f6ff0749eb9d85716e6"
+    },
+    {
+      "path": "webui/src/lib/uiScale.ts",
+      "sha256": "5de9c010527169735dda7734e8a5e880029c32b394565b20884f4ae787e86b33"
     },
     {
       "path": "webui/src/lib/uploads.ts",
@@ -736,7 +740,7 @@
     },
     {
       "path": "webui/vite.config.ts",
-      "sha256": "79393d0bbbe4dff4ac4cb810cf8c31b9cdfd98719be49fed252865299efd383d"
+      "sha256": "d91b3fd165f7a0cc85dd15dc9b22dfa142fdacbb9944debdcaaf4fa4ad634069"
     }
   ]
 }

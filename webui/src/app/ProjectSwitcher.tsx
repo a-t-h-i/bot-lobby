@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } f
 import { Check, ChevronDown, Folder, FolderOpen, RefreshCw, TriangleAlert } from "lucide-react"
 import type { ProjectInfo } from "@protocol"
 import { call } from "@/lib/api"
+import { rem } from "@/lib/uiScale"
 import { useHotkey } from "@/lib/hotkeys"
 import { rememberProjects, selectedProject, switchProject } from "@/lib/project"
 import { Spinner } from "@/components/ui/spinner"
@@ -173,7 +174,7 @@ export function ProjectsPane({ projects, tab, onBrowse, onClose }: { projects: P
         </button>
       </div>
       <div className="h-px shrink-0" />
-      <div role="listbox" aria-label="Projects" className="bubble-scroll flex shrink-0 flex-col overflow-y-auto" style={{ height: rows * 46 }}>
+      <div role="listbox" aria-label="Projects" className="bubble-scroll flex shrink-0 flex-col overflow-y-auto" style={{ height: rem(rows * 46) }}>
         {data ? data.projects.map((project, index) => {
           const on = project.id === active
           return (
