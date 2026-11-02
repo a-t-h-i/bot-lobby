@@ -156,6 +156,8 @@ test("the master briefs smaller agents explicitly and every agent follows its br
   assert.ok(master.includes("## Briefing the agents") && master.includes("Never assume they are as capable as you"));
   for (const part of ["**Goal**", "**Files**", "**Contracts**", "**Done when**", "**If stuck**"]) assert.ok(master.includes(part), part);
   assert.ok(loadPrompt("global.md").includes("## Following your brief"), "every agent gets the rule");
+  assert.ok(loadPrompt("global.md").includes("## Talking to the user"), "every agent answers the user briefly and plainly");
+  assert.ok(loadPrompt("planner.md").includes("## Talking to the user"), "the planning chair does too");
   const worker = compilePrompt({ domain: "backend", role: "worker", task: "x" });
   assert.ok(worker.includes("## Brief Check") && worker.includes("Following your brief"));
 });
