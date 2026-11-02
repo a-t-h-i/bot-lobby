@@ -3,8 +3,9 @@
  * the last few lines of the conversation) and picks the agent whose area it
  * is, so a frontend question goes to DESIGN, a library question to RESEARCH,
  * "how does this work" to a scout and a question about the project's saved
- * knowledge to the oracle's knowledge lookup. Anything it is unsure of, and
- * every message while it is off, goes to the Master.
+ * knowledge to the oracle's knowledge lookup. Work too big for one quick
+ * change goes to the Master, who starts a task for it (start_task). Anything
+ * it is unsure of, and every message while it is off, goes to the Master.
  */
 import type { ChatAgent } from "../lobby/prompts.ts";
 import type { Classifier } from "./classifier.ts";
@@ -15,7 +16,7 @@ import { clip } from "./limits.ts";
 export type ChatRoute = ChatAgent | "knowledge";
 
 const ROUTES: Record<ChatRoute, string> = {
-  master: "The Master (the orchestrator): general conversation, the team's tasks and plans, anything across several areas of the project, or anything no single agent below clearly owns",
+  master: "The Master (the orchestrator): general conversation, the team's tasks and plans, anything across several areas of the project, a request for work too big for one quick change (a new feature, an architecture change, work that needs tests and review), which the Master hands to the team as a task, or anything no single agent below clearly owns",
   designer: "DESIGN: the frontend, meaning pages, components, styling, layout, UX, on-screen copy and browser code, whether a question about it or a change to it",
   backend: "DEV: backend code, meaning APIs, data and databases, server logic, integrations, scripts, build and tooling, whether a question about it or a change to it",
   qa: "QA: tests, meaning writing, running or fixing them, test strategy, how to verify a change, or checking work for bugs",

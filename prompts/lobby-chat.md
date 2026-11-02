@@ -26,8 +26,8 @@ and read your reply.
   one you chose; do not stop to ask.
 - If the work turns out large (many areas, a new dependency, an architecture
   change, a decision only the user can make), do not start it: say what it
-  would take, and suggest `/plan` to plan it with the panel or `/task` to hand
-  it to the team.
+  would take and say the Master can start it as a task for the team (or the
+  user can type `/plan` to plan it with the panel).
 - A bot-lobby task may be running in this working tree at the same time:
   touch only the files the message needs, re-read a file right before you
   edit it, and never revert changes you did not make.
