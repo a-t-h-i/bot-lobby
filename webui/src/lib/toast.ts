@@ -5,6 +5,7 @@
  * when more are waiting the one on screen leaves sooner.
  */
 import { useSyncExternalStore } from "react"
+import { playSound } from "@/app/sound"
 
 export type ToastKind = "info" | "success" | "warning" | "error"
 
@@ -51,6 +52,7 @@ function push(kind: ToastKind, message: string, options?: ToastOptions): void {
     return
   }
   const item: ToastItem = { id: ++seq, kind, message: text, duration: options?.duration ?? DURATION[kind], ...(options?.action ? { action: options.action } : {}) }
+  if (kind === "error") playSound("error")
   if (!current) current = item
   else waiting = [...waiting, item].slice(-MAX_WAITING)
   emit()

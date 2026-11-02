@@ -1,0 +1,33 @@
+Sounds in /sounds
+
+Each file was converted to MP3 and its loudness levelled (ffmpeg loudnorm, -20 LUFS). Nothing else was changed.
+
+question.mp3
+  "dialog-question" from the Ocean Sound Theme for KDE Plasma
+  by Guilherme Marçal Silva, https://invent.kde.org/plasma/ocean-sound-theme
+  License: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+  This changed version is shared under the same license.
+
+attention.mp3
+  "message-new-email" from the Ocean Sound Theme for KDE Plasma
+  by Guilherme Marçal Silva, https://invent.kde.org/plasma/ocean-sound-theme
+  License: CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+  This changed version is shared under the same license.
+
+done.mp3
+  "NFCSuccess" from the Android Open Source Project,
+  frameworks/base/data/sounds/effects/ogg/NFCSuccess.ogg
+  Copyright The Android Open Source Project
+  License: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0
+
+error.mp3
+  "NFCFailure" from the Android Open Source Project,
+  frameworks/base/data/sounds/effects/ogg/NFCFailure.ogg
+  Copyright The Android Open Source Project
+  License: Apache License 2.0, https://www.apache.org/licenses/LICENSE-2.0
+
+sent.mp3
+  "audio-volume-change" from the elementary OS sound theme,
+  https://github.com/elementary/sound-theme, originally
+  https://freesound.org/people/ianslattery/sounds/168861/
+  License: CC0 1.0 (public domain), https://creativecommons.org/publicdomain/zero/1.0/

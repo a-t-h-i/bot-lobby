@@ -27,7 +27,7 @@ export function HelpButton({ hint, onHelp, className, side = "top" }: { hint: st
 
 export function SoundToggle({ className, side = "top" }: { className: string; side?: Side }) {
   const muted = useSoundMuted()
-  const label = muted ? "Unmute prompt sounds" : "Mute prompt sounds"
+  const label = muted ? "Unmute sounds" : "Mute sounds"
   return (
     <button {...tip(label, { side, keep: true })} type="button" aria-label={label} aria-pressed={muted} aria-describedby="focused-action-help" className={className} onClick={() => setSoundMuted(!muted)}>
       {muted ? <VolumeX aria-hidden="true" className={ICON} /> : <Volume2 aria-hidden="true" className={ICON} />}

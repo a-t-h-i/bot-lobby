@@ -1,6 +1,11 @@
 {
+<<<<<<< HEAD
   "hash": "da79bb8234a3c37f3c413d1906234c485d850a4f07a5a594dc149b9153eeee9b",
   "builtAt": "2026-11-02T19:51:58.680Z",
+=======
+  "hash": "97c60cc259eee5eee6bad637abcf76fb1cead0ad7c123c7488aeb33c936105e6",
+  "builtAt": "2026-11-02T19:28:38.057Z",
+>>>>>>> origin/lobby-sounds
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,7 +33,7 @@
     },
     {
       "path": "webui/src/app/AppTools.tsx",
-      "sha256": "a5a68c6090f3527afc63262b686433f07907b37f055e112eec5468788917cf31"
+      "sha256": "de79a028bbd1d4158f3bd5ed5e666711122327ca310a610230bea53a799b2848"
     },
     {
       "path": "webui/src/app/Bays.tsx",
@@ -36,7 +41,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "5087954eed4dc52f0a1614f41580f964036da732169e40659c7d87e57ae0d236"
+      "sha256": "fdb1cc7e22f5ce17d4e39966241eea1f8034ebfa7dcd6043f95284feefd42e33"
     },
     {
       "path": "webui/src/app/NewSessionDialog.tsx",
@@ -156,7 +161,7 @@
     },
     {
       "path": "webui/src/app/notify.ts",
-      "sha256": "c784d25d87f5cbd572981f358d6f8120a0fc43e41cced3adf1aa418f4d3402fb"
+      "sha256": "5a64633d45f17468873a5498ea68ef23281ae67348d4c3a96e3ef275a7ebbab7"
     },
     {
       "path": "webui/src/app/palette.ts",
@@ -184,7 +189,7 @@
     },
     {
       "path": "webui/src/app/sound.ts",
-      "sha256": "8bc9f370a6a76d09e231cd5d23f13a64d33d91f5967abe59a89bdc01a3c5e8f6"
+      "sha256": "5fbae9413fd0a78e0b98cf8291318750dfff096a291f2f5cbd1959144ce9cab9"
     },
     {
       "path": "webui/src/app/taskRoute.ts",
@@ -388,7 +393,7 @@
     },
     {
       "path": "webui/src/lib/toast.ts",
-      "sha256": "eb121746713cac91bf2969a3f8d67a5a10b4c16d64b45600134c767e83618762"
+      "sha256": "c78ee6052653afc18a827b32571723ade1f3d02e2edee4ec275198317db8cf04"
     },
     {
       "path": "webui/src/lib/uiScale.ts",
@@ -591,8 +596,12 @@
       "sha256": "9296f95f1c831385dd68dd844978fd78a5ea67e2d866077291161108917ff746"
     },
     {
+      "path": "webui/src/tabs/settings/SoundFields.tsx",
+      "sha256": "9b493990d0bcd6654b16f949634fd105a5ebd1f5566ab19a5c76ae2e3754bcee"
+    },
+    {
       "path": "webui/src/tabs/settings/ThemeGroup.tsx",
-      "sha256": "f14547a11ed7302e2db91e4820d0c27b847c3ccea37aaa387ad7dee06e6e8727"
+      "sha256": "ff37c9787bf3f810da65eebe0256e7109715c73d0b3e80b985b19085a55d90b1"
     },
     {
       "path": "webui/src/tabs/settings/parts.tsx",
