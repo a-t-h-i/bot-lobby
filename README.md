@@ -3,7 +3,7 @@ Bot-lobby is a determenistic agentic coding engine. You can come up with a vague
 
 I came up with the name bot-lobby from my 6+ years worth of experience in playing online FPS games. The name is normally used as a joke or to mock the other players by stating that you're playing in a bot lobby (playing with robots) because of how incompetent they appear to be. The contrary is true for the bots in bot-lobby though, they are quite smart and capable... Well, depending on the models you choose of course.
 
-<img src="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/questionnaire-light.gif" alt="An agent asks a question with two clickable UI mockups; the user expands one, picks an option, answers the next question, and a toast confirms it was sent" width="100%">
+<img src="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/questionnaire-hero.gif" alt="An agent asks a question with two clickable UI mockups; the user expands one, picks an option, answers the next question, and a toast confirms it was sent" width="100%">
 
 <sub>Agents ask with real mockups. Expand one, pick it, move on.</sub>
 
