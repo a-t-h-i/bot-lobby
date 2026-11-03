@@ -1,6 +1,6 @@
 {
   "name": "@a-t-h-i/bot-lobby",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Structured multi-agent software engineering orchestrator for Pi",
   "type": "module",
   "license": "Apache-2.0",
@@ -37,7 +37,7 @@
     "extensions": [
       "./src/index.ts"
     ],
-    "image": "https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/.github/screenshots/lobby.png"
+    "image": "https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/lobby.png"
   },
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p webui --noEmit",
