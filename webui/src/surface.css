@@ -148,8 +148,22 @@
 /* Sessions keep their rename and archive buttons, shown in place of the state on hover. */
 .cs-srow { position: relative; }
 .cs-srow .cs-sacts { position: absolute; right: 4px; top: 0; bottom: 0; display: none; align-items: center; gap: 2px; }
-/* On hover the name ends before the action buttons (28px each + 2px gap) so they never sit on top of its text. */
-.cs-srow:is(:hover, :focus-within) > .cs-sr { padding-right: calc(8px + var(--acts, 0) * 30px); }
+/* On hover (or while its menu is open) the name ends before the "…" button so it never sits on top of its text. */
+.cs-srow[data-acts]:is(:hover, :focus-within, [data-menu]) > .cs-sr { padding-right: 40px; }
+.cs-srow[data-menu] .cs-sacts { display: flex; }
+.cs-srow[data-menu] .cs-sstate { display: none; }
+.cs-srow[data-menu] > .cs-sr { background: var(--hover); }
+.cs-smore[data-state="open"] { background: var(--fill); color: var(--foreground); }
+/* The row's menu, after the Claude app's: roomy rows, each action's letter at the end, Delete in the muted red. */
+.cs-smenu { z-index: 1100; min-width: 200px; padding: 6px; border-radius: 12px; transform-origin: var(--radix-dropdown-menu-content-transform-origin); animation: cs-smenu-in 160ms var(--spring) both; }
+.cs-smenu-item { height: 34px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: 8px; font-size: 14px; color: var(--foreground); cursor: pointer; outline: none; user-select: none; }
+.cs-smenu-item[data-highlighted] { background: var(--hover); }
+.cs-smenu-item[data-danger] { color: var(--stop-action); }
+.cs-smenu-item[data-danger][data-highlighted] { color: var(--stop-action-hover); }
+.cs-smenu-key { font: inherit; font-size: 12px; color: var(--muted-foreground); }
+.cs-smenu-rule { height: 1px; margin: 5px 4px; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
+@keyframes cs-smenu-in { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .cs-smenu { animation: none; } }
 .cs-srow:hover .cs-sacts, .cs-srow:focus-within .cs-sacts { display: flex; }
 .cs-srow:hover .cs-sstate, .cs-srow:focus-within .cs-sstate { display: none; }
 .cs-sact { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); cursor: pointer; }

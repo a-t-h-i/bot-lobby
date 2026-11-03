@@ -9,8 +9,7 @@
  * Switching to a session is a click on its row.
  */
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react"
-import { Archive, ChevronDown, CircleDashed, Pencil, Trash2 } from "lucide-react"
-import { ConfirmButton } from "@/ui/ConfirmButton"
+import { ChevronDown, CircleDashed } from "lucide-react"
 import type { StatusInfo } from "@protocol"
 import { Keys } from "@/components/ui/kbd"
 import { tip } from "@/ui/TipLayer"
@@ -24,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { FullscreenToggle, HelpButton, NotifyToggle, SoundToggle } from "./AppTools.tsx"
 import { useTopic } from "./hooks.ts"
 import { BayGhost, TabGlyph, useHoverBay } from "./Bays.tsx"
+import { HoldBay, SessionMenu } from "./SessionMenu.tsx"
 import { go, type Route } from "./router.ts"
 import { sessionEntries, type SessionEntry } from "./sessionList.ts"
 import { useApiRead } from "./useApiRead"
@@ -193,7 +193,7 @@ function RenameField({ entry, onDone }: { entry: SessionEntry; onDone: () => voi
   )
 }
 
-/** A session as a thin row: its name and, at the end, its state; Rename and Archive take the state's place on hover. */
+/** A session as a thin row: its name and, at the end, its state; on hover a "…" button takes the state's place and opens its menu. */
 function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const pick = useSwitch()
   const [renaming, setRenaming] = useState(false)
@@ -203,10 +203,9 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const canDelete = entry.where === "saved"
   const hasActions = canRename || canArchive || canDelete
   const style = { "--i": index } as CSSProperties
-  // How many action buttons show on hover, so the name ends before them instead of running under them.
-  const acts = Number(canRename) + Number(canArchive) + Number(canDelete)
+  const [menu, setMenu] = useState(false)
   return (
-    <li className="cs-srow session-item" data-fresh={entry.fresh || undefined} style={{ "--acts": acts } as CSSProperties}>
+    <li className="cs-srow session-item" data-fresh={entry.fresh || undefined} data-menu={menu || undefined} data-acts={hasActions || undefined}>
       {renaming ? (
         <div className="cs-sr" data-active={entry.where === "here" || undefined} style={style}>
           <RenameField entry={entry} onDone={() => setRenaming(false)} />
@@ -240,31 +239,13 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
       )}
       {!renaming && hasActions ? (
         <span className="cs-sacts">
-          {canRename ? (
-            <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className="cs-sact" {...tip("Rename", { side: "right" })}>
-              <Pencil aria-hidden="true" className="size-4" />
-            </button>
-          ) : null}
-          {canArchive ? (
-            <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className="cs-sact" {...tip("Archive", { side: "right" })}>
-              <Archive aria-hidden="true" className="size-4" />
-            </button>
-          ) : null}
-          {canDelete ? (
-            <ConfirmButton
-              iconOnly
-              className="cs-sact"
-              side="right"
-              label={`Delete ${entry.name}`}
-              text="Delete"
-              icon={Trash2}
-              variant="destructive"
-              title={`Delete ${entry.name}?`}
-              description="Its conversation file is removed for good. Archive it instead to keep it."
-              confirmLabel="Delete"
-              onConfirm={() => void act("sessions.delete", { sessionId: entry.sessionId! })}
-            />
-          ) : null}
+          <SessionMenu
+            name={entry.name}
+            onOpenChange={setMenu}
+            {...(canRename ? { onRename: () => setRenaming(true) } : {})}
+            {...(canArchive ? { onArchive: () => void archive(entry) } : {})}
+            {...(canDelete ? { onDelete: () => void act("sessions.delete", { sessionId: entry.sessionId! }) } : {})}
+          />
         </span>
       ) : null}
     </li>
@@ -411,7 +392,8 @@ export function useSidebar(props: SidebarProps) {
   listed.entries = useSessions()
   listed.flash = bay.flash
   const [query, setQuery] = useState("")
-  const open = pinned || bay.open
+  const [held, setHeld] = useState(false)
+  const open = pinned || bay.open || held
   const vars = { "--wL": rem(open ? OPEN.w : 122), "--hL": open ? OPEN.h : rem(40), "--sb-open-h": OPEN.h } as CSSProperties
   return {
     open,
@@ -434,7 +416,9 @@ export function useSidebar(props: SidebarProps) {
           <div className="cs-sbfull" inert={!open}>
             <NewRow hint={props.keys.newSession ?? "Alt+N"} />
             <SearchRow query={query} onQuery={setQuery} />
-            <Sessions query={query} />
+            <HoldBay.Provider value={setHeld}>
+              <Sessions query={query} />
+            </HoldBay.Provider>
             <Foot {...props} />
           </div>
         </aside>
