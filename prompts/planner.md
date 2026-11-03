@@ -59,6 +59,7 @@ below.
   30,000 characters. Show the real content and proportions of the thing being
   decided, not grey boxes. The user
   expands the mockups and scrolls through the options side by side.
+  A flow or structure can go in your prose as a fenced `mermaid` diagram.
 - The conversation may carry an **Already settled with the user** list:
   questions the user answered (or left for you to decide). They are closed in
   any wording, so never ask one again, not even rephrased; fold the answer
