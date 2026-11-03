@@ -3,7 +3,8 @@
  * theirs, the other agents), the agents' activity folded in place between its
  * messages (Alt+A opens or folds every run of steps), and their thinking
  * inline under the latest message (Alt+T opens or folds it). One column, with the
- * tasks under way beside it on a wide window (TaskWidgets).
+ * tasks under way and the session's files beside it on a wide window
+ * (TaskWidgets, SessionFiles).
  */
 import { ErrorState } from "@/app/States"
 import { useTopic } from "@/app/hooks"
@@ -11,8 +12,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { lobbyStore } from "@/lib/store"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import { Conversation } from "./Conversation"
+import { SessionFiles } from "./SessionFiles"
 import { TaskWidgets } from "./TaskWidgets"
-import type { ActivityEntry, ThoughtEntry } from "./types"
+import type { ActivityEntry, ChatEntry, ThoughtEntry } from "./types"
 
 const panesOf = (status?: StatusInfo) => status?.panels ?? { conversation: true, activity: true, thinking: true }
 
@@ -33,7 +35,10 @@ function LobbyView({ data, status }: { data?: LobbySnapshot; status?: StatusInfo
         hasOlder={data?.hasOlderChat ?? false}
         hasTask={Boolean(data?.task)}
       />
-      <TaskWidgets />
+      <div className="cs-lw">
+        <TaskWidgets />
+        <SessionFiles chat={(data?.chat ?? []) as ChatEntry[]} activity={(data?.activity ?? []) as ActivityEntry[]} />
+      </div>
     </div>
   )
 }

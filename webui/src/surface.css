@@ -1390,10 +1390,14 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 /* ---------------------------------------------------------------------------------------------------------------
  * The Lobby's side widget (tabs/lobby/TaskWidgets.tsx): the tasks under way in a small floating card at the top
  * left, under the sidebar button, as the bays float. Each task is a row that opens into its steps, one at a time. It shows
- * only when the window leaves room for it beside the chat column, and keeps to the top half.
+ * only when the window leaves room for it beside the chat column. The session's files (tabs/lobby/SessionFiles.tsx)
+ * reuse the card under it, a fold each for the files agents changed and the files you attached; one alone takes the room.
  * ------------------------------------------------------------------------------------------------------------- */
 .cs-lobby { position: relative; container: lobby / inline-size; }
-.cs-tw { position: absolute; z-index: 30; top: 57px; left: 5px; width: 272px; max-height: calc(50% - 84px); box-sizing: border-box; display: none; flex-direction: column; padding: 8px 6px 6px; border-radius: 12px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -6px rgb(60 45 30 / 0.09); transform-origin: 0 0; animation: cs-tw-in 420ms var(--spring) both; }
+/* The left column the cards stack in (tasks, then the session's files); it lets clicks through between them. */
+.cs-lw { position: absolute; z-index: 30; top: 57px; left: 5px; width: 272px; max-height: calc(100% - 210px); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.cs-lw > * { pointer-events: auto; }
+.cs-tw { flex: 0 1 auto; min-height: 0; max-height: 60%; box-sizing: border-box; display: none; flex-direction: column; padding: 8px 6px 6px; border-radius: 12px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -6px rgb(60 45 30 / 0.09); transform-origin: 0 0; animation: cs-tw-in 420ms var(--spring) both; }
 .dark .cs-tw { box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.22); }
 @container lobby (min-width: 1360px) { .cs-tw { display: flex; } }
 @media (pointer: coarse) { @container lobby (max-width: 1500px) { .cs-tw { display: none; } } }
@@ -1441,3 +1445,23 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 .cs-two:hover { background: var(--hover); color: var(--foreground); }
 .cs-two:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
 .cs-two svg { width: 13px; height: 13px; }
+/* The files card: one row per file, a file icon, its name and its +/- lines, monochrome. */
+.cs-tw.cs-sf { animation-delay: 60ms; }
+.cs-tw:only-child { max-height: 100%; }
+.cs-sfl { margin: 0; padding: 0 0 4px; list-style: none; }
+.cs-sfl li { animation: cs-tw-step 300ms var(--out) backwards; }
+.cs-sfl li:nth-child(2) { animation-delay: 20ms; } .cs-sfl li:nth-child(3) { animation-delay: 40ms; } .cs-sfl li:nth-child(n+4) { animation-delay: 60ms; }
+.cs-sfr { box-sizing: border-box; width: 100%; height: 30px; padding: 0 8px 0 10px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; color: var(--foreground); text-align: left; text-decoration: none; cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-sfr:hover { background: var(--hover); }
+.cs-sfr:active { transform: scale(0.985); transition: transform 90ms ease, background 76ms ease; }
+.cs-sfr:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-sfr[data-still] { cursor: default; color: var(--muted-foreground); }
+.cs-sfr[data-still]:hover { background: transparent; }
+.cs-sfr[data-still]:active { transform: none; }
+.cs-sfi { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.cs-sfr[data-live] .cs-sfi { color: var(--foreground); animation: cs-sf-live 1400ms ease-in-out infinite; }
+@keyframes cs-sf-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.cs-sfn { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-sfc { flex: none; display: flex; gap: 5px; font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.cs-sfc span:last-child:not(:only-child) { color: var(--faint); }
+@media (prefers-reduced-motion: reduce) { .cs-sfl li, .cs-tw.cs-sf { animation: none; } .cs-sfr[data-live] .cs-sfi { animation: none; } .cs-sfr:active { transform: none; } }
