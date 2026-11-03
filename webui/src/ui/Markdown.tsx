@@ -1,4 +1,4 @@
-/** Safe Markdown; only explicit question payloads are interpreted as HTML mockups. */
+/** Safe Markdown; a fenced `mockup` (sandboxed HTML) or `mermaid` block is drawn as a visual (see Visuals). */
 import { memo, useRef, useState, type ReactNode } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -13,6 +13,7 @@ import { AttachmentList, splitAttachments } from "./Attachments"
 import { isImageHref, lightboxClick } from "./Lightbox"
 import { useGradual } from "@/lib/useGradual"
 import { FileLink } from "@/app/code/FileLink"
+import { DiagramBlock, MockupBlock } from "./Visuals"
 import { filePathOf } from "@/app/code/codeStore"
 
 interface Node {
@@ -80,12 +81,26 @@ function CopyableCode({ text, children, block = false }: { text: string; childre
   </code>
 }
 
+function blockLanguage(n?: Node): string | undefined {
+  const names = n?.children?.find((child) => child.tagName === "code")?.properties?.className
+  return (Array.isArray(names) ? names : []).map(String).find((name) => name.startsWith("language-"))?.slice(9)
+}
+
+/** A fenced block: a `mockup` or `mermaid` one is drawn (its code is the fallback), any other is copyable code. */
+function FencedBlock(props: { node?: unknown; children?: ReactNode; source: string }) {
+  const n = props.node as Node | undefined
+  const language = blockLanguage(n)?.toLowerCase()
+  if (language !== "mockup" && language !== "mermaid") return <CodeBlock {...props} />
+  const text = hastText(n).replace(/\n$/, "")
+  const Visual = language === "mockup" ? MockupBlock : DiagramBlock
+  return <Visual source={text} fallback={<CodeBlock {...props} />} />
+}
+
 function CodeBlock({ node, children, source }: { node?: unknown; children?: ReactNode; source: string }) {
   const n = node as Node | undefined
   const text = codeSource(source, n?.position, true) ?? hastText(n)
   const { copied, copy } = useCopy(text)
-  const names = n?.children?.find((child) => child.tagName === "code")?.properties?.className
-  const language = (Array.isArray(names) ? names : []).map(String).find((name) => name.startsWith("language-"))?.slice(9)
+  const language = blockLanguage(n)
   return <div className="relative my-3 rounded-lg bg-muted">
     <div className="flex items-center justify-between pl-3"><span className="text-xs text-muted-foreground">{language && /^[\w+#.-]{1,20}$/.test(language) ? language : "code"} · tap to copy</span><ActionButton label={copied ? "Copied" : "Copy the code"} icon={copied ? Check : Copy} iconOnly onClick={() => void copy()} /></div>
     <pre className="!my-0 overflow-x-auto !rounded-t-none !bg-transparent px-3 pb-3 text-sm leading-relaxed [&>code]:block">{children}</pre>
@@ -94,7 +109,7 @@ function CodeBlock({ node, children, source }: { node?: unknown; children?: Reac
 
 function componentsFor(source: string): Components {
   return {
-    pre: (props) => <CodeBlock {...props} source={source} />,
+    pre: (props) => <FencedBlock {...props} source={source} />,
     code: ({ node, children }) => {
       const n = node as Node | undefined
       if (n?.properties?.copyBlocked) return <code>{children}</code>
