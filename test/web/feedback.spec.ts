@@ -43,7 +43,7 @@ test("delivery merge requires second confirmed action, no automatic publication"
   });
   await openScenario(page, server, "full");
   await task(page);
-  await expect(page.getByText("Checks: absent", { exact: true })).toBeVisible();
+  await expect(page.getByText(/^none · local QA/)).toBeVisible();
   expect(sent).toEqual([]);
   await page.getByRole("button", { name: "Merge to main", exact: true }).click();
   const confirm = page.getByRole("dialog", { name: "Confirm merge to main", exact: true });
@@ -78,7 +78,7 @@ test("delivery PR targets reviewed main without merging, deferral persists and s
   await expect(page.getByRole("status").filter({ hasText: "Saved for later" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("status").filter({ hasText: "Saved for later" })).toBeVisible();
-  await page.getByRole("button", { name: "Refresh review", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByText(new RegExp("d{40}"))).toBeVisible();
   expect(sent).toEqual([]);
   await page.getByRole("button", { name: "Create PR", exact: true }).click();
@@ -92,10 +92,10 @@ for (const status of ["in_progress", "successful", "recoverable_failure"] as con
     await detail(page, () => ({ delivery }));
     await openScenario(page, server, "full");
     await task(page);
-    const merge = page.getByRole("button", { name: "Merge to main", exact: true });
-    await expect(merge).toBeDisabled();
-    if (status === "recoverable_failure") await expect(page.getByRole("alert").filter({ hasText: "Completed work is retained" })).toBeVisible();
-    else await expect(page.getByRole("button", { name: "Create PR", exact: true })).toBeDisabled();
+    // An action that cannot run is left out, not greyed.
+    await expect(page.getByRole("button", { name: "Merge to main", exact: true })).toHaveCount(0);
+    if (status === "recoverable_failure") await expect(page.getByRole("alert").filter({ hasText: "PR lookup unavailable" })).toBeVisible();
+    else await expect(page.getByRole("button", { name: "Create PR", exact: true })).toHaveCount(0);
   });
 }
 

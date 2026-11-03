@@ -23,7 +23,7 @@ import { ActionBar, ActionButton } from "@/ui/Actions"
 import { ConfirmButton } from "@/ui/ConfirmButton"
 import { CheckMark, Pips, trackText } from "@/ui/task-facts"
 import { Comments } from "./Comments"
-import { DetailTrailer, PlanSections } from "./DetailSections"
+import { DetailTrailer, PlanSections, RecentRuns } from "./DetailSections"
 import { OpenInSession } from "./OpenInSession"
 import { PlanActions, PlanDetail } from "./PlanDetail"
 import { TaskInterventions } from "./TaskInterventions"
@@ -176,6 +176,7 @@ export function TaskDetail(props: DetailProps) {
       <Header row={row} task={task} />
       {detail.data ? <TaskInterventions row={row} detail={detail.data} onChanged={() => { detail.reload(); props.onChanged() }} /> : null}
       <p className="mt-2 text-[12.5px] text-muted-foreground"><PhaseTiming timing={detail.data?.timing ?? row.timing} {...(work ? { work } : {})} stopped={row.check !== "open"} /></p>
+      {detail.data ? <RecentRuns runs={detail.data.runs} /> : null}
       {detail.data?.delivery ? <DeliveryReview key={row.id} taskId={row.id} title={row.title} delivery={detail.data.delivery} onChanged={detail.reload} /> : null}
       {detail.data ? <PlanSections detail={detail.data} finished={!open} {...(open && detail.data.canSkip ? { skip: { taskId: row.id, onSkipped: () => { detail.reload(); props.onChanged() } } } : {})} /> : null}
       <Comments taskId={row.id} finished={!open} canComment={open} />

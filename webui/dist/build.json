@@ -1,6 +1,6 @@
 {
-  "hash": "4c3c32596e5e756b9bac7ae58ee440b3a0589f36ba9ba72c7bfec187993514a2",
-  "builtAt": "2026-11-02T20:08:19.935Z",
+  "hash": "707b0f68c18181f07358cc0b35b5217178803076f3a29be9410d0a3b1c9fea93",
+  "builtAt": "2026-11-03T08:10:16.081Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -448,7 +448,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "9cad357b4381cffe3e831008be9148471864eccff31089275a98ef08e36e4fa5"
+      "sha256": "890ddb5d7936045ab923a48fcfd4e593ddb95e176751c35b7b50e8295e826550"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -608,11 +608,11 @@
     },
     {
       "path": "webui/src/tabs/tasks/DeliveryReview.tsx",
-      "sha256": "7c72283d90fa5d5b766e32c7bf6f24b0bae0233d9b5e3023b7877f312872a53e"
+      "sha256": "995a6bde52fc56dddaff45e85356a2731479e646be77e2c38d4a5db201784d16"
     },
     {
       "path": "webui/src/tabs/tasks/DetailSections.tsx",
-      "sha256": "1ddd4ad3b9a532022126f7d7f058bde607bc1165a256acdc4fccc7c55f5d0a89"
+      "sha256": "6d85ed8ead9294b69bffbb889c3366bd23684996a3c35fc27f76ca508ee879c8"
     },
     {
       "path": "webui/src/tabs/tasks/OpenInSession.tsx",
@@ -636,7 +636,7 @@
     },
     {
       "path": "webui/src/tabs/tasks/TaskDetail.tsx",
-      "sha256": "44254849062d6929ad18c3d58ed6b89b4a9635013ffd23a68ea4068bba2e5482"
+      "sha256": "1c44e4ab8ce4d266f9c4b33f0f2ae91b525b0524d67fd7f2ec4b1cc8c108c3ce"
     },
     {
       "path": "webui/src/tabs/tasks/TaskInterventions.tsx",

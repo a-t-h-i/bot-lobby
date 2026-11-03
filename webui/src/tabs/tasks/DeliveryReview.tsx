@@ -6,6 +6,8 @@ import { Popup } from "@/components/ui/popup"
 import { Button } from "@/components/ui/button"
 import { PRIORITY, useOverlaySlot } from "@/lib/overlay"
 import { Section } from "@/ui/Section"
+import { tip } from "@/ui/TipLayer"
+import { AlertCircle, RefreshCw } from "lucide-react"
 
 type Delivery = NonNullable<TaskDetail["delivery"]>
 type Action = "create_pr" | "merge_main"
@@ -14,30 +16,33 @@ interface ReviewProps { taskId: string; title: string; delivery: Delivery; onCha
 const CONFIRM = "This merges the reviewed commit into main and pushes main, then removes the task worktree after verifying the merge. The task branch is kept."
 const STATUS = { pending_approval: "Ready for your review", deferred: "Saved for later", in_progress: "Delivery in progress", successful: "Delivered", recoverable_failure: "Delivery needs attention" }
 
-function Facts({ delivery: d, title }: { delivery: Delivery; title: string }) {
-  return <div className="cs-dlv grid gap-2 text-[12.5px]">
-    <p className="text-[13.5px] font-semibold break-words">{title}</p>
+const CHECK_WORDS: Record<NonNullable<Delivery["verification"]>["checks"], string> = { passing: "passing", failing: "failing", pending: "pending", absent: "none", unavailable: "unavailable", stale: "out of date" }
+
+/** Only the facts that are known: nothing reads "unavailable"; what is missing shows as a problem below instead. */
+function Facts({ delivery: d, title, state }: { delivery: Delivery; title: string; state: string }) {
+  const v = d.verification
+  return <div className="cs-dlv">
+    <p className="cs-dlvt"><span>{title}</span><span role="status" className="cs-dlvst">{state}</span></p>
     <dl>
-      <div><dt>Project</dt><dd>{d.project}</dd></div>
-      <div><dt>Repository</dt><dd>{d.repository ?? "Unavailable — refresh review"}</dd></div>
-      <div><dt>Source</dt><dd>{d.sourceBranch} · {d.sourceCommit ?? "Commit unavailable"}</dd></div>
-      <div><dt>Target</dt><dd>main{d.targetCommit ? ` · ${d.targetCommit}` : ""}</dd></div>
+      <div><dt>Branch</dt><dd>{d.sourceBranch} → main</dd></div>
+      {d.sourceCommit ? <div><dt>Commit</dt><dd>{d.sourceCommit}{d.targetCommit ? ` onto ${d.targetCommit}` : ""}</dd></div> : null}
+      {d.repository ? <div><dt>Repository</dt><dd>{d.repository}</dd></div> : null}
+      {v ? <div><dt>Checks</dt><dd title={v.summary}>{CHECK_WORDS[v.checks]} · local QA {v.localVerified ? "passed" : "not verified"}{v.requiredChecks.length ? ` · needs ${v.requiredChecks.join(", ")}` : ""}</dd></div> : null}
     </dl>
-    <p>Checks: {d.verification?.checks ?? "unavailable"}</p>
-    <p>{d.verification?.summary ?? "Verification unavailable. Refresh the review before delivery."}</p>
-    {d.verification ? <p className="text-muted-foreground">Local completion/QA: {d.verification.localVerified ? "passed" : "not verified"} · Repository rules: {d.verification.rulesKnown ? "known" : "unavailable"}{d.verification.requiredChecks.length ? ` · Required: ${d.verification.requiredChecks.join(", ")}` : ""}</p> : null}
   </div>
 }
 
-function DeliveryAction({ action, delivery, busy, onAction }: { action: Action; delivery: Delivery; busy: boolean; onAction: (action: Action) => void }) {
-  const reason = delivery.blocked[action]
-  const retryCleanup = action === "merge_main" && delivery.status === "successful" && Boolean(delivery.cleanupError)
-  const disabled = busy || delivery.status === "in_progress" || (delivery.status === "successful" && !retryCleanup) || Boolean(reason)
-  return <div className="grid min-w-0 gap-1">
-    <Button variant="outline" size="sm" className="w-fit" disabled={disabled} onClick={() => onAction(action)}>{action === "create_pr" ? "Create PR" : retryCleanup ? "Retry worktree cleanup" : "Merge to main"}</Button>
-    <p className="text-xs text-muted-foreground">{action === "create_pr" ? "Pushes the task branch and opens a PR targeting main. Does not merge." : retryCleanup ? "Main was delivered. Removes the retained worktree after confirmation." : "Updates and pushes main, then removes the task worktree. Requires confirmation."}</p>
-    {reason ? <p className="text-sm text-destructive">{reason} Refresh review after resolving this restriction, then choose the action again.</p> : null}
-  </div>
+/** Every distinct problem once: the same sentence from the error and both blocked actions collapses into one line. */
+function problems(d: Delivery, local?: string): string[] {
+  const all = [local ?? d.error, d.cleanupError, d.blocked.create_pr, d.blocked.merge_main].filter((text): text is string => Boolean(text))
+  return [...new Set(all.map((text) => text.trim()))]
+}
+
+/** An action that can run right now; a blocked or finished one is left out, not greyed. */
+function available(action: Action, d: Delivery): boolean {
+  if (d.blocked[action] || d.status === "in_progress") return false
+  if (d.status === "successful") return action === "merge_main" && Boolean(d.cleanupError)
+  return true
 }
 
 async function sendRequest(kind: RequestKind, taskId: string, reviewId: string) {
@@ -102,27 +107,23 @@ function useDeliveryController(props: ReviewProps) {
 
 type Controller = ReturnType<typeof useDeliveryController>
 function Status({ review: r }: { review: Controller }) {
+  const d = r.current
+  const issues = problems(d, r.error)
   return <>
-    <p className="mt-2 text-sm text-muted-foreground">Task completion is recorded separately. Nothing is published without your approval.</p>
-    <p role="status" className="text-sm">{r.busy ? "Updating delivery…" : r.current.operation ? `Operation: ${r.current.operation.stage}` : STATUS[r.current.status]}</p>
-    {r.current.error || r.error ? <p role="alert" className="text-sm text-destructive">{r.error ?? r.current.error} Completed work is retained. Refresh review to reconcile the result before retrying.</p> : null}
-    {r.current.cleanupError ? <p role="alert" className="text-sm text-destructive">{r.current.cleanupError} Retry cleanup after resolving it.</p> : null}
-    {r.current.operation?.worktreeRemoved ? <p className="text-sm">Task worktree removed.</p> : null}
-    {r.current.result ? <p className="text-sm break-all">{r.current.result.action === "create_pr" ? `PR #${r.current.result.pullNumber ?? ""} created` : `main pushed · ${r.current.result.commit ?? ""}`}{r.current.result.pullUrl ? <span> · {r.current.result.pullUrl}</span> : null}</p> : null}
+    {issues.length ? <ul role="alert" className="cs-dlvp">{issues.map((text) => <li key={text}><AlertCircle aria-hidden="true" />{text}</li>)}</ul> : null}
+    {d.result ? <p className="cs-dlvs break-all">{d.result.action === "create_pr" ? `PR #${d.result.pullNumber ?? ""} created` : `main pushed · ${d.result.commit ?? ""}`}{d.result.pullUrl ? <> · <a href={d.result.pullUrl} target="_blank" rel="noreferrer">{d.result.pullUrl}</a></> : null}{d.operation?.worktreeRemoved ? " · worktree removed" : ""}</p> : null}
   </>
 }
 
 function Actions({ review: r }: { review: Controller }) {
-  return <>
-    <div className="mt-3 grid grid-cols-2 gap-3">
-      <DeliveryAction action="create_pr" delivery={r.current} busy={r.busy} onAction={() => void r.request("create_pr")} />
-      <DeliveryAction action="merge_main" delivery={r.current} busy={r.busy} onAction={r.reviewMerge} />
-    </div>
-    <div className="mt-3 flex flex-wrap gap-2">
-      <Button variant="outline" size="sm" disabled={r.busy} onClick={() => void r.request("refresh")}>Refresh review</Button>
-      <Button variant="ghost" size="sm" disabled={r.busy || r.terminal} onClick={() => void r.request("defer")}>Not now</Button>
-    </div>
-  </>
+  const d = r.current
+  const retryCleanup = d.status === "successful" && Boolean(d.cleanupError)
+  return <div className="cs-dlva">
+    {available("create_pr", d) ? <Button variant="outline" size="sm" disabled={r.busy} onClick={() => void r.request("create_pr")} {...tip("Pushes the task branch and opens a PR to main. Does not merge.")}>Create PR</Button> : null}
+    {available("merge_main", d) ? <Button variant="outline" size="sm" disabled={r.busy} onClick={r.reviewMerge} {...tip(retryCleanup ? "Removes the kept worktree. Asks first." : "Merges into main, pushes, then removes the worktree. Asks first.")}>{retryCleanup ? "Retry worktree cleanup" : "Merge to main"}</Button> : null}
+    <Button variant="ghost" size="sm" disabled={r.busy} onClick={() => void r.request("refresh")}><RefreshCw aria-hidden="true" />Refresh</Button>
+    {r.terminal ? null : <Button variant="ghost" size="sm" disabled={r.busy} onClick={() => void r.request("defer")}>Not now</Button>}
+  </div>
 }
 
 function Confirmation({ review: r }: { review: Controller }) {
@@ -142,9 +143,12 @@ function Confirmation({ review: r }: { review: Controller }) {
 }
 
 function Panel({ title, review }: { title: string; review: Controller }) {
-  return <Section title="Completed work · delivery review" right={STATUS[review.current.status]}>
-    <div className="cs-sunkbox">
-      <Facts delivery={review.current} title={title} />
+  const d = review.current
+  const blocked = d.status === "pending_approval" && problems(d, review.error).length > 0
+  const state = review.busy ? "Updating…" : d.operation && d.status === "in_progress" ? d.operation.stage : blocked ? "Needs a fix first" : STATUS[d.status]
+  return <Section title="Delivery">
+    <div className="cs-sunkbox grid gap-3">
+      <Facts delivery={review.current} title={title} state={state} />
       <Status review={review} />
       <Actions review={review} />
     </div>

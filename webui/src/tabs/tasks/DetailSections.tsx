@@ -8,7 +8,7 @@
  * plan text and steps arrive with `tasks.get`.
  */
 import { useEffect, useId, useState, type CSSProperties } from "react"
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Loader, Minus, X } from "lucide-react"
 import type { TaskDetail as TaskDetailData } from "@protocol"
 import { executionWords } from "@/lib/phaseTiming"
 import { useElapsed } from "@/lib/useElapsed"
@@ -242,40 +242,77 @@ function Amendments({ amendments }: { amendments: string[] }) {
   )
 }
 
-/** How much QA the built change warrants, as Jev read its diff: the level, how deep QA goes, where it looks and why. */
+/** How much QA the built change warrants, as Jev read its diff: the level and depth on one line, then what to check first and why, each a list to scan. */
 function QaRisk({ risk }: { risk: NonNullable<TaskDetailData["qaRisk"]> }) {
   const words = QA_RISK_WORDS[risk.risk]
   return (
     <Section title="QA risk" right={qaRiskNote(risk)}>
-      <p className="cs-qa1" data-qa-risk={risk.risk}>
-        <span className="cs-bdg" data-t={words.tone}>{words.label}</span>
-        <span className="text-muted-foreground">{words.depth}</span>
-      </p>
-      {risk.focusAreas.length > 0 ? (
-        <ul className="cs-bl" aria-label="What QA looks at first">
-          {risk.focusAreas.map((area) => (
-            <li key={area} className="break-words">{area}</li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="cs-qaf">
-        {risk.riskFactors.join(" · ")}
-        {risk.qaRequired ? ` · existing tests ${risk.existingTestsLikelySufficient ? "likely enough" : "likely not enough"}` : ""}
-      </p>
+      <div className="cs-qa" data-qa-risk={risk.risk}>
+        <p className="cs-qa1">
+          <span className="cs-bdg" data-t={words.tone}>{words.label}</span>
+          <span className="min-w-0 text-muted-foreground">{words.depth}</span>
+        </p>
+        {risk.qaRequired ? (
+          <p className="cs-qat" data-ok={risk.existingTestsLikelySufficient || undefined}>
+            {risk.existingTestsLikelySufficient ? <Check aria-hidden="true" /> : <X aria-hidden="true" />}
+            {risk.existingTestsLikelySufficient ? "Existing tests likely cover it" : "Existing tests likely not enough"}
+          </p>
+        ) : null}
+        {risk.focusAreas.length > 0 ? (
+          <div className="cs-qag">
+            <h4>Check first</h4>
+            <ol aria-label="What QA looks at first">
+              {risk.focusAreas.map((area) => <li key={area}>{area}</li>)}
+            </ol>
+          </div>
+        ) : null}
+        {risk.riskFactors.length > 0 ? (
+          <div className="cs-qag" data-why="">
+            <h4>Why</h4>
+            <ul aria-label="What the change touches">
+              {risk.riskFactors.map((factor) => <li key={factor}>{factor}</li>)}
+            </ul>
+          </div>
+        ) : null}
+      </div>
     </Section>
   )
 }
 
-function Runs({ runs }: { runs: string[] }) {
+/** A run line as the server writes it (`✓ DEV worker · 28s · …`, a failure's reason after ` — `), split for display. */
+function parseRun(line: string): { state: "ok" | "bad" | "live" | "off"; who: string; meta: string; why: string } {
+  const mark = line.charAt(0)
+  const state = mark === "✓" ? "ok" : mark === "✗" ? "bad" : mark === "◐" ? "live" : "off"
+  const body = /^[✓✗◐·]\s/.test(line) ? line.slice(2) : line
+  const dash = body.indexOf(" — ")
+  const main = dash >= 0 ? body.slice(0, dash) : body
+  const [who = "", ...rest] = main.split(" · ")
+  return { state, who, meta: rest.join(" · "), why: dash >= 0 ? body.slice(dash + 3) : "" }
+}
+
+const RUN_ICON = { ok: Check, bad: X, live: Loader, off: Minus }
+const RUN_WORD = { ok: "succeeded", bad: "failed", live: "running", off: "cancelled" }
+
+/** The last runs, newest first, as plain monochrome rows: a check or a cross, who ran, then the quiet facts; the full line is its tooltip. */
+export function RecentRuns({ runs }: { runs: string[] }) {
   if (runs.length === 0) return null
+  const failed = runs.filter((run) => run.startsWith("✗")).length
   return (
-    <Section title="Recent runs">
-      <ul className="cs-bl cs-plain">
-        {runs.map((run, index) => (
-          <li key={`${index}-${run}`} className="break-words">
-            {run}
-          </li>
-        ))}
+    <Section title="Recent runs" {...(failed ? { right: `${failed} failed` } : {})}>
+      <ul className="cs-runs">
+        {[...runs].reverse().map((line, index) => {
+          const run = parseRun(line)
+          const Icon = RUN_ICON[run.state]
+          return (
+            <li key={`${index}-${line}`} data-s={run.state} title={line}>
+              <Icon aria-hidden="true" className="cs-runi" />
+              <span className="sr-only">{RUN_WORD[run.state]}: </span>
+              <b>{run.who}</b>
+              <span className="cs-runm">{run.meta}</span>
+              {run.why ? <span className="cs-runw">{run.why}</span> : null}
+            </li>
+          )
+        })}
       </ul>
     </Section>
   )
@@ -310,13 +347,12 @@ export function PlanSections({ detail, finished, skip }: { detail: TaskDetailDat
   )
 }
 
-/** Amendments, Waiting on, QA risk and Recent runs — the sections below Comments. */
+/** Amendments and QA risk — the sections below Comments (Recent runs sit at the top). */
 export function DetailTrailer({ detail }: { detail: TaskDetailData }) {
   return (
     <>
       <Amendments amendments={detail.amendments} />
       {detail.qaRisk ? <QaRisk risk={detail.qaRisk} /> : null}
-      <Runs runs={detail.runs} />
     </>
   )
 }

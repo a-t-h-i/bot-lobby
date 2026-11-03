@@ -290,7 +290,7 @@
    small UI size. */
 .chat-prose { font-size: 15px; line-height: 1.6; letter-spacing: -0.003em; }
 .chat-prose .md-body, .cs-umsg .md-body { font-size: inherit; line-height: inherit; }
-.chat-bubble.cs-umsg { position: relative; max-width: 70%; margin-right: 9px; padding: 9px 15px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 15px; line-height: 1.5; letter-spacing: -0.003em; }
+.chat-bubble.cs-umsg { position: relative; max-width: calc(100% - 9px); margin-right: 9px; padding: 9px 15px; border-radius: 0; background: none; box-shadow: none; color: var(--foreground); font-size: 15px; line-height: 1.5; letter-spacing: -0.003em; }
 .cs-umsg .cs-uf { position: absolute; inset: 0; display: block; pointer-events: none; }
 .cs-umsg .cs-uf { --shape: var(--bubble); }
 /* A plain soft fill, no outline: the colour alone sets it off from the page. */
@@ -890,7 +890,6 @@
 .cs-bl { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--muted-foreground); line-height: 1.5; overflow-wrap: anywhere; }
 .cs-bl.cs-plain { list-style: none; padding: 0; }
 .cs-qa1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px; font-size: 13px; }
-.cs-qaf { margin: 0; font-size: 12px; color: var(--faint); line-height: 1.5; overflow-wrap: anywhere; }
 .cs-fpb { padding: 14px 16px; border-radius: 10px; background: var(--sunk); }
 .cs-cm { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
 .cs-cmc { padding: 11px 14px; border-radius: 10px; background: var(--sunk); min-width: 0; }
@@ -906,11 +905,45 @@
 @media (prefers-reduced-motion: reduce) { .cs-arow :is(.cs-bt, .cs-be), .cs-avs i, .cs-arow .cs-live::before { animation: none; } }
 .cs-cal .cs-wacts { display: flex; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 2px solid var(--page); flex-wrap: wrap; }
 .cs-sunkbox [data-slot="button"] { height: 28px; padding: 0 11px; font-size: 12.5px; border-radius: 10px; }
-.cs-dlv dl { margin: 2px 0 0; display: grid; gap: 3px; color: var(--muted-foreground); word-break: break-all; }
-.cs-dlv dl div { display: flex; gap: 6px; }
+/* Delivery: the title, only the facts that are known, each problem once, then the actions that can run now. */
+.cs-dlv { display: grid; gap: 8px; font-size: 12.5px; min-width: 0; }
+.cs-dlvt { margin: 0; display: flex; align-items: baseline; gap: 12px; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.cs-dlvt > span:first-child { min-width: 0; flex: 1; }
+.cs-dlvst { flex: none; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.cs-dlv dl { margin: 0; display: grid; gap: 4px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.cs-dlv dl div { display: flex; gap: 8px; }
 .cs-dlv dt { color: var(--faint); flex: none; width: 76px; }
-.cs-dlv dd { margin: 0; color: var(--foreground); }
-.cs-dlv p { margin: 0; line-height: 1.5; color: var(--muted-foreground); }
+.cs-dlv dd { margin: 0; color: var(--foreground); min-width: 0; }
+.cs-dlvs { margin: 0; font-size: 12.5px; color: var(--muted-foreground); }
+.cs-dlvs a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.cs-dlvp { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; line-height: 1.5; color: var(--bad); overflow-wrap: anywhere; }
+.cs-dlvp li { display: flex; gap: 8px; }
+.cs-dlvp svg { flex: none; width: 14px; height: 14px; margin-top: 3px; }
+.cs-dlva { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-top: 12px; border-top: 2px solid var(--page); }
+.cs-dlva [data-slot="button"] svg { width: 13px; height: 13px; }
+
+/* Recent runs: monochrome rows, a check or a cross, who ran in the ink, the facts quiet after it. */
+.cs-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12.5px; }
+.cs-runs li { display: flex; align-items: baseline; gap: 8px; min-width: 0; line-height: 1.6; color: var(--muted-foreground); }
+.cs-runs b { font-weight: 550; color: var(--foreground); white-space: nowrap; }
+.cs-runs .cs-runi { flex: none; width: 13px; height: 13px; align-self: center; color: var(--foreground); stroke-width: 2.4; }
+.cs-runs li[data-s="off"] .cs-runi, .cs-runs li[data-s="live"] .cs-runi { color: var(--faint); }
+.cs-runs .cs-runm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--faint); font-variant-numeric: tabular-nums; }
+.cs-runs .cs-runw { flex: 1 1 40%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* QA risk: level and depth, the test call, then "Check first" and "Why" as short lists to scan. */
+.cs-qa { display: grid; gap: 12px; font-size: 13px; }
+.cs-qa .cs-qa1 { flex-wrap: nowrap; align-items: center; }
+.cs-qat { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted-foreground); }
+.cs-qat svg { width: 13px; height: 13px; flex: none; stroke-width: 2.4; color: var(--foreground); }
+.cs-qag { display: grid; grid-template-columns: 92px 1fr; gap: 0 12px; min-width: 0; }
+.cs-qag h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--faint); line-height: 1.6; }
+.cs-qag :is(ol, ul) { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; min-width: 0; counter-reset: qa; line-height: 1.5; overflow-wrap: anywhere; }
+.cs-qag ol li { counter-increment: qa; display: flex; gap: 8px; color: var(--foreground); }
+.cs-qag ol li::before { content: counter(qa); flex: none; width: 14px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.cs-qag ul li { color: var(--muted-foreground); font-size: 12.5px; display: flex; gap: 8px; }
+.cs-qag ul li::before { content: ""; flex: none; width: 4px; height: 4px; margin: 0.6em 5px 0; border-radius: 50%; background: var(--faint); }
+@media (max-width: 560px) { .cs-qag { grid-template-columns: 1fr; gap: 4px; } }
 
 /* Plan: one column of conversation and, at its right, the rail of round, seats and actions. */
 .cs-pside { position: absolute; right: 30px; top: 74px; z-index: 5; display: flex; flex-direction: column; align-items: center; }
