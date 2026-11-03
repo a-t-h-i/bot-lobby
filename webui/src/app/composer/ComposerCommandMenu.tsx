@@ -72,9 +72,9 @@ const LISTBOX_LABEL_BY_TRIGGER: Record<ComposerTriggerKind, string> = {
 /** At most this many rows show; more scroll. */
 export const SUGGESTION_ROWS = 8
 
-/** The bubble's height for these rows: 4px padding above and below, 30px a row. */
+/** The bubble's height for these rows: 8px padding above (clear of the bubble's 12px corners), 4px below, 30px a row. */
 export function suggestionHeight(count: number): number {
-  return 8 + Math.min(count, SUGGESTION_ROWS) * 30
+  return 12 + Math.min(count, SUGGESTION_ROWS) * 30
 }
 
 let measurer: CanvasRenderingContext2D | null | undefined
@@ -135,7 +135,7 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
       data-more-up={more.up || undefined}
       data-more-down={more.down || undefined}
       onScroll={measure}
-      className="bubble-pane bubble-scroll cs-cmd overflow-y-auto p-1"
+      className="bubble-pane bubble-scroll cs-cmd overflow-y-auto px-1 pt-2 pb-1"
       // In rem, like the rows inside: a px height here ignored the UI's 90% scale, so the list stood taller than
       // its bubble, cutting off the top row and leaving a gap under the last.
       style={{ height: rem(suggestionHeight(props.items.length)) }}

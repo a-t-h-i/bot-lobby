@@ -1,6 +1,6 @@
 {
-  "hash": "fa7cf92ec851311ae8dbff8fa90f102e8ed5c1d96d53b665d844a6abd4c8ec48",
-  "builtAt": "2026-11-03T08:51:55.001Z",
+  "hash": "66d8142461f2413a601632e659d065291d30dc566d44e9e50ce17b4696cdf6ca",
+  "builtAt": "2026-11-03T09:57:57.337Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -452,7 +452,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "fc30dd3438d4efa23faed7de183eb66d8a68706eb1c0ef015b6d4e40bbd27e87"
+      "sha256": "73779294fb7b6505c23f4065d35a33e157b273908cce1137996b20f08130f232"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -508,11 +508,15 @@
     },
     {
       "path": "webui/src/tabs/lobby/LobbyTab.tsx",
-      "sha256": "7616b0956fe49e10d42193d700b81d6969a16b6ca38d8f1f02276dbb2e6a7f42"
+      "sha256": "4f0f50991b7072511c7d45e21cfd40d27fa349d9dab33d5b51c626d3a5534f46"
     },
     {
       "path": "webui/src/tabs/lobby/RoleWord.tsx",
       "sha256": "e6e92c0d6f7784d1d5a30bf7fca6aae08b9f2683860b2081351a31c27eb71e28"
+    },
+    {
+      "path": "webui/src/tabs/lobby/TaskWidgets.tsx",
+      "sha256": "626afe6f0866f14ba27012464c89d78b63c30a9fab835ca730c0121bc229421a"
     },
     {
       "path": "webui/src/tabs/lobby/busy.ts",
