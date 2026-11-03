@@ -1382,11 +1382,11 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 
 /* ---------------------------------------------------------------------------------------------------------------
  * The Lobby's side widget (tabs/lobby/TaskWidgets.tsx): the tasks under way in a small floating card at the top
- * right, under the tools, as the bays float. Each task is a row that opens into its steps, one at a time. It shows
- * only when the window leaves room for it beside the chat column, and stops short of the thread's scroll hints.
+ * left, under the sidebar button, as the bays float. Each task is a row that opens into its steps, one at a time. It shows
+ * only when the window leaves room for it beside the chat column, and keeps to the top half.
  * ------------------------------------------------------------------------------------------------------------- */
 .cs-lobby { position: relative; container: lobby / inline-size; }
-.cs-tw { position: absolute; z-index: 30; top: 57px; right: 5px; width: 272px; max-height: calc(50% - 84px); box-sizing: border-box; display: none; flex-direction: column; padding: 8px 6px 6px; border-radius: 12px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -6px rgb(60 45 30 / 0.09); transform-origin: 100% 0; animation: cs-tw-in 420ms var(--spring) both; }
+.cs-tw { position: absolute; z-index: 30; top: 57px; left: 5px; width: 272px; max-height: calc(50% - 84px); box-sizing: border-box; display: none; flex-direction: column; padding: 8px 6px 6px; border-radius: 12px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -6px rgb(60 45 30 / 0.09); transform-origin: 0 0; animation: cs-tw-in 420ms var(--spring) both; }
 .dark .cs-tw { box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.22); }
 @container lobby (min-width: 1360px) { .cs-tw { display: flex; } }
 @media (pointer: coarse) { @container lobby (max-width: 1500px) { .cs-tw { display: none; } } }
@@ -1399,7 +1399,6 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 .cs-twh { box-sizing: border-box; width: 100%; height: 34px; padding: 0 8px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
 .cs-twh:hover { background: var(--hover); }
 .cs-twh:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
-.cs-twh .cs-mk { width: 16px; height: 16px; }
 .cs-twt { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-twn { flex: none; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
 .cs-twc { flex: none; width: 14px; height: 14px; color: var(--faint); transition: transform 320ms var(--spring); }
@@ -1412,14 +1411,22 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 .cs-tws li { display: flex; align-items: flex-start; gap: 9px; padding: 4px 0; font-size: 13px; line-height: 1.45; color: var(--foreground); animation: cs-tw-step 300ms var(--out) backwards; }
 .cs-tws li:nth-child(2) { animation-delay: 20ms; } .cs-tws li:nth-child(3) { animation-delay: 40ms; } .cs-tws li:nth-child(4) { animation-delay: 60ms; } .cs-tws li:nth-child(n+5) { animation-delay: 80ms; }
 @keyframes cs-tw-step { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-.cs-twm { flex: none; width: 16px; height: 16px; stroke: color-mix(in srgb, var(--foreground) 45%, transparent); }
-.cs-tws .cs-twm { margin-top: 1.5px; }
-.cs-twm[data-m="now"] { stroke: var(--foreground); }
-.cs-twm[data-m="skip"] { stroke: var(--faint); }
-.cs-twa { transform-origin: 8px 8px; animation: cs-tw-spin 900ms linear infinite; }
-@keyframes cs-tw-spin { to { transform: rotate(360deg); } }
-.cs-twd { fill: color-mix(in srgb, var(--foreground) 14%, transparent); stroke: none; }
-.cs-twk { stroke: var(--foreground); }
+.cs-twm { position: relative; flex: none; width: 15px; height: 15px; box-sizing: border-box; display: grid; place-items: center; border-radius: 4.5px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 28%, transparent); transition: background 160ms ease, box-shadow 160ms ease; }
+.cs-tws .cs-twm { margin-top: 2px; }
+.cs-twm svg { width: 15px; height: 15px; stroke: #fff; }
+.cs-twm::after { content: ""; position: absolute; inset: 4px; border-radius: 2px; background: transparent; }
+.cs-twm[data-m="now"] { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.cs-twm[data-m="now"]::after { background: var(--primary); animation: cs-tw-breathe 1200ms ease-in-out infinite; }
+.cs-twm[data-m="wait"] { box-shadow: inset 0 0 0 1.5px var(--warn); }
+.cs-twm[data-m="wait"]::after { background: var(--warn); }
+.cs-twm[data-m="done"] { background: var(--primary); box-shadow: none; animation: cs-tw-pop 380ms var(--spring) backwards; }
+.cs-twm[data-m="done"] path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cs-tw-tick 260ms var(--out) 120ms forwards; }
+.cs-twm[data-m="skip"] { background: var(--sunk); box-shadow: none; }
+.cs-twm[data-m="skip"] svg { stroke: var(--muted-foreground); }
+@keyframes cs-tw-breathe { 0%, 100% { transform: scale(0.55); opacity: 0.55; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes cs-tw-pop { from { transform: scale(0.6); } to { transform: scale(1); } }
+@keyframes cs-tw-tick { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .cs-twm[data-m="done"] path { stroke-dashoffset: 0; } }
 .cs-tws li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
 .cs-tws li[data-s="done"] > span:last-child { color: var(--muted-foreground); }
 .cs-tws li[data-s="skip"] > span:last-child { color: var(--faint); text-decoration: line-through; }

@@ -10,33 +10,22 @@ import { ArrowUpRight, ChevronDown } from "lucide-react"
 import type { TaskRow } from "@protocol"
 import { useApiRead } from "@/app/useApiRead"
 import { go, tabHash } from "@/app/router"
-import { CheckMark } from "@/ui/task-facts"
 
 /** A task still under way: on the list, not yet done or dropped. */
 const underWay = (row: TaskRow) => row.kind === "task" && row.check === "open" && (row.section === "mine" || row.section === "others")
 const waits = (row: TaskRow) => /wait|block|review|propos/i.test(row.status)
 
-type Mark = "open" | "now" | "done" | "skip"
+type Mark = "open" | "now" | "wait" | "done" | "skip"
 
-/** A step's mark, drawn like a terminal checklist: a dashed ring still to do, a turning arc under way, a tick done. */
-function StepMark({ mark }: { mark: Mark }) {
+/** A checkbox: empty to do, a breathing square under way (amber while it waits on someone), ticked with a pop when done. */
+function Box({ mark }: { mark: Mark }) {
   return (
-    <svg className="cs-twm" data-m={mark} viewBox="0 0 16 16" aria-hidden="true" fill="none">
-      {mark === "open" || mark === "skip" ? <circle cx="8" cy="8" r="6.25" strokeWidth="1.5" strokeDasharray="2.2 2.4" /> : null}
-      {mark === "skip" ? <path d="M5 11L11 5" strokeWidth="1.5" strokeLinecap="round" /> : null}
-      {mark === "now" ? (
-        <>
-          <circle cx="8" cy="8" r="6.25" strokeWidth="1.5" opacity="0.2" />
-          <path className="cs-twa" d="M8 1.75a6.25 6.25 0 0 1 6.25 6.25" strokeWidth="1.5" strokeLinecap="round" />
-        </>
-      ) : null}
-      {mark === "done" ? (
-        <>
-          <circle cx="8" cy="8" r="7" className="cs-twd" />
-          <path d="M5 8.2l2 2 4-4.2" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="cs-twk" />
-        </>
-      ) : null}
-    </svg>
+    <span className="cs-twm" data-m={mark} aria-hidden="true">
+      <svg viewBox="0 0 16 16" fill="none">
+        {mark === "done" ? <path d="M4.5 8.4l2.3 2.3 4.7-5" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" pathLength="1" /> : null}
+        {mark === "skip" ? <path d="M5 8h6" strokeWidth="1.6" strokeLinecap="round" /> : null}
+      </svg>
+    </span>
   )
 }
 
@@ -51,7 +40,7 @@ function Steps({ taskId }: { taskId: string }) {
         const mark: Mark = step.status === "done" ? "done" : step.status === "skipped" ? "skip" : step.active || step.status === "current" ? "now" : "open"
         return (
           <li key={`${index}-${step.text}`} data-s={mark}>
-            <StepMark mark={mark} />
+            <Box mark={mark} />
             <span>{step.text}</span>
           </li>
         )
@@ -67,7 +56,7 @@ function TaskItem({ row, open, onToggle }: { row: TaskRow; open: boolean; onTogg
   return (
     <li className="cs-twi" data-open={open ? "true" : undefined}>
       <button type="button" className="cs-twh" aria-expanded={open} onClick={onToggle}>
-        {!live && waits(row) ? <CheckMark check="open" waiting /> : <StepMark mark={live ? "now" : "open"} />}
+        <Box mark={live ? "now" : waits(row) ? "wait" : "open"} />
         <span className="cs-twt" title={row.title}>{row.title}</span>
         {total > 0 ? <span className="cs-twn">{done}/{total}</span> : null}
         <ChevronDown aria-hidden="true" className="cs-twc" />
