@@ -39,8 +39,8 @@ export const SIDEBAR_KEY = "app.sidebar.pinned"
 
 export const toggleSidebarPin = () => toggleCollapsed(SIDEBAR_KEY)
 
-/** The open sidebar's size: 244px wide, 600px tall where the window has room (drawn at the 15px root; see lib/uiScale). */
-const OPEN = { w: 244, h: `min(${rem(600)}, calc(100vh - ${rem(40)}))` }
+/** The open sidebar's size: 288px wide, 600px tall where the window has room (drawn at the 15px root; see lib/uiScale). */
+const OPEN = { w: 288, h: `min(${rem(600)}, calc(100vh - ${rem(40)}))` }
 
 const TOOL = "cs-iconbtn cs-sm"
 
@@ -188,7 +188,7 @@ function RenameField({ entry, onDone }: { entry: SessionEntry; onDone: () => voi
           onDone()
         }
       }}
-      className="h-6 w-full min-w-0 rounded-md bg-[var(--fill)] px-1.5 text-[13px] text-foreground outline-none ring-2 ring-ring"
+      className="h-7 w-full min-w-0 rounded-md bg-[var(--fill)] px-1.5 text-[14px] text-foreground outline-none ring-2 ring-ring"
     />
   )
 }
@@ -203,8 +203,10 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
   const canDelete = entry.where === "saved"
   const hasActions = canRename || canArchive || canDelete
   const style = { "--i": index } as CSSProperties
+  // How many action buttons show on hover, so the name ends before them instead of running under them.
+  const acts = Number(canRename) + Number(canArchive) + Number(canDelete)
   return (
-    <li className="cs-srow session-item" data-fresh={entry.fresh || undefined}>
+    <li className="cs-srow session-item" data-fresh={entry.fresh || undefined} style={{ "--acts": acts } as CSSProperties}>
       {renaming ? (
         <div className="cs-sr" data-active={entry.where === "here" || undefined} style={style}>
           <RenameField entry={entry} onDone={() => setRenaming(false)} />
@@ -240,12 +242,12 @@ function SessionRow({ entry, index }: { entry: SessionEntry; index: number }) {
         <span className="cs-sacts">
           {canRename ? (
             <button type="button" aria-label={`Rename ${entry.name}`} onClick={() => setRenaming(true)} className="cs-sact" {...tip("Rename", { side: "right" })}>
-              <Pencil aria-hidden="true" className="size-3.5" />
+              <Pencil aria-hidden="true" className="size-4" />
             </button>
           ) : null}
           {canArchive ? (
             <button type="button" aria-label={`Archive ${entry.name}`} onClick={() => void archive(entry)} className="cs-sact" {...tip("Archive", { side: "right" })}>
-              <Archive aria-hidden="true" className="size-3.5" />
+              <Archive aria-hidden="true" className="size-4" />
             </button>
           ) : null}
           {canDelete ? (
