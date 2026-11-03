@@ -89,6 +89,19 @@ interface Pending {
   image?: string
   state: "uploading" | "ready"
   info?: UploadInfo
+  /** Text pasted in that was long enough to go as a `.txt` file: its first lines, and how many it has. */
+  paste?: { head: string; lines: number }
+}
+
+/** A paste this long (characters or lines) goes with the message as a `.txt` file, not into the box. */
+const PASTE_CHARS = 1500
+const PASTE_LINES = 30
+
+function isLongPaste(text: string): boolean {
+  if (text.length >= PASTE_CHARS) return true
+  let lines = 1
+  for (let at = text.indexOf("\n"); at >= 0; at = text.indexOf("\n", at + 1)) if (++lines >= PASTE_LINES) return true
+  return false
 }
 
 let keySeq = 0
@@ -100,6 +113,8 @@ function isSend(event: KeyboardEvent): boolean {
 }
 
 const EASE = { duration: 0.16, ease: "easeOut" } as const
+/** Springy, settles fast; motion skips it under reduced motion through MotionConfig's user setting. */
+const SPRING = { type: "spring", stiffness: 520, damping: 30, mass: 0.7 } as const
 
 /** An attachment: an image as a 64px thumbnail with its remove button in the corner, any other file as a row. */
 function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
@@ -111,12 +126,33 @@ function Chip({ file, onRemove }: { file: Pending; onRemove: () => void }) {
       onClick={onRemove}
       className={cn(
         "flex shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        file.image ? "absolute top-1 right-1 size-[1.625rem] rounded-full bg-background/85 text-foreground shadow-xs hover:bg-background" : "size-7"
+        file.image || file.paste ? "absolute top-1 right-1 size-[1.625rem] rounded-full bg-background/85 text-foreground shadow-xs hover:bg-background" : "size-7"
       )}
     >
       <X aria-hidden="true" className="size-3.5" />
     </button>
   )
+  if (file.paste) {
+    return (
+      <motion.li
+        layout
+        initial={{ opacity: 0, scale: 0.9, y: 4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        transition={SPRING}
+        title={`Pasted text · ${file.paste.lines} ${file.paste.lines === 1 ? "line" : "lines"} · ${sizeLabel(file.size)}. It goes with the message as ${file.name}.`}
+        className="composer-paste"
+      >
+        <pre aria-hidden="true">{file.paste.head}</pre>
+        <span className="composer-paste-tag">
+          {file.state === "uploading" ? <Spinner className="size-2.5" aria-hidden="true" role="presentation" /> : null}
+          Pasted
+        </span>
+        <span className="sr-only">{`Pasted text, ${file.paste.lines} lines`}</span>
+        {remove}
+      </motion.li>
+    )
+  }
   if (file.image) {
     return (
       <motion.li
@@ -462,7 +498,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     }
   }, [blocked, visible])
 
-  const attach = useCallback((list: Iterable<File>) => {
+  const attach = useCallback((list: Iterable<File>, paste?: Pending["paste"]) => {
     if (!visibleRef.current) return
     const incoming = [...list]
     const room = MAX_ATTACHMENTS - filesRef.current.length
@@ -470,7 +506,7 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
     for (const file of incoming.slice(0, Math.max(0, room))) {
       const key = `f${++keySeq}`
       const image = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined
-      setFiles((now) => [...now, { key, name: file.name || (image ? "image.png" : "file"), size: file.size, ...(image ? { image } : {}), state: "uploading" }])
+      setFiles((now) => [...now, { key, name: file.name || (image ? "image.png" : "file"), size: file.size, ...(image ? { image } : {}), ...(paste ? { paste } : {}), state: "uploading" }])
       uploadFile(file)
         .then((info) => setFiles((now) => now.map((entry) => (entry.key === key ? { ...entry, state: "ready", info } : entry))))
         .catch((error: unknown) => {
@@ -603,9 +639,21 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = [...event.clipboardData.files]
-    if (pasted.length === 0) return
+    if (pasted.length > 0) {
+      event.preventDefault()
+      attach(pasted)
+      return
+    }
+    // A long paste (a file's worth of code, a log) goes as a .txt file, the way Claude takes one, so the box
+    // stays short; the agents read the whole of it from the file. With no room left for a file it goes in as text.
+    const typed = event.clipboardData.getData("text/plain")
+    if (!isLongPaste(typed) || filesRef.current.length >= MAX_ATTACHMENTS) return
     event.preventDefault()
-    attach(pasted)
+    const text = typed.replace(/\r\n?/g, "\n")
+    const lines = text.split("\n").length
+    const count = filesRef.current.filter((entry) => entry.paste).length
+    const name = count > 0 ? `pasted-text-${count + 1}.txt` : "pasted-text.txt"
+    attach([new File([text], name, { type: "text/plain" })], { head: text.split("\n", 8).join("\n").slice(0, 600), lines })
   }
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {

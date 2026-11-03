@@ -18,7 +18,7 @@ import type { PlannerMessage, PanelQuestion } from "@protocol"
 import { formatClock } from "@/lib/format"
 import { Markdown } from "@/ui/Markdown"
 import { agentColor } from "@/ui/AgentIcon"
-import { AgentMessage, ChatNote, YourMessage } from "../lobby/ChatParts"
+import { AgentMessage, ChatNote, Fold, YourMessage } from "../lobby/ChatParts"
 import { sourceLabel } from "../lobby/types"
 
 /** The page width a mockup is laid out at before it is scaled into its thumbnail. */
@@ -125,7 +125,7 @@ function UserTurn({ message, index, busy, readOnly }: { message: PlannerMessage;
   ) : null
   return (
     <YourMessage time={message.at > 0 ? formatClock(message.at) : undefined} head note={current.editedAt ? "(edited)" : undefined} actions={edit}>
-      {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Markdown text={current.text} />}
+      {editing ? <InlineEditor text={current.text} disabled={busy} onSave={save} onCancel={() => setEditing(false)} /> : <Fold><Markdown text={current.text} /></Fold>}
     </YourMessage>
   )
 }

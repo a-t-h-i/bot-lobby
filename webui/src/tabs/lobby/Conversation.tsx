@@ -12,7 +12,8 @@
  */
 import { memo, useCallback, useEffect, useMemo, useState, type RefObject } from "react"
 import { useStickToBottom } from "@/lib/useStickToBottom"
-import { AgentMessage, ChatNote, YourMessage } from "./ChatParts"
+import { AgentMessage, ChatNote, Fold, YourMessage } from "./ChatParts"
+import { AttachmentList, splitAttachments } from "@/ui/Attachments"
 import { motion } from "motion/react"
 import { JumpToLatest } from "@/ui/JumpToLatest"
 import { ScrollHints } from "@/ui/ScrollHints"
@@ -57,10 +58,15 @@ function leadOf(entry: ChatEntry): { token: string; color: string; text: string 
 function MessageBody({ entry, head, fresh }: { entry: ChatEntry; head: boolean; fresh: boolean }) {
   if (entry.role === "you") {
     const lead = leadOf(entry)
+    // A long message folds; the files it carries stay in view under it.
+    const { body, files } = splitAttachments(lead ? lead.text : entry.text)
     return (
       <YourMessage time={formatClock(entry.at)} head={head} fresh={fresh}>
-        {lead ? <span className="cs-lead" style={{ color: lead.color }}>{lead.token}</span> : null}
-        <Markdown text={lead ? lead.text : entry.text} />
+        <Fold>
+          {lead ? <span className="cs-lead" style={{ color: lead.color }}>{lead.token}</span> : null}
+          {body ? <Markdown text={body} /> : null}
+        </Fold>
+        <AttachmentList files={files} />
       </YourMessage>
     )
   }

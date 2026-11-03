@@ -34,9 +34,12 @@ function safeName(name: string): string {
   return trimmed || "file";
 }
 
+/** Plain text the agents read as it is, such as a long paste the composer sent as a `.txt` file. */
+const TEXT_TYPES: Record<string, string> = { ".txt": "text/plain", ".md": "text/markdown" };
+
 function mimeOf(name: string, claimed: string): string {
   const ext = extname(name).toLowerCase();
-  return IMAGE_TYPES[ext] ?? (ext === ".pdf" ? "application/pdf" : claimed.trim() && /^[\w.+-]+\/[\w.+-]+$/.test(claimed.trim()) ? claimed.trim() : "application/octet-stream");
+  return IMAGE_TYPES[ext] ?? TEXT_TYPES[ext] ?? (ext === ".pdf" ? "application/pdf" : claimed.trim() && /^[\w.+-]+\/[\w.+-]+$/.test(claimed.trim()) ? claimed.trim() : "application/octet-stream");
 }
 
 function kindOf(mime: string): UploadKind {
