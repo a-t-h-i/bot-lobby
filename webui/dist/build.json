@@ -1,6 +1,6 @@
 {
-  "hash": "707b0f68c18181f07358cc0b35b5217178803076f3a29be9410d0a3b1c9fea93",
-  "builtAt": "2026-11-03T08:10:16.081Z",
+  "hash": "92ebbde24a8bd1e5b75324d077ce39cd0fe54c3cb145f2b6eacfc26072163214",
+  "builtAt": "2026-11-03T08:42:31.970Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -32,7 +32,7 @@
     },
     {
       "path": "webui/src/app/Bays.tsx",
-      "sha256": "a510cd51c515ca73228931ac382adc73234c51f80dac91c1dd1079b73c7d505d"
+      "sha256": "29ff31aee279e638380c05155cf8326a29afa966a1f0126ada8325df48f5d8b6"
     },
     {
       "path": "webui/src/app/Composer.tsx",
@@ -47,12 +47,16 @@
       "sha256": "245c492ce64bb21fdee058da171c9cfc0a267626a542c3dc5ad5df079b6db222"
     },
     {
+      "path": "webui/src/app/SessionMenu.tsx",
+      "sha256": "790164a3635e803df12486f3a5a9434682d406f0279919ae5d52baf9e3e6c5cb"
+    },
+    {
       "path": "webui/src/app/Shell.tsx",
       "sha256": "6996316126e6e29b048c92744a5def1c3069fc1d99ad3be571af42edd6530f93"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "3fbaae724734253bef8d883de3024303ad97e88593d7a56b26dbd8af26403554"
+      "sha256": "34302c279f7bc5c8d3c0b37c0310075fa26c22288f4e3609fb71319f1f8e0c17"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -112,7 +116,7 @@
     },
     {
       "path": "webui/src/app/composer/ComposerPrimaryActions.tsx",
-      "sha256": "8abae94d018fb1858ff345c253c526c4df01930a3d85317841663ebda915e6ae"
+      "sha256": "f385ff695ddbdd174c640b6f2fdcd3fea66866cc394b875dc9eff84d9cfa0d42"
     },
     {
       "path": "webui/src/app/composer/ComposerSurface.tsx",
@@ -236,7 +240,7 @@
     },
     {
       "path": "webui/src/components/ui/alert-dialog.tsx",
-      "sha256": "17748d65a8c8e400e143840a236072d6bad557e90292f66fb6dc24e21452738d"
+      "sha256": "002de6b7688ad4da43906ecf0acc71154f5598799d923fc311cfa2c6fadcbca2"
     },
     {
       "path": "webui/src/components/ui/badge.tsx",
@@ -448,7 +452,7 @@
     },
     {
       "path": "webui/src/surface.css",
-      "sha256": "890ddb5d7936045ab923a48fcfd4e593ddb95e176751c35b7b50e8295e826550"
+      "sha256": "fc30dd3438d4efa23faed7de183eb66d8a68706eb1c0ef015b6d4e40bbd27e87"
     },
     {
       "path": "webui/src/tabs/knowledge/AgentCards.tsx",
@@ -668,7 +672,7 @@
     },
     {
       "path": "webui/src/ui/ConfirmButton.tsx",
-      "sha256": "1f3c454ec5a454e60a54a9650b6b40d6d8aac5cab4f009c95e8a1bcb8a6b1186"
+      "sha256": "c6cdd251b465a127be4d34eeb53e6d7d320cb26b252da335ba4520beabccdbbb"
     },
     {
       "path": "webui/src/ui/EffortChoice.tsx",
