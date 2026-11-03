@@ -37,7 +37,7 @@
     "extensions": [
       "./src/index.ts"
     ],
-    "image": "https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/.github/screenshots/lobby.png"
+    "image": "https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/lobby.png"
   },
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p webui --noEmit",
