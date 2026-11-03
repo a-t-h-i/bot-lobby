@@ -281,7 +281,7 @@
 /* ---------------------------------------------------------------------------------------------------------------
  * The Lobby's thread: the agents' words as plain prose under their name, yours in a speech bubble on the right.
  * ------------------------------------------------------------------------------------------------------------- */
-:root { --chat-content-max-width: 780px; }
+:root { --chat-content-max-width: 900px; }
 .chat-speaker { display: flex; align-items: baseline; gap: 8px; }
 /* An agent's turn starts at a small dot in its colour, so its name never reads as a heading inside a message. */
 .chat-name { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: color-mix(in srgb, var(--who, var(--foreground)) 78%, var(--foreground)); }
@@ -1379,3 +1379,53 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
    mockups (each then reads as a page). It eases there with the bubble's own width transition, and back after. */
 .bubble[data-ask="text"] { max-width: clamp(54rem, var(--cg, 0px), 64rem); }
 .bubble[data-ask="mockups"] { max-width: 76rem; }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * The Lobby's side widget (tabs/lobby/TaskWidgets.tsx): the tasks under way in a small floating card at the top
+ * right, under the tools, as the bays float. Each task is a row that opens into its steps, one at a time. It shows
+ * only when the window leaves room for it beside the chat column, and stops short of the thread's scroll hints.
+ * ------------------------------------------------------------------------------------------------------------- */
+.cs-lobby { position: relative; container: lobby / inline-size; }
+.cs-tw { position: absolute; z-index: 30; top: 57px; right: 5px; width: 272px; max-height: calc(50% - 84px); box-sizing: border-box; display: none; flex-direction: column; padding: 8px 6px 6px; border-radius: 12px; background: var(--fill); box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -6px rgb(60 45 30 / 0.09); transform-origin: 100% 0; animation: cs-tw-in 420ms var(--spring) both; }
+.dark .cs-tw { box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 16px rgb(0 0 0 / 0.22); }
+@container lobby (min-width: 1360px) { .cs-tw { display: flex; } }
+@media (pointer: coarse) { @container lobby (max-width: 1500px) { .cs-tw { display: none; } } }
+@keyframes cs-tw-in { from { opacity: 0; transform: translateY(-6px) scale(0.94); } to { opacity: 1; transform: none; } }
+.cs-twl { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0 8px 6px; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; color: var(--faint); }
+.cs-twl b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.cs-twx { min-height: 0; margin: 0; padding: 0; list-style: none; overflow-y: auto; overscroll-behavior: contain; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 6px, #000 calc(100% - 10px), transparent); mask-image: linear-gradient(to bottom, transparent 0, #000 6px, #000 calc(100% - 10px), transparent); }
+.cs-twi { position: relative; border-radius: 8px; }
+.cs-twi + .cs-twi { margin-top: 2px; }
+.cs-twh { box-sizing: border-box; width: 100%; height: 34px; padding: 0 8px; display: flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13.5px; font-weight: 500; color: var(--foreground); text-align: left; cursor: pointer; outline: none; transition: background 76ms ease; }
+.cs-twh:hover { background: var(--hover); }
+.cs-twh:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-twh .cs-mk { width: 16px; height: 16px; }
+.cs-twt { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-twn { flex: none; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.cs-twc { flex: none; width: 14px; height: 14px; color: var(--faint); transition: transform 320ms var(--spring); }
+.cs-twi[data-open] .cs-twc { transform: rotate(180deg); }
+/* The steps fold open with the row: a grid row easing from 0fr to 1fr, so the height follows the content. */
+.cs-twb { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 340ms var(--out); }
+.cs-twi[data-open] .cs-twb { grid-template-rows: 1fr; }
+.cs-twb > div { min-height: 0; overflow: hidden; }
+.cs-tws { margin: 0; padding: 2px 8px 4px 8px; list-style: none; }
+.cs-tws li { display: flex; align-items: flex-start; gap: 9px; padding: 4px 0; font-size: 13px; line-height: 1.45; color: var(--foreground); animation: cs-tw-step 300ms var(--out) backwards; }
+.cs-tws li:nth-child(2) { animation-delay: 20ms; } .cs-tws li:nth-child(3) { animation-delay: 40ms; } .cs-tws li:nth-child(4) { animation-delay: 60ms; } .cs-tws li:nth-child(n+5) { animation-delay: 80ms; }
+@keyframes cs-tw-step { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.cs-twm { flex: none; width: 16px; height: 16px; stroke: color-mix(in srgb, var(--foreground) 45%, transparent); }
+.cs-tws .cs-twm { margin-top: 1.5px; }
+.cs-twm[data-m="now"] { stroke: var(--foreground); }
+.cs-twm[data-m="skip"] { stroke: var(--faint); }
+.cs-twa { transform-origin: 8px 8px; animation: cs-tw-spin 900ms linear infinite; }
+@keyframes cs-tw-spin { to { transform: rotate(360deg); } }
+.cs-twd { fill: color-mix(in srgb, var(--foreground) 14%, transparent); stroke: none; }
+.cs-twk { stroke: var(--foreground); }
+.cs-tws li > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.cs-tws li[data-s="done"] > span:last-child { color: var(--muted-foreground); }
+.cs-tws li[data-s="skip"] > span:last-child { color: var(--faint); text-decoration: line-through; }
+.cs-tws li[data-s="now"] > span:last-child { font-weight: 500; }
+.cs-twe { margin: 0; padding: 4px 8px 6px 33px; font-size: 12.5px; color: var(--muted-foreground); }
+.cs-two { display: inline-flex; align-items: center; gap: 3px; margin: 0 0 6px 25px; height: 26px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--muted-foreground); cursor: pointer; outline: none; transition: background 76ms ease, color 76ms ease; }
+.cs-two:hover { background: var(--hover); color: var(--foreground); }
+.cs-two:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.cs-two svg { width: 13px; height: 13px; }
