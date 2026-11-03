@@ -1,10 +1,10 @@
 {
-  "hash": "d65b5d9dfc05bf3172d8d4f52a1d23cb9d3c3ed1504bd8a371cba43c00f661eb",
-  "builtAt": "2026-11-03T10:22:52.980Z",
+  "hash": "01f7a9531e5b6cf96b6002cd2c97d108fd88951d482b0c6481a77c30e8d151ed",
+  "builtAt": "2026-11-03T13:22:29.674Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
-      "sha256": "8f4cdcd7140c2f1476cc4987a45454fba8b1db70589e35ddf81a56d5f501720c"
+      "sha256": "305fad94e609df12e6242d765bf0b272ba3d14a842edb6e7de0e3e9b54ed6438"
     },
     {
       "path": "src/webui/protocol.ts",

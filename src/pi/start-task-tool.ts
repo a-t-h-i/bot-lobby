@@ -4,7 +4,7 @@
  * does itself; work that is large, risky or spans several areas it hands to
  * the team by starting a task here, the same as the user typing `/task`.
  * The task's track (fast or full) still comes from the effort and triage
- * reads, and the kickoff follows the current turn, in a fresh context.
+ * reads, and the kickoff follows the current turn in this same conversation.
  * While it drives a task, a message that is separate work starts its task in
  * a new background session instead, and the current task carries on.
  */
@@ -24,7 +24,7 @@ import type { TrackPath } from "../schemas/task.ts";
 export const START_TASK_TOOL = "start_task";
 
 const Params = Type.Object({
-  request: Type.String({ minLength: 1, maxLength: 8000, description: "The work, written in full for the team: what the user wants, the files or areas you already know it touches, and any constraint they gave. The task starts in a fresh context, so this must stand on its own." }),
+  request: Type.String({ minLength: 1, maxLength: 8000, description: "The work, written in full for the team: what the user wants, the files or areas you already know it touches, and any constraint they gave. The team's agents do not see this chat, so this must stand on its own." }),
   title: Type.Optional(Type.String({ maxLength: 80, description: "A short title (3-8 words); derived from the request when absent." })),
   track: Type.Optional(Type.Union([Type.Literal("fast"), Type.Literal("full")], { description: "Only when you are sure: fast (small and clear, straight to the agents) or full (scouts, proposal, QA). Left out, the effort read picks." })),
   auto: Type.Optional(Type.Boolean({ description: "true only when the user asked for it to run without them (no proposal approval or questions)." })),

@@ -37,7 +37,7 @@ import { modelLookup } from "../pi/tools.ts";
 import { startPlannedTask, startTask } from "../pi/start-task.ts";
 import { deliverComments, pauseOwner, setAuto } from "../pi/owner.ts";
 import { switchLanded, switchPending } from "../pi/switch-pending.ts";
-import { CHAT_MARK, chatFromEntries, chatMarkContent, CLEARED_NOTE, lobbyFeed, type ChatEntry, type ChatMarkDetails } from "./feed.ts";
+import { CHAT_MARK, chatFromEntries, chatMarkContent, lobbyFeed, type ChatEntry, type ChatMarkDetails } from "./feed.ts";
 import { CHAT_AGENT_SOURCES, parseLobbyCommand, parseMention, type LobbyCommand } from "./prompts.ts";
 import type { ChatJob, ChatWorker } from "./chat-agents.ts";
 import { routeChatMessage } from "../classifier/lobby.ts";
@@ -197,11 +197,9 @@ function chatLine(entry: ChatEntry): string {
   return `${entry.agent ?? "MASTER"}: ${entry.text}`;
 }
 
-/** The conversation since the oracle's context was last cleared, as lines. */
+/** The lobby conversation, as lines. */
 export function chatHistoryLines(): string[] {
-  const chat = lobbyFeed.chat;
-  const cleared = chat.map((entry) => entry.text).lastIndexOf(CLEARED_NOTE);
-  return chat.slice(cleared + 1).map(chatLine);
+  return lobbyFeed.chat.map(chatLine);
 }
 
 /** Who answers a message nobody was named in: the classifier's pick when it is sure, else the Master. */
@@ -270,8 +268,12 @@ function fromConversation(): string | undefined {
   return `From the lobby chat:\n\n${lines.slice(-12).join("\n\n")}`;
 }
 
-/** `/plan` and `/task`: plan the work with the panel on the Plan tab, or start it as a task. */
+/** `/plan` and `/task`: plan the work with the panel on the Plan tab, or start it as a task. `/clear`: a new session, the only way the orchestrator's context is cleared. */
 function lobbyCommand(state: Runtime, command: LobbyCommand, rest: string): LobbySendResult {
+  if (command === "clear") {
+    const result = newSession(state);
+    return result.notice ?? (result.opened ? undefined : "nothing to clear: this session is already empty");
+  }
   const request = rest.trim() || fromConversation();
   if (!request) return `type what to ${command === "plan" ? "plan" : "do"} after /${command}`;
   if (command === "task") {

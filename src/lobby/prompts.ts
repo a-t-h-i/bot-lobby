@@ -59,10 +59,11 @@ export function parseMention(text: string): { agent: ChatAgent; rest: string } |
   return agent ? { agent, rest: text.slice(match[0].length) } : undefined;
 }
 
-/** The lobby's slash commands: the chat does the work until you ask for a plan or a task. */
+/** The lobby's slash commands: the chat does the work until you ask for a plan or a task, and keeps its context until you /clear it. */
 export const LOBBY_COMMANDS = [
   { name: "plan", args: "what to plan", hint: "Plan it with the panel on the Plan tab" },
   { name: "task", args: "what to do", hint: "Start it as a task for the team" },
+  { name: "clear", args: "", hint: "Clear the context: start a new session" },
 ] as const;
 export type LobbyCommand = (typeof LOBBY_COMMANDS)[number]["name"];
 
