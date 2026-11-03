@@ -304,7 +304,7 @@ test("the box grows with what is typed, carries lists on, formats with Ctrl+B an
   await expect(page.getByRole("button", { name: "Preview the Markdown" }), "the composer has no Preview button").toHaveCount(0);
   await box.press("Alt+p");
   await expect(page.getByRole("region", { name: "Markdown preview" }), "nor a preview pane").toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Attach images, PDFs or files" }), "attaching stays").toBeVisible();
+  await expect(page.getByRole("button", { name: "Attach documents" }), "attaching stays").toBeVisible();
 });
 
 test("the dock grows and shrinks with the text on its own, over the page, and the page makes room to scroll clear of it", async ({ page, server }) => {

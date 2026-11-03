@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, Image, Paperclip, X } from "lucide-react"
+import { FileText, Paperclip, X } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { useHotkey } from "@/lib/hotkeys"
 import { call } from "@/lib/api"
@@ -80,7 +80,7 @@ function targetFor(route: Route, openTask: string | undefined): Target {
 type Pane = "suggest" | "attach" | "projects" | "browse" | "ask" | "bar"
 type Panel = Exclude<Pane, "suggest" | "ask" | "bar">
 
-const ATTACH_SIZE = { w: 260, h: 97 } as const
+const ATTACH_SIZE = { w: 260, h: 67 } as const
 
 interface Pending {
   key: string
@@ -255,7 +255,6 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
   const field = useRef<HTMLTextAreaElement>(null)
   const mirror = useRef<HTMLDivElement>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const imagePicker = useRef<HTMLInputElement>(null)
   const filesRef = useRef(files)
   filesRef.current = files
   const selection = useRef<{ start: number; end: number } | undefined>(undefined)
@@ -669,13 +668,9 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
         const at = items.indexOf(document.activeElement as HTMLElement)
         items[(at + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus()
       }}>
-      <button type="button" role="menuitem" className="bubble-row" style={{ "--delay": "24ms" } as CSSProperties} onClick={() => pickFiles(picker)}>
+      <button type="button" role="menuitem" className="bubble-row" style={{ "--delay": "12ms" } as CSSProperties} onClick={() => pickFiles(picker)}>
         <FileText aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
-        <span className="text-sm font-medium text-(--bubble-ink)">Upload a file…</span>
-      </button>
-      <button type="button" role="menuitem" className="bubble-row" style={{ "--delay": "12ms" } as CSSProperties} onClick={() => pickFiles(imagePicker)}>
-        <Image aria-hidden="true" className="size-4 shrink-0 text-(--bubble-muted)" strokeWidth={1.7} />
-        <span className="text-sm font-medium text-(--bubble-ink)">Upload an image…</span>
+        <span className="text-sm font-medium text-(--bubble-ink)">Attach document…</span>
       </button>
       <div className="h-px" />
       <div className="flex h-7 items-center px-2 text-[11.5px] text-(--bubble-muted)">Or drop files on the composer</div>
@@ -787,11 +782,11 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
               <button
                 type="button"
                 data-composer-attach
-                aria-label="Attach images, PDFs or files"
+                aria-label="Attach documents"
                 aria-haspopup="menu"
                 aria-expanded={panel === "attach"}
                 data-on={panel === "attach" || undefined}
-                data-tip="Attach a file"
+                data-tip="Attach document"
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => togglePanel("attach")}
                 className="bubble-iconbtn bubble-tip bubble-tool size-8 rounded-full"
@@ -815,12 +810,8 @@ export function Composer({ route, projects, drawer, drawerOpen }: { route: Route
             </div>
           </div>
 
-          <input ref={picker} type="file" multiple hidden tabIndex={-1} aria-label="Attach files"
-            onChange={(event) => {
-              attach(event.target.files ?? [])
-              event.target.value = ""
-            }} />
-          <input ref={imagePicker} type="file" accept="image/*" multiple hidden tabIndex={-1} aria-label="Attach images"
+          {/* One picker, no accept filter: the upload path takes images, PDFs, text, code and any other file. */}
+          <input ref={picker} type="file" multiple hidden tabIndex={-1} aria-label="Attach documents"
             onChange={(event) => {
               attach(event.target.files ?? [])
               event.target.value = ""
