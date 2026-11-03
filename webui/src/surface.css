@@ -156,7 +156,9 @@
 .cs-sact:hover { background: var(--fill); color: var(--foreground); }
 .cs-sact:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
 /* New session: the sidebar's first row, an icon, the words and the key; it answers the click at once. */
-.cs-snew { gap: 9px; font-weight: 500; }
+.cs-snew { gap: 9px; font-weight: 500; margin-bottom: 8px; }
+.cs-sbfull > .cs-search { margin-bottom: 4px; }
+.cs-sblist ul { gap: 2px; }
 .cs-snew > svg { flex: none; color: var(--primary); transition: transform 260ms var(--spring); }
 .cs-snew:hover > svg { transform: rotate(-8deg) scale(1.08); }
 .cs-snew:active > svg { transform: scale(.9); transition-duration: 90ms; }

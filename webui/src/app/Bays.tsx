@@ -130,20 +130,58 @@ export function useHoverBay(linger: number, flashFor = linger) {
       }
     } else if ((event.target as HTMLElement).closest("[role='tab']")) leave()
   }
+  // The bay closes when it loses the user: a press anywhere outside it (dialogs it opened aside) or the window
+  // losing focus drops both the pointer's hold and the focus's.
+  const wrapRef = useRef<HTMLElement | null>(null)
+  const open = hover || focus
+  useEffect(() => {
+    if (!open) return
+    const drop = () => {
+      window.clearTimeout(timer.current)
+      setHover(false)
+      setFocus(false)
+      const wrap = wrapRef.current
+      if (wrap && document.activeElement instanceof HTMLElement && wrap.contains(document.activeElement)) document.activeElement.blur()
+    }
+    const away = (down: PointerEvent) => {
+      const target = down.target as Element | null
+      if (!target || wrapRef.current?.contains(target)) return
+      if (target.closest("[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']")) return
+      drop()
+    }
+    document.addEventListener("pointerdown", away, true)
+    window.addEventListener("blur", drop)
+    return () => {
+      document.removeEventListener("pointerdown", away, true)
+      window.removeEventListener("blur", drop)
+    }
+  }, [open])
   const handlers = {
     onPointerDown: onTouch,
     onPointerEnter: (event: React.PointerEvent) => {
+      wrapRef.current = event.currentTarget as HTMLElement
       if (event.pointerType !== "touch") enter()
     },
     onPointerLeave: (event: React.PointerEvent) => {
-      if (event.pointerType !== "touch") leave()
+      if (event.pointerType === "touch") return
+      // Focus a click left behind does not hold the bay open once the pointer goes; keyboard focus still does.
+      const wrap = event.currentTarget as HTMLElement
+      const active = document.activeElement
+      if (active instanceof HTMLElement && wrap.contains(active) && !active.matches(":focus-visible") && !active.matches("input, textarea")) {
+        active.blur()
+        setFocus(false)
+      }
+      leave()
     },
-    onFocus: () => setFocus(true),
+    onFocus: (event: React.FocusEvent) => {
+      wrapRef.current = event.currentTarget as HTMLElement
+      setFocus(true)
+    },
     onBlur: (event: React.FocusEvent) => {
       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocus(false)
     },
   }
-  return { open: hover || focus, flash, close: () => { window.clearTimeout(timer.current); setHover(false) }, handlers }
+  return { open, flash, close: () => { window.clearTimeout(timer.current); setHover(false) }, handlers }
 }
 
 /** The tab icons, as the design draws them: a chat bubble, a ticked box, a folded map, a book and a gear. */
