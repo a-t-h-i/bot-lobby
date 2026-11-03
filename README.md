@@ -1,16 +1,13 @@
 # Bot-Lobby
+Bot-lobby is a determenistic agentic coding engine. You can come up with a vague description of what you want to create, the agents (Oracle, Dev, Design, QA and Research) ask you a series of questions to help you form a clear picture from the vague description you've provided. The agents can even generate UI mockups that you can pick from. Once you come to an agreement with the agents, they will then get to work, and the harness will enforce the agreed upon plan. The agents are required to follow it faithfully. 
 
-**A team of AI agents for [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) that plans with you, asks before it guesses, and then builds exactly what you agreed.**
+I came up with the name bot-lobby from my 6+ years worth of experience in playing online FPS games. The name is normally used as a joke or to mock the other players by stating that you're playing in a bot lobby (playing with robots) because of how incompetent they appear to be. The contrary is true for the bots in bot-lobby though, they are quite smart and capable... Well, depending on the models you choose of course.
 
-You describe what you want, even vaguely. The agents (Orchestrator, Design, Dev, QA, Research and Scout) ask you short questions, show you UI mockups to pick from, and write a plan with you. Once you agree, they get to work, and the harness holds them to the plan. It all runs in a lobby that opens in your browser.
-
-<picture>
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/questionnaire-light.gif">
-  <img src="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/questionnaire-dark.gif" alt="An agent asks a question with two clickable UI mockups; the user expands one, picks an option, answers the next question, and a toast confirms it was sent" width="100%">
-</picture>
+<img src="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/questionnaire.gif" alt="An agent asks a question with two clickable UI mockups; the user expands one, picks an option, answers the next question, and a toast confirms it was sent" width="100%">
 
 <sub>Agents ask with real mockups. Expand one, pick it, move on.</sub>
 
+AI written wall of text below: 
 ## Install
 
 ```bash
@@ -108,7 +105,3 @@ project knowledge stay in `.pi/bot-lobby/` inside your project.
 
 The [guide](docs/guide.md) covers the rest: delivery and commits, crash recovery, knowledge and
 shared scripts, the classifier, delegation, compaction, and MCP tools and skills.
-
-## Why "bot-lobby"?
-
-I came up with the name bot-lobby from my 6+ years worth of experience in playing online FPS games. The name is normally used as a joke or to mock the other players by stating that you're playing in a bot lobby (playing with robots) because of how incompetent they appear to be. The contrary is true for the bots in bot-lobby though, they are quite smart and capable... Well, depending on the models you choose of course.
