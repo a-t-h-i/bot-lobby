@@ -13,7 +13,6 @@ import { useStoreVersion } from "./hooks"
 import { useApiRead } from "./useApiRead"
 import { selectedProject } from "@/lib/project"
 import { PromptSeen, promptIdentity, dialogIdentity, deliveryIdentity } from "@/lib/promptSeen"
-import { playSound, useSoundUnlock } from "./sound"
 import type { WebPrompt } from "@protocol"
 import { toast } from "@/lib/toast"
 import { go } from "./router"
@@ -100,7 +99,6 @@ function promptId(project: string, prompt: WebPrompt): string {
 
 function useNotificationContext() {
   const enabled = useNotificationsEnabled()
-  useSoundUnlock()
   useStoreVersion()
   const tasks = useApiRead("tasks.list", {}, ["tasks"])
   const sessions = useApiRead("sessions.list", {}, ["sessions"])
@@ -122,7 +120,6 @@ function announce(context: NotificationContext, channel: string, ids: string[], 
   const fresh = seen.current.observe(`${project}:${channel}`, ids, quiet.current.has(channel))
   quiet.current.delete(channel)
   if (!fresh.length) return
-  playSound(channel === "prompts" ? "question" : "attention")
   if (enabled && canNotify()) show(body)
   if (channel === "delivery") toast.info(body, { action: { label: "Review tasks", onClick: () => go("#/tasks") } })
 }
@@ -148,13 +145,11 @@ function updateNotifications(context: NotificationContext) {
   announcePrompts(context)
   const state = lobby?.task?.state ?? "", done = outcome(state)
   const changed = Boolean(previousState.current) && state !== previousState.current
-  if (changed && state === "completed") playSound("done")
-  else if (changed && (state === "abandoned" || state === "blocked")) playSound("error")
   if (changed && done && enabled && canNotify()) show(`${lobby?.task?.title ?? "The task"} ${done}.`)
   previousState.current = state
 }
 
-/** Quiet snapshots, identity-based transitions, independent sound and desktop preferences. */
+/** Quiet snapshots, identity-based transitions, desktop preferences. */
 export function useDesktopNotifications(): void {
   const context = useNotificationContext()
   const { connection, enabled, project, prompts, sessions, tasks, lobby } = context

@@ -1,6 +1,6 @@
 {
-  "hash": "4bc77983568790612f662ef1799cabbd87525ce606ee3c1770a3bf3c6a778df8",
-  "builtAt": "2026-11-03T16:19:18.846Z",
+  "hash": "1cb9c0308dd3c07d4a2839c3117438f48acb701486e5508bab729b044b52739d",
+  "builtAt": "2026-11-03T14:58:49.280Z",
   "files": [
     {
       "path": "src/lobby/prompts.ts",
@@ -28,7 +28,7 @@
     },
     {
       "path": "webui/src/app/AppTools.tsx",
-      "sha256": "de79a028bbd1d4158f3bd5ed5e666711122327ca310a610230bea53a799b2848"
+      "sha256": "a1a74821e194916784b52672ad8660875cccfbc310d422e08cbaabd114a82fe7"
     },
     {
       "path": "webui/src/app/Bays.tsx",
@@ -36,7 +36,7 @@
     },
     {
       "path": "webui/src/app/Composer.tsx",
-      "sha256": "01ada343411c921c674bec51210eeb549fcedd6b6b2d87d930363b23c5667ad2"
+      "sha256": "3a659985d897b4be7936263ab1093498500399d0e72e6ed2086332923aa815f7"
     },
     {
       "path": "webui/src/app/ProjectFolderDialog.tsx",
@@ -52,11 +52,11 @@
     },
     {
       "path": "webui/src/app/Shell.tsx",
-      "sha256": "6996316126e6e29b048c92744a5def1c3069fc1d99ad3be571af42edd6530f93"
+      "sha256": "e873e996ec96b6a6f3dd8c2678d81fae202346996867d5ce1cf75aa71b846692"
     },
     {
       "path": "webui/src/app/Sidebar.tsx",
-      "sha256": "34302c279f7bc5c8d3c0b37c0310075fa26c22288f4e3609fb71319f1f8e0c17"
+      "sha256": "e82cd6aa57114b4e139bc6084159fcc43124d0d2dd0185fe9374465e1b09db06"
     },
     {
       "path": "webui/src/app/SignIn.tsx",
@@ -156,7 +156,7 @@
     },
     {
       "path": "webui/src/app/notify.ts",
-      "sha256": "5a64633d45f17468873a5498ea68ef23281ae67348d4c3a96e3ef275a7ebbab7"
+      "sha256": "3c094aad7646714e947de0d5949567f1015c4f536d1eedb53347b11b3e0aeab9"
     },
     {
       "path": "webui/src/app/palette.ts",
@@ -183,10 +183,6 @@
       "sha256": "0a56e916244ebfcd8cfc1cac16faf6bb4b41e095cb6b2270c42c5fca1dd33541"
     },
     {
-      "path": "webui/src/app/sound.ts",
-      "sha256": "5fbae9413fd0a78e0b98cf8291318750dfff096a291f2f5cbd1959144ce9cab9"
-    },
-    {
       "path": "webui/src/app/taskRoute.ts",
       "sha256": "0d683f985c5f3787bef4a481dbefea30b93c960523879313c25cea01ec1208cd"
     },
@@ -196,7 +192,7 @@
     },
     {
       "path": "webui/src/app/typeface.ts",
-      "sha256": "b654a170085555dd777e4088551f57e8e4c7338ca6d6b0585669f27b6d1e9813"
+      "sha256": "25e8a611d662bcf2f3449106bebce7129d78fee88673d13f6ebe7c7761e102a0"
     },
     {
       "path": "webui/src/app/useApiRead.ts",
@@ -388,7 +384,7 @@
     },
     {
       "path": "webui/src/lib/toast.ts",
-      "sha256": "c78ee6052653afc18a827b32571723ade1f3d02e2edee4ec275198317db8cf04"
+      "sha256": "eb121746713cac91bf2969a3f8d67a5a10b4c16d64b45600134c767e83618762"
     },
     {
       "path": "webui/src/lib/uiScale.ts",
@@ -599,12 +595,8 @@
       "sha256": "9296f95f1c831385dd68dd844978fd78a5ea67e2d866077291161108917ff746"
     },
     {
-      "path": "webui/src/tabs/settings/SoundFields.tsx",
-      "sha256": "9b493990d0bcd6654b16f949634fd105a5ebd1f5566ab19a5c76ae2e3754bcee"
-    },
-    {
       "path": "webui/src/tabs/settings/ThemeGroup.tsx",
-      "sha256": "ff37c9787bf3f810da65eebe0256e7109715c73d0b3e80b985b19085a55d90b1"
+      "sha256": "5873df06bb9dfe41100a0962a4273819785f83bc51bcc8b7dc83de7e81a5f134"
     },
     {
       "path": "webui/src/tabs/settings/parts.tsx",

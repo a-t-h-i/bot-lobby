@@ -49,7 +49,9 @@ opens the draft, and any line takes a comment that goes into the next round.
 
 <img src="https://raw.githubusercontent.com/a-t-h-i/bot-lobby/main/docs/media/planning-light.gif" alt="The Plan tab shows the panel's questions; the draft plan slides out and the user comments on one line" width="100%">
 
-### Follow every task
+The rail on the left holds settings, the key list and the theme. The project switcher
+(`P`) opens any folder on the machine running bot-lobby. Background sessions still run tasks;
+follow their progress and use **Resume** in **Tasks**, without a separate Sessions conversation page.
 
 **Tasks** lists every task across sessions with its steps, timings, approvals and blockers.
 **Resume** carries a stopped task on in the background, and a toast tells you it happened.

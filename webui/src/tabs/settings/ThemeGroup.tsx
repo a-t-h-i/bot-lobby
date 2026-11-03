@@ -19,7 +19,6 @@ import { ConfirmButton } from "@/ui/ConfirmButton"
 import { Section } from "@/ui/Section"
 import { TypefacePicker } from "@/ui/TypefacePicker"
 import { Choice, Field, Rows } from "./parts"
-import { SoundFields } from "./SoundFields"
 import { GROUP_TITLES, PAGE } from "./words"
 
 const TWEAKCN = "https://tweakcn.com/editor/theme"
@@ -259,9 +258,6 @@ export function ThemeGroup() {
         <Field label="Import a theme" stacked>
           <ImportTheme />
         </Field>
-      </Rows>
-      <Rows>
-        <SoundFields />
       </Rows>
     </Section>
   )

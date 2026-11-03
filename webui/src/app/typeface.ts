@@ -1,6 +1,6 @@
 /**
  * The page's typefaces: a short list of bundled ones (each only its Latin, variable weights) or the system's
- * own, for the text and for code. Kept in this browser like the sounds; `html[data-font]` and
+ * own, for the text and for code. Kept in this browser; `html[data-font]` and
  * `html[data-mono]` pick the face in fonts.css, and "theme" leaves it to the colour theme's own fonts.
  */
 import { useSyncExternalStore } from "react"

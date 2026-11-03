@@ -98,20 +98,3 @@ License 2.0, https://www.apache.org/licenses/LICENSE-2.0), Shiki and its
 grammars (`shiki`, `@shikijs/*`, Pine Wu and Anthony Fu, MIT; each grammar
 keeps its own licence, listed in `@shikijs/langs`) and `diff` (Kevin Decker,
 BSD 3-Clause).
-
-## Sounds
-
-The five sounds in `webui/public/sounds` (shipped in `webui/dist/sounds`) were
-converted to MP3 and levelled in loudness; nothing else was changed. Full
-details are in `webui/public/licenses/sounds.txt`.
-
-- `question.mp3` and `attention.mp3`: "dialog-question" and
-  "message-new-email" from the Ocean Sound Theme for KDE Plasma by Guilherme
-  Marçal Silva (https://invent.kde.org/plasma/ocean-sound-theme), CC BY-SA 4.0
-  (https://creativecommons.org/licenses/by-sa/4.0/). The changed files are
-  shared under the same license.
-- `done.mp3` and `error.mp3`: "NFCSuccess" and "NFCFailure" from the Android
-  Open Source Project (`frameworks/base/data/sounds`), Apache License 2.0.
-- `sent.mp3`: "audio-volume-change" from the elementary OS sound theme
-  (https://github.com/elementary/sound-theme), from Freesound user
-  ianslattery, CC0 1.0.

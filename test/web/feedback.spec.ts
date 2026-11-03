@@ -206,38 +206,3 @@ test("explicit HTML mockup isolates hostile payloads and retains local CSS and M
   await page.screenshot({ path: info.outputPath("static-preview.png"), fullPage: true });
 });
 
-test("droplet snapshots quiet, same-count new IDs once, rerenders quiet and mute survives reload", async ({ page, server }) => {
-  let prompts: WebPrompt[] = [];
-  await page.addInitScript(() => {
-    window.tones = 0;
-    const parameter = { setValueAtTime() {}, exponentialRampToValueAtTime() {} };
-    window.AudioContext = class { state = "running"; currentTime = 0; destination = {}; async resume() {} createGain() { return { gain: parameter, connect() {}, disconnect() {} }; } createOscillator() { return { frequency: parameter, connect() {}, disconnect() {}, start() { window.tones++; }, stop() {} }; } };
-  });
-  await page.route((url) => url.pathname === "/api/prompts.list", (request) => request.fulfill({ json: { ok: true, result: { prompts } } }));
-  await openScenario(page, server, "full");
-  await expect(page.locator("header").first().getByText("reconnecting…")).toHaveCount(0);
-  await page.locator("#composer-text").click();
-  await page.waitForTimeout(300);
-  expect(await page.evaluate(() => window.tones)).toBe(0);
-  prompts = [{ id: "sound-one", kind: "confirm", from: "qa", createdAt: 1, payload: { question: "First sound question?" } }];
-  server.bump("prompts");
-  await expect(page.getByText("First sound question?", { exact: true }).first()).toBeVisible();
-  await expect.poll(() => page.evaluate(() => window.tones)).toBe(1);
-  prompts = [{ ...prompts[0]!, id: "sound-two", payload: { question: "Replacement sound question?" } }];
-  server.bump("prompts");
-  await expect.poll(() => page.evaluate(() => window.tones)).toBe(2);
-  server.bump("prompts");
-  await page.waitForTimeout(300);
-  expect(await page.evaluate(() => window.tones)).toBe(2);
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Mute sounds", exact: true }).click();
-  expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.prompt-sound-muted"))).toBe("on");
-  const notificationPreference = await page.evaluate(() => window.localStorage.getItem("bot-lobby.notifications"));
-  await page.reload();
-  expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.prompt-sound-muted"))).toBe("on");
-  await expect(page.getByRole("dialog", { name: "Question from the lobby" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Unmute sounds", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => window.tones)).toBe(0);
-  expect(await page.evaluate(() => window.localStorage.getItem("bot-lobby.notifications"))).toBe(notificationPreference);
-});
