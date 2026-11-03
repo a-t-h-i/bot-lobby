@@ -1379,3 +1379,9 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
    mockups (each then reads as a page). It eases there with the bubble's own width transition, and back after. */
 .bubble[data-ask="text"] { max-width: clamp(54rem, var(--cg, 0px), 64rem); }
 .bubble[data-ask="mockups"] { max-width: 76rem; }
+
+/* The @mention and /command list: rows keep inside the bubble's 12px corners, and an edge with more rows past it fades. */
+.cs-cmd { --fade: 18px; }
+.cs-cmd[data-more-down] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - var(--fade)), transparent); }
+.cs-cmd[data-more-up] { -webkit-mask-image: linear-gradient(to top, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to top, #000 calc(100% - var(--fade)), transparent); }
+.cs-cmd[data-more-up][data-more-down] { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to bottom, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); }

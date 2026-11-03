@@ -6,10 +6,11 @@
  * row's colour (lobby commands the accent, Pi's the QA colour, skills the Plan colour, agents their own). The text box keeps focus and drives it (a combobox: Up and Down move, Enter
  * or Tab takes the row, Esc closes); a pointer picks a row too. Rows rise from the bottom one after another.
  */
-import { memo, useLayoutEffect, useRef, type CSSProperties } from "react"
+import { memo, useCallback, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
 import type { StatusInfo } from "@protocol"
 import { CHAT_MENTIONS, LOBBY_COMMANDS, type ChatAgent } from "@shared"
 import { agentColor } from "@/ui/AgentIcon"
+import { rem } from "@/lib/uiScale"
 
 export type ComposerTriggerKind = "slash-command" | "mention"
 
@@ -112,6 +113,17 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
     el?.scrollIntoView({ block: "nearest" })
   }, [props.activeItemId])
 
+  // When there are more rows than fit, the edge with more to see fades out, in place of a scrollbar.
+  const [more, setMore] = useState<{ up: boolean; down: boolean }>({ up: false, down: false })
+  const measure = useCallback(() => {
+    const el = listRef.current
+    if (!el) return
+    const up = el.scrollTop > 2
+    const down = el.scrollTop + el.clientHeight < el.scrollHeight - 2
+    setMore((now) => (now.up === up && now.down === down ? now : { up, down }))
+  }, [])
+  useLayoutEffect(measure, [measure, props.items.length])
+
   const shown = Math.min(props.items.length, SUGGESTION_ROWS)
   return (
     <div
@@ -120,8 +132,13 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
       role="listbox"
       aria-label={LISTBOX_LABEL_BY_TRIGGER[props.triggerKind]}
       data-composer-command-drawer="true"
-      className="bubble-pane bubble-scroll overflow-y-auto p-1"
-      style={{ height: suggestionHeight(props.items.length) }}
+      data-more-up={more.up || undefined}
+      data-more-down={more.down || undefined}
+      onScroll={measure}
+      className="bubble-pane bubble-scroll cs-cmd overflow-y-auto p-1"
+      // In rem, like the rows inside: a px height here ignored the UI's 90% scale, so the list stood taller than
+      // its bubble, cutting off the top row and leaving a gap under the last.
+      style={{ height: rem(suggestionHeight(props.items.length)) }}
     >
       {props.items.map((item, index) => {
         const active = props.activeItemId === item.id
