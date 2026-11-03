@@ -84,6 +84,8 @@
 .cs-frame {
   /* How far the floating bays sit in from the window's edges. */
   --fi: 5px;
+  /* The top edge gets 2px more, so the bays clearly float off the window's top. */
+  --ft: calc(var(--fi) + 2px);
   --float-r: 12px;
   --gR: var(--fi);
   --wR: 84px;
@@ -103,9 +105,9 @@
 
 /* The ghost layers of a bay: like the composer, each floats --fi in from its window edge, fully rounded. */
 .cs-gl, .cs-gt, .cs-gr { position: absolute; z-index: 40; pointer-events: none; }
-.cs-gl { left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); }
-.cs-gt { left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); }
-.cs-gr { right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); }
+.cs-gl { left: var(--fi); top: var(--ft); width: var(--wL); height: var(--hL); }
+.cs-gt { left: calc(50% - var(--wT) / 2); top: var(--ft); width: var(--wT); height: var(--hT); }
+.cs-gr { right: var(--gR); top: var(--ft); width: var(--wR); height: var(--hR); }
 .cs-layer { position: absolute; inset: -30px; box-sizing: border-box; padding: 30px; display: flex; flex-direction: column; pointer-events: none; }
 /* The bays' rim: a neutral hairline a shade lighter than a card's, so the floating shapes read by their soft shadow first. */
 .cs-layer.cs-edge { --shape: color-mix(in srgb, var(--foreground) 9%, var(--page)); filter: url(#cs-bayedge) drop-shadow(var(--drop1)) drop-shadow(var(--drop2)); }
@@ -117,8 +119,8 @@
 
 /* The sidebar: a bubble at the top left, level with the tab bar and the tools (sessions, new session, settings),
  * that grows down and across into the full list on hover or pin. */
-.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: 0; width: calc(var(--wL) + var(--fi)); height: calc(var(--hL) + var(--fi)); }
-.cs-sbx { position: absolute; left: var(--fi); top: var(--fi); width: var(--wL); height: var(--hL); overflow: hidden; }
+.cs-sbwrap { position: absolute; z-index: 41; left: 0; top: 0; width: calc(var(--wL) + var(--fi)); height: calc(var(--hL) + var(--ft)); }
+.cs-sbx { position: absolute; left: var(--fi); top: var(--ft); width: var(--wL); height: var(--hL); overflow: hidden; }
 .cs-sbmini { position: absolute; left: 0; top: 0; width: 122px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 4px; opacity: 1; transition: opacity 76ms ease 76ms; }
 .cs-frame[data-sb="open"] .cs-sbmini { opacity: 0; pointer-events: none; transition: opacity 51ms ease; }
 .cs-sbfull { position: absolute; left: 0; top: 0; width: 288px; height: var(--sb-open-h); box-sizing: border-box; padding: 12px 10px 10px; display: flex; flex-direction: column; opacity: 0; pointer-events: none; transition: opacity 68ms ease; }
@@ -214,8 +216,8 @@
 /* The tab navigator: always open, every tab showing. A tab (its hover and its chosen pill) sits 3px inside the bar,
  * so its corner follows the bar's as drawn (the bar's soft edge renders its 12px corner nearer 14px, rounded a touch past that to 13px per the user):
  * concentric, the corners run parallel. */
-.cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--fi)); }
-.cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--fi); width: var(--wT); height: var(--hT); overflow: hidden; }
+.cs-tbwrap { position: absolute; z-index: 41; left: calc(50% - max(var(--wT), 220px) / 2); top: 0; width: max(var(--wT), 220px); height: calc(max(var(--hT), 56px) + var(--ft)); }
+.cs-tbx { position: absolute; left: calc(50% - var(--wT) / 2); top: var(--ft); width: var(--wT); height: var(--hT); overflow: hidden; }
 .cs-tbo { position: absolute; left: 0; right: 0; top: 0; height: 40px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 2px; }
 .cs-tab { animation: cs-row-pop 187ms var(--out) backwards; animation-delay: calc(51ms + var(--i, 0) * 22ms); transform-origin: 50% 0; }
 /* The tab bar shows each page as its icon; the open page grows into its icon and name, and the bay narrows or widens
@@ -260,7 +262,7 @@
 .cs-tab[aria-selected="true"]::before { opacity: 1; transform: none; transition: opacity 120ms ease-out, transform 280ms cubic-bezier(0.3, 1.2, 0.5, 1); }
 
 /* The code viewer and terminal buttons, in their own bay at the top right. */
-.cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: var(--fi); width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; }
+.cs-rbx { position: absolute; z-index: 41; right: var(--gR); top: var(--ft); width: var(--wR); height: var(--hR); display: flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; }
 
 /* The page area: the whole window, under the bays. */
 .cs-body { position: relative; display: flex; min-height: 0; flex: 1 1 auto; flex-direction: column; }
