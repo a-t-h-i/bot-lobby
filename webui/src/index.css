@@ -1135,7 +1135,8 @@
   --bubble-press-deep: inset 0 2px 3.5px -0.5px rgb(40 40 70 / 0.2), inset 0 -1.5px 1.5px -0.5px rgb(255 255 255 / 0.9), inset 0 0 0 1px rgb(40 40 70 / 0.07);
   --bubble-inset: inset 0 1px 2px rgb(40 40 70 / 0.08), inset 0 0 0 1px rgb(40 40 70 / 0.05);
   --bubble-drop1: 0 1px 2px rgb(0 0 0 / 0.05);
-  --bubble-drop2: 0 12px 32px -12px rgb(60 45 30 / 0.16);
+  /* drop-shadow() takes no spread: a spread value voids the whole filter, goo and rim included. */
+  --bubble-drop2: 0 8px 18px rgb(60 45 30 / 0.09);
   --bubble-row-hl: rgb(255 255 255);
   --bubble-row-sh: rgb(40 40 70 / 0.09);
   /* The box: 106px open (60px of text, 46px of tools) or as tall as its content, 14px corners; 44px tall with 12px corners folded. */
