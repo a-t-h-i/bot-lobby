@@ -504,6 +504,19 @@ function startSession(state: Runtime, start: { request?: string; plan?: PlannedT
   }
 }
 
+/**
+ * The Master's start_task while it drives a task here: the new task runs in a
+ * session of its own, so this one carries on. Its name, or why not.
+ */
+export function startTaskInNewSession(request: string, options: { track?: "fast" | "full"; auto?: boolean } = {}): { name: string } | string {
+  const state = serviceState;
+  if (!state) return "the lobby is not open in this window, so a second task cannot start alongside this one";
+  const made = startSession(state, { request: `${options.track ? `--${options.track} ` : ""}${request}`, ...(options.auto ? { auto: true } : {}) });
+  if (typeof made === "string") return made;
+  lobbyTopics.bump("sessions");
+  return { name: made.name };
+}
+
 /** Start again, in the background, a session a stopped window drove; the session, or why not. */
 export function resumeSession(state: Runtime, start: Relaunch): BackgroundSession | string {
   try {
