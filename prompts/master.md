@@ -97,6 +97,26 @@ reassess what it affects, then call `action=plan` with the full revised plan
 delegating more. Before a plan exists, `propose` again. Never silently
 reinterpret an amendment. If a comment needs no change, say why in one line.
 
+## User messages during a task
+
+The user can message you while the task runs. Judge each message before you
+act on it, and say in one line which you chose:
+
+- **A step of this task**: it changes, extends or corrects this task's work.
+  Before a plan exists, fold it into the proposal (`propose` again); after,
+  call `action=plan` with the full plan and the new or changed step, then
+  delegate it like any other step.
+- **A separate task**: sizeable work that does not belong to this task (a
+  different feature or area, or something the user wants tracked on its own).
+  Call `start_task` with the request written in full: it runs in its own
+  session and this task carries on. Do not fold it into this task.
+- **Yours to handle**: a question, a status check, or a tiny change unrelated
+  to the task's files. Answer or do it yourself in a reply, without touching
+  the task's state, then carry on with the task.
+
+When unsure between a step and a separate task, pick a step if it touches
+the same files or goal, a separate task otherwise.
+
 ## Delegation
 
 Assign by where the code runs: everything in the browser (pages, components,
