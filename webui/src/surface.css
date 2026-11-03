@@ -303,6 +303,24 @@
 .cs-umsg .cs-ux { position: relative; min-width: 0; }
 /* The @name or /command a message starts with: in its colour, bolder, running into the first line. */
 .cs-umsg .cs-lead { float: left; margin-right: 0.3em; font-weight: 600; font-size: inherit; line-height: inherit; }
+/* A long message of yours folds: its first lines, the foot fading out, Show more under them. The height moves on a
+   soft spring once it has settled its first size; under reduced motion it just changes. */
+.cs-fold { position: relative; }
+.cs-fold-in { display: flow-root; }
+.cs-fold[data-folded], .cs-fold[style] { overflow: hidden; }
+.cs-fold[data-ready] { transition: height 460ms cubic-bezier(0.32, 1.18, 0.5, 1); }
+.cs-fold[data-folded] { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent); }
+.cs-fold-btn { display: inline-flex; align-items: center; gap: 4px; margin: 4px 0 -2px -6px; padding: 3px 6px 3px 7px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--muted-foreground); transition: color 140ms ease, background-color 140ms ease; }
+.cs-fold-btn:hover { color: var(--foreground); background: color-mix(in oklab, var(--foreground) 6%, transparent); }
+.cs-fold-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.cs-fold-chev { width: 14px; height: 14px; transition: transform 320ms cubic-bezier(0.34, 1.4, 0.5, 1); }
+.cs-fold-chev[data-open] { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .cs-fold[data-ready], .cs-fold-chev { transition: none; } }
+/* A long paste waiting in the composer as a .txt file: a small card of its first lines, the foot fading, and a
+   Pasted tag, the size of an image tile but wider. */
+.composer-paste { position: relative; width: 132px; height: 64px; flex-shrink: 0; overflow: hidden; border-radius: 10px; border: 1px solid var(--bubble-edge); background: var(--background); }
+.composer-paste pre { margin: 0; padding: 7px 9px; font-family: var(--font-mono); font-size: 9px; line-height: 1.35; color: var(--muted-foreground); white-space: pre; overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 88%); mask-image: linear-gradient(to bottom, #000 30%, transparent 88%); }
+.composer-paste-tag { position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--foreground); background: color-mix(in oklab, var(--background) 82%, transparent); box-shadow: 0 0 0 1px var(--bubble-edge); }
 .cs-umsg[data-new] { transform-origin: 100% 100%; animation: cs-um-pop 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; }
 @keyframes cs-um-pop { 0% { transform: scale(0.35, 0.3) translateY(14px); opacity: 0; } 30% { opacity: 1; } 58% { transform: scale(1.07, 0.93) translateY(-2px); } 80% { transform: scale(0.985, 1.02); } 100% { transform: none; opacity: 1; } }
 .cs-umsg[data-new] .cs-ut { animation: cs-um-tail 391ms cubic-bezier(0.34, 1.1, 0.5, 1) both; transform-origin: 0 100%; }

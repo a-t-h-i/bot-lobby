@@ -48,7 +48,7 @@ export function AttachmentList({ files }: { files: AttachmentRef[] }) {
             </a>
           ) : (
             <span className="inline-flex max-w-[min(16rem,100%)] min-w-0 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {file.mime === "application/pdf" ? <FileText aria-hidden="true" className="size-4 shrink-0" /> : <Paperclip aria-hidden="true" className="size-4 shrink-0" />}
+              {file.mime === "application/pdf" || file.mime.startsWith("text/") ? <FileText aria-hidden="true" className="size-4 shrink-0" /> : <Paperclip aria-hidden="true" className="size-4 shrink-0" />}
               <span className="truncate">{file.name}</span>
             </span>
           )}

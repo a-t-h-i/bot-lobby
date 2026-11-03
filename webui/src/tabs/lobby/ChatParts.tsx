@@ -6,7 +6,9 @@
  * while their reply is on its way. A reply still being written ends in a
  * beating dot, in its speaker's colour.
  */
-import type { CSSProperties, ReactNode } from "react"
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
+import { ChevronDown } from "lucide-react"
+import { ui } from "@/lib/uiScale"
 import { cn } from "@/lib/utils"
 import { isOracle } from "@/ui/AgentIcon"
 import { sourceTone } from "./types"
@@ -86,5 +88,61 @@ export function ChatNote({ failed, auto, children }: { failed?: boolean; auto?: 
     <div role="note" className={cn("chat-note", failed && "text-destructive", auto && "chat-note-auto")}>
       <span>{children}</span>
     </div>
+  )
+}
+
+/** A long message of yours folds to about this height (at the 15px root): eleven lines or so. */
+const FOLD_PX = 252
+/** Only a message this much taller than the fold folds; a line or two over just shows. */
+const FOLD_SLACK_PX = 66
+
+/**
+ * A long message of yours, folded: its first lines with the foot fading out, and Show more under them, which opens
+ * it to its full height on a soft spring (and Show less folds it back). Short messages show as they are.
+ */
+export function Fold({ children }: { children: ReactNode }) {
+  const inner = useRef<HTMLDivElement>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const [full, setFull] = useState(0)
+  const [open, setOpen] = useState(false)
+  const [ready, setReady] = useState(false)
+  useLayoutEffect(() => {
+    const el = inner.current
+    if (!el) return
+    setFull(el.offsetHeight)
+    const observer = new ResizeObserver(() => setFull(el.offsetHeight))
+    observer.observe(el)
+    // The fold takes its first height at once; only later changes (Show more, Show less) move.
+    const frame = requestAnimationFrame(() => setReady(true))
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+  const limit = ui(FOLD_PX)
+  const long = full > limit + ui(FOLD_SLACK_PX)
+  const toggle = () => {
+    setOpen((now) => !now)
+    // Folding a tall message back keeps its top in view rather than leaving the page far below it.
+    if (open && box.current && box.current.getBoundingClientRect().top < 0) box.current.scrollIntoView({ block: "start", behavior: "smooth" })
+  }
+  return (
+    <>
+      <div
+        ref={box}
+        className="cs-fold"
+        data-folded={(long && !open) || undefined}
+        data-ready={ready || undefined}
+        style={long ? { height: open ? full : limit } : undefined}
+      >
+        <div ref={inner} className="cs-fold-in">{children}</div>
+      </div>
+      {long ? (
+        <button type="button" className="cs-fold-btn" aria-expanded={open} onClick={toggle}>
+          {open ? "Show less" : "Show more"}
+          <ChevronDown aria-hidden="true" className="cs-fold-chev" data-open={open || undefined} />
+        </button>
+      ) : null}
+    </>
   )
 }
