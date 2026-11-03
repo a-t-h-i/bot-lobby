@@ -22,7 +22,6 @@ import { requestBesidePlan } from "../state/backlog.ts";
 import { isAutoMode } from "../state/auto.ts";
 import { triageContext } from "../classifier/triage.ts";
 import { qaStillDue, rosterWords } from "../workflow/track.ts";
-import { previousTaskNote } from "./fresh-context.ts";
 import { skippedStepsNote } from "./plan-checklist.ts";
 import { clockTask, pauseClocks, resumeClocks, startClock, stopClocks, turnStarted } from "../state/work-clock.ts";
 
@@ -67,6 +66,7 @@ export const LOBBY_CHAT_NOTE = [
   "You are the orchestrator, so judge each request before you act. Questions, explanations and small, clear changes (a few files in one area) you do yourself, right here.",
   "Work that is large, risky or spans several areas (a new feature, frontend and backend together, an architecture change, anything that needs tests and review) goes to the team: call start_task with the request written in full, say in one line that you started a task, and end your turn. Effort decides its track, and the task's kickoff follows. Do not ask first.",
   "If the request is unclear, ask one short question before starting a task. The user can also type /plan (plan it with the panel) or /task (start a task) themselves.",
+  "This conversation carries on across tasks: finished tasks stay in your context, and the user may keep chatting or start more tasks here. It is cleared only when the user starts a new session or compacts it.",
 ].join("\n");
 
 /**
@@ -155,10 +155,8 @@ export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
       }
     }
     if (!task) {
-      // The lobby chat, and after a task ended and cleared the context, a line on where its record is, in case the user refers back to it.
-      const previous = hidden ? undefined : previousTaskNote(ctx, configDir);
       if (isSubagentProcess() || hidden) delete event.systemPromptOptions.sections["bot-lobby"];
-      else event.systemPromptOptions.sections["bot-lobby"] = [LOBBY_CHAT_NOTE, previous ?? ""].filter(Boolean).join("\n\n");
+      else event.systemPromptOptions.sections["bot-lobby"] = LOBBY_CHAT_NOTE;
       return;
     }
     const dataRoots = readDataRoots(root, configDir);

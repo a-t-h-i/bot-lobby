@@ -87,8 +87,6 @@ export interface WorkflowConfig {
   toolStallTimeoutMs: number;
   /** Workers that may run at once when the Master delegates several domains together. */
   maxParallelWorkers: number;
-  /** The oracle starts each task with a clean context: its model is sent only the conversation since the task started, or since the last one ended. */
-  freshContext: boolean;
   /** Small, clear, low-risk requests take the fast track (no scouts, proposal or plan; QA only when tests are needed); false puts every task on the full workflow. */
   fastTrack: boolean;
   /** A delegation that names nothing concrete, or is long without done criteria, is sent back to the oracle once for a fuller brief (sending it again unchanged goes through). */
@@ -282,7 +280,6 @@ export const DEFAULT_CONFIG: BotLobbyConfig = {
     stallTimeoutMs: 5 * 60 * 1000,
     toolStallTimeoutMs: 10 * 60 * 1000,
     maxParallelWorkers: 3,
-    freshContext: true,
     fastTrack: true,
     briefCheck: true,
     gitIsolation: "off",
@@ -521,7 +518,8 @@ function normalizeClassifier(value: unknown): ClassifierConfig {
 export function resolveConfig(partial: unknown): BotLobbyConfig {
   const src = (partial ?? {}) as Record<string, unknown>;
   const workflow = { ...DEFAULT_CONFIG.workflow, ...(src.workflow as Partial<WorkflowConfig> | undefined) };
-  workflow.freshContext = workflow.freshContext !== false;
+  // Retired: the oracle no longer clears its own context when a task starts or ends.
+  delete (workflow as Partial<WorkflowConfig> & { freshContext?: unknown }).freshContext;
   workflow.fastTrack = workflow.fastTrack !== false;
   workflow.briefCheck = workflow.briefCheck !== false;
   workflow.repoMap = workflow.repoMap !== false;

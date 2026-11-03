@@ -299,6 +299,7 @@ export function createFixtureService(name: string, feed = new LobbyFeed()): Lobb
     toOracle: (text: string) => {
       const command = parseLobbyCommand(text);
       if (command?.command === "plan") return { notice: "planning on the Plan tab", open: "plan" as const };
+      if (command?.command === "clear") return "started a new session";
       if (command) return "starting a task — the orchestrator takes it from here";
       const mention = parseMention(text);
       if (mention && mention.agent !== "master") {

@@ -380,18 +380,6 @@ export function chatText(role: "user" | "assistant", text: string): Array<{ role
 /** What the conversation shows where auto mode kept the oracle going. */
 export const AUTO_NOTE = "auto mode";
 
-/** The session entry bot-lobby leaves where the oracle's context starts over (see pi/fresh-context.ts). */
-export const CONTEXT_MARK = "bot-lobby-context";
-
-/** What the conversation shows where a task's end cleared the oracle's context. */
-export const CLEARED_NOTE = "context cleared · the next request starts fresh";
-
-/** Whether a session entry is where a finished task cleared the oracle's context. */
-export function isClearedMark(entry: unknown): boolean {
-  const record = entry as { type?: string; customType?: string; data?: { kind?: unknown } } | undefined;
-  return record?.type === "custom" && record.customType === CONTEXT_MARK && record.data?.kind === "end";
-}
-
 /** The session entry that keeps one line of the lobby chat an agent other than the oracle took part in. */
 export const CHAT_MARK = "bot-lobby-chat";
 
@@ -422,11 +410,6 @@ export function chatFromEntries(entries: readonly unknown[], max = MAX_CHAT): Ch
   const chat: ChatLine[] = [];
   for (const entry of entries) {
     const record = entry as { type?: string; timestamp?: string; message?: { role?: string; content?: unknown } };
-    if (isClearedMark(entry)) {
-      const at = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;
-      chat.push({ role: "note", text: CLEARED_NOTE, ...(Number.isFinite(at) ? { at } : {}) });
-      continue;
-    }
     const marked = chatMarkLine(entry);
     if (marked) {
       const at = record.timestamp ? Date.parse(record.timestamp) : Number.NaN;

@@ -21,7 +21,6 @@ import { applyMasterModel } from "./model-settings.ts";
 import { setAutoMode } from "../state/auto.ts";
 import { listPlannedTasks, loadPlannedTask, markPlannedTaskStarted, plannedTaskRequest, type PlannedTask } from "../state/backlog.ts";
 import { triageFor } from "../classifier/instance.ts";
-import { freshContextOn, markContext } from "./fresh-context.ts";
 import { createWorkspace, gitLine, taskCwd } from "../execution/workspace.ts";
 import { draftAssignments, draftAssignmentsNote } from "../workflow/draft-assignments.ts";
 import type { GitIsolation } from "../schemas/configuration.ts";
@@ -181,8 +180,6 @@ export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configD
   applyStatus(ctx, root, configDir);
   await applyMasterModel(pi, ctx, loadConfig());
   ctx.ui.notify(`bot-lobby ${task.id} started`, "info");
-  // The oracle takes the task on with a clean context: nothing said before the kickoff is sent to its model.
-  if (freshContextOn()) markContext(pi, { kind: "start", taskId: task.id, at: Date.now() });
   // The full workflow scouts first: start it now, so the findings are on their way while the orchestrator reads the request.
   // It is only a head start: anything that stops it leaves the oracle to scout as before.
   let scouting: Domain[] = [];

@@ -1,5 +1,4 @@
 import { compact, CONFIG_DIR_NAME, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type ExtensionContext, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
-import { contextMarks, freshContextOn, staleCompaction } from "./fresh-context.ts";
 import { AUTO_COMPACT_ENV, COMPACT_AT_ENV, isSubagentProcess } from "./quiet.ts";
 import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
 import { normalizeCompactAt } from "../schemas/configuration.ts";
@@ -75,11 +74,7 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
     const estimate = event.context.contextMessages.reduce((total, message) => total + estimateTokens(message), 0) + Math.ceil(ctx.getSystemPrompt().length / 4);
     const usage = ctx.getContextUsage();
     if (Math.max(estimate, usage?.tokens ?? 0) < threshold) return;
-    let entries = ctx.sessionManager.buildContextEntries();
-    if (!isSubagentProcess() && freshContextOn()) {
-      const boundary = contextMarks(ctx.sessionManager.getBranch()).at(-1)?.at;
-      if (boundary !== undefined) entries = entries.filter((entry) => Date.parse(entry.timestamp) >= boundary);
-    }
+    const entries = ctx.sessionManager.buildContextEntries();
     if (entries.length < 2) return;
     const keepRecentTokens = Math.min(16_000, override?.keepRecentTokens ?? configured?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, Math.floor(threshold / 4));
     const cut = findCutPoint(entries, 0, entries.length, keepRecentTokens);
@@ -118,7 +113,7 @@ export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compa
   // pi's own compactions (its context threshold, overflow recovery, /compact) write the same checkpoint from pi's
   // preparation, so every summary an agent continues from has the same shape and the oracle's still feeds knowledge.
   pi.on("session_before_compact", async (event, ctx) => {
-    if (staleCompaction(event) || !ctx.model) return undefined;
+    if (!ctx.model) return undefined;
     try {
       const compaction = await checkpoint(event.preparation, ctx, event.signal, event.customInstructions);
       learn(compaction.summary, ctx);
