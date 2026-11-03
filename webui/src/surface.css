@@ -1237,13 +1237,27 @@ nav[aria-label="Terminals"] button[aria-current="true"] { background: color-mix(
 .cs-knri[data-k="file"][data-sel] { color: var(--foreground); }
 .cs-kc .cs-mut { color: var(--muted-foreground); font-weight: 500; }
 .cs-kc[data-on="true"] { background: color-mix(in srgb, var(--primary) 9%, var(--sunk)); box-shadow: var(--ss), 0 0 0 1px color-mix(in srgb, var(--primary) 34%, transparent); }
-/* Confirmations: a popover on the button that asked, in the menus' flat card with a spring in. */
-.cs-cfm { background: var(--fill); box-shadow: var(--rs), 0 16px 40px rgb(0 0 0 / 0.3); color: var(--foreground); }
-.cs-cfm[data-state="open"] { animation: cs-cfm-in 204ms cubic-bezier(0.34, 1.4, 0.5, 1) both; }
-.cs-cfm[data-state="closed"] { animation: cs-cfm-out 94ms cubic-bezier(0.5, 0, 0.75, 0) both; }
-@keyframes cs-cfm-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
-@keyframes cs-cfm-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.95); } }
-@media (prefers-reduced-motion: reduce) { .cs-cfm[data-state] { animation: none; } }
+/* Confirmations: a small card on the button that asked. It flies out of that button and grows into place
+ * (transform-origin is the trigger's side, from Radix), then shrinks back into it on close. One question, one line
+ * of detail, and two equal buttons: a quiet Cancel and a soft red action. Keys still work; their caps are hidden. */
+.cs-cfm { width: min(17rem, calc(100vw - 2rem)); gap: 12px; padding: 16px; border-radius: 14px; background: var(--fill); box-shadow: var(--rs), 0 18px 44px -12px rgb(0 0 0 / 0.32); color: var(--foreground); will-change: transform, opacity; }
+.cs-cfm [data-slot="alert-dialog-title"] { font-size: 14px; font-weight: 600; line-height: 1.35; }
+.cs-cfm [data-slot="alert-dialog-description"] { font-size: 12.5px; line-height: 1.45; }
+.cs-cfm [data-slot="alert-dialog-footer"] { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
+.cs-cfm :is([data-slot="alert-dialog-cancel"], [data-slot="alert-dialog-action"]) { height: 32px; justify-content: center; border: 0; border-radius: 10px; font-size: 13px; font-weight: 500; --tw-shadow: 0 0 #0000; box-shadow: none; }
+.cs-cfm [data-slot="alert-dialog-cancel"] { background: var(--hover); color: var(--foreground); }
+.cs-cfm [data-slot="alert-dialog-cancel"]:hover { background: color-mix(in srgb, var(--foreground) 12%, transparent); }
+.cs-cfm [data-slot="alert-dialog-action"] { background: var(--primary); color: var(--primary-foreground); }
+.cs-cfm [data-slot="alert-dialog-action"][data-variant="destructive"], .cs-cfm [data-slot="alert-dialog-action"].btn-destructive { background: color-mix(in srgb, var(--destructive) 14%, transparent); color: var(--stop-action-hover); }
+.cs-cfm [data-slot="alert-dialog-action"][data-variant="destructive"]:hover, .cs-cfm [data-slot="alert-dialog-action"].btn-destructive:hover { background: color-mix(in srgb, var(--destructive) 22%, transparent); }
+.cs-cfm.cs-cfm :is([data-slot="alert-dialog-cancel"], [data-slot="alert-dialog-action"]):focus { outline: none; }
+.cs-cfm.cs-cfm :is([data-slot="alert-dialog-cancel"], [data-slot="alert-dialog-action"]):focus-visible { box-shadow: 0 0 0 2px var(--ring); }
+.cs-cfm :is(.kbd-hint, kbd, [data-slot="kbd"], [data-slot="kbd-group"]) { display: none; }
+.cs-cfm[data-state="open"] { animation: cs-cfm-in 380ms cubic-bezier(0.2, 1.2, 0.3, 1) both; }
+.cs-cfm[data-state="closed"] { animation: cs-cfm-out 150ms cubic-bezier(0.5, 0, 0.75, 0) both; }
+@keyframes cs-cfm-in { 0% { opacity: 0; transform: scale(0.12); filter: blur(4px); } 45% { opacity: 1; filter: none; } 100% { opacity: 1; transform: none; } }
+@keyframes cs-cfm-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.2); } }
+@media (prefers-reduced-motion: reduce) { .cs-cfm[data-state="open"] { animation: cs-cfm-fade 120ms ease both; } .cs-cfm[data-state="closed"] { animation: none; } @keyframes cs-cfm-fade { from { opacity: 0; } } }
 
 /* Settings agents: every card the same width and height (the tallest one's), while no card has More open. */
 .cs-agrid { align-items: stretch; }

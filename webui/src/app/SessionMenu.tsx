@@ -125,7 +125,7 @@ export function SessionMenu({ name, onRename, onArchive, onDelete, onOpenChange 
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>
-            Keep it
+            Cancel
             <Keys chord="Esc" className="kbd-hint ml-1" />
           </AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={remove}>

@@ -34,8 +34,17 @@ function AlertDialogTrigger({ ...props }: React.ComponentProps<typeof PopoverPri
   return <PopoverPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />
 }
 
-function AlertDialogContent({ className, children, ...props }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+function AlertDialogContent({ className, children, onOpenAutoFocus, ...props }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   const ids = React.useContext(TitleId)
+  // Focus starts on Cancel (Enter never confirms by accident) but without a ring when a click opened it.
+  const focusCancel = (event: Event) => {
+    onOpenAutoFocus?.(event)
+    if (event.defaultPrevented) return
+    const cancel = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[data-slot="alert-dialog-cancel"]')
+    if (!cancel) return
+    event.preventDefault()
+    cancel.focus({ preventScroll: true, focusVisible: false } as FocusOptions)
+  }
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
@@ -47,6 +56,7 @@ function AlertDialogContent({ className, children, ...props }: React.ComponentPr
         align="end"
         sideOffset={8}
         collisionPadding={12}
+        onOpenAutoFocus={focusCancel}
         className={cn(
           "cs-cfm z-[1100] grid w-[min(20rem,calc(100vw-2rem))] gap-3 rounded-2xl p-3.5 text-sm outline-none origin-(--radix-popover-content-transform-origin)",
           className

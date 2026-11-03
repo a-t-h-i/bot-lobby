@@ -771,9 +771,9 @@ test("the keys printed on the buttons work from the page, ask before anything is
   await page.keyboard.press("e");
   const archive = page.getByRole("alertdialog");
   await expect(archive, "E asks to archive").toContainText("Archive");
-  await expect(archive.getByRole("button", { name: /Keep it/ }).locator('[data-slot="kbd"]'), "Esc keeps it").toHaveText("Esc");
+  await expect(archive.getByRole("button", { name: /Cancel/ }).locator('[data-slot="kbd"]'), "Esc keeps it").toHaveText("Esc");
   await expect(archive.getByRole("button", { name: /^Archive/ }).locator('[data-slot="kbd"]'), "Y goes ahead").toHaveText("Y");
-  await expect(archive.getByRole("button", { name: /Keep it/ }), "focus starts on the safe choice").toBeFocused();
+  await expect(archive.getByRole("button", { name: /Cancel/ }), "focus starts on the safe choice").toBeFocused();
   await page.keyboard.press("Escape");
   await expect(archive).toHaveCount(0);
   await page.keyboard.press("Delete");
@@ -1100,9 +1100,9 @@ test("tabs are slim and a confirmation's buttons are small, with a crisp focus l
   await page.keyboard.press("Delete");
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
-  for (const name of [/Keep it/, /^Delete/]) {
+  for (const name of [/Cancel/, /^Delete/]) {
     const button = dialog.getByRole("button", { name });
-    expect((await button.boundingBox())!.height, "a small button").toBeLessThanOrEqual(28);
+    expect((await button.boundingBox())!.height, "a small button").toBeLessThanOrEqual(32);
   }
   const focus = await page.evaluate(() => {
     const el = document.activeElement as any;

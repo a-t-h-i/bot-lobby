@@ -1,7 +1,7 @@
 /**
  * A button that asks before it acts, for the actions that cannot be taken
  * back (delete, discard, cancel, archive of a task under way). The dialog's
- * focus starts on Keep it, so Enter never confirms by accident; `Y` confirms
+ * focus starts on Cancel, so Enter never confirms by accident; `Y` confirms
  * and Esc keeps, and both keys are printed on their buttons.
  */
 import { useState } from "react"
@@ -73,7 +73,7 @@ export function ConfirmButton({ label, text, shortcut, title, description, confi
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>
-            Keep it
+            Cancel
             <Keys chord="Esc" className="kbd-hint ml-1" />
           </AlertDialogCancel>
           <AlertDialogAction variant={destructive ? "destructive" : "default"} onClick={onConfirm}>
