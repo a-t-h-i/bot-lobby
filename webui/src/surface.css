@@ -1411,19 +1411,17 @@ textarea[data-slot="textarea"], .cs-bdg { border-radius: var(--r-mid); }
 .cs-tws li { display: flex; align-items: flex-start; gap: 9px; padding: 4px 0; font-size: 13px; line-height: 1.45; color: var(--foreground); animation: cs-tw-step 300ms var(--out) backwards; }
 .cs-tws li:nth-child(2) { animation-delay: 20ms; } .cs-tws li:nth-child(3) { animation-delay: 40ms; } .cs-tws li:nth-child(4) { animation-delay: 60ms; } .cs-tws li:nth-child(n+5) { animation-delay: 80ms; }
 @keyframes cs-tw-step { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
-.cs-twm { position: relative; flex: none; width: 15px; height: 15px; box-sizing: border-box; display: grid; place-items: center; border-radius: 4.5px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 28%, transparent); transition: background 160ms ease, box-shadow 160ms ease; }
-.cs-tws .cs-twm { margin-top: 2px; }
-.cs-twm svg { width: 15px; height: 15px; stroke: #fff; }
-.cs-twm::after { content: ""; position: absolute; inset: 4px; border-radius: 2px; background: transparent; }
-.cs-twm[data-m="now"] { box-shadow: inset 0 0 0 1.5px var(--primary); }
-.cs-twm[data-m="now"]::after { background: var(--primary); animation: cs-tw-breathe 1200ms ease-in-out infinite; }
+.cs-twm { position: relative; flex: none; width: 16px; height: 16px; box-sizing: border-box; display: grid; place-items: center; border-radius: 4px; background: var(--card); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 38%, transparent), 0 1px 1px rgb(0 0 0 / 0.04); transition: background 160ms ease, box-shadow 160ms ease; }
+.cs-tws .cs-twm { margin-top: 1.5px; }
+.cs-twm svg { width: 16px; height: 16px; stroke: #fff; }
+/* Under way: the empty box in the accent, a soft halo breathing round it. */
+.cs-twm[data-m="now"] { box-shadow: inset 0 0 0 1.5px var(--primary); animation: cs-tw-halo 1400ms ease-in-out infinite; }
 .cs-twm[data-m="wait"] { box-shadow: inset 0 0 0 1.5px var(--warn); }
-.cs-twm[data-m="wait"]::after { background: var(--warn); }
 .cs-twm[data-m="done"] { background: var(--primary); box-shadow: none; animation: cs-tw-pop 380ms var(--spring) backwards; }
 .cs-twm[data-m="done"] path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: cs-tw-tick 260ms var(--out) 120ms forwards; }
-.cs-twm[data-m="skip"] { background: var(--sunk); box-shadow: none; }
+.cs-twm[data-m="skip"] { background: var(--sunk); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--foreground) 14%, transparent); }
 .cs-twm[data-m="skip"] svg { stroke: var(--muted-foreground); }
-@keyframes cs-tw-breathe { 0%, 100% { transform: scale(0.55); opacity: 0.55; } 50% { transform: scale(1); opacity: 1; } }
+@keyframes cs-tw-halo { 0%, 100% { box-shadow: inset 0 0 0 1.5px var(--primary), 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent); } 50% { box-shadow: inset 0 0 0 1.5px var(--primary), 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); } }
 @keyframes cs-tw-pop { from { transform: scale(0.6); } to { transform: scale(1); } }
 @keyframes cs-tw-tick { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .cs-twm[data-m="done"] path { stroke-dashoffset: 0; } }

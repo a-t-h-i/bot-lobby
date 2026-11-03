@@ -17,12 +17,12 @@ const waits = (row: TaskRow) => /wait|block|review|propos/i.test(row.status)
 
 type Mark = "open" | "now" | "wait" | "done" | "skip"
 
-/** A checkbox: empty to do, a breathing square under way (amber while it waits on someone), ticked with a pop when done. */
+/** A checkbox: empty to do, outlined in the accent with a breathing halo under way (amber while it waits on someone), filled and ticked with a pop when done. */
 function Box({ mark }: { mark: Mark }) {
   return (
     <span className="cs-twm" data-m={mark} aria-hidden="true">
       <svg viewBox="0 0 16 16" fill="none">
-        {mark === "done" ? <path d="M4.5 8.4l2.3 2.3 4.7-5" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" pathLength="1" /> : null}
+        {mark === "done" ? <path d="M4.4 8.3l2.4 2.4 4.8-5.2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" pathLength="1" /> : null}
         {mark === "skip" ? <path d="M5 8h6" strokeWidth="1.6" strokeLinecap="round" /> : null}
       </svg>
     </span>
