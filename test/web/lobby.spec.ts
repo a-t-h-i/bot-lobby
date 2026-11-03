@@ -283,7 +283,7 @@ test("the conversation follows new steps, lets a reader who scrolled up stay put
   await expect.poll(gap, { message: "Jump to latest lands on the newest line" }).toBeLessThanOrEqual(2);
 });
 
-const SWITCHES = ["Keyboard shortcuts", "Switch to dark mode|Switch to light mode", "Mute sounds|Unmute sounds"];
+const SWITCHES = ["Keyboard shortcuts", "Switch to dark mode|Switch to light mode"];
 
 test("the sidebar holds the sessions, Settings and the app's switches; there is no Sessions page or task name in the bar, and the tabs sit centred", async ({ page, server }) => {
   await openScenario(page, server, "full");

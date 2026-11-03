@@ -46,7 +46,7 @@ files the task changed, after the project's linter and a QA pass sized to the ch
 - **Knowledge**: what each agent has learned about the project, which you can edit, annotate or ask
   about.
 
-The rail on the left holds settings, the key list, the theme and sounds. The project switcher
+The rail on the left holds settings, the key list and the theme. The project switcher
 (`P`) opens any folder on the machine running bot-lobby. Background sessions still run tasks;
 follow their progress and use **Resume** in **Tasks**, without a separate Sessions conversation page.
 

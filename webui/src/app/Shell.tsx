@@ -16,7 +16,7 @@ import type { ConnectionState } from "@/lib/events"
 import type { LobbySnapshot, StatusInfo } from "@protocol"
 import type { TabId } from "@shared"
 import { AltH } from "./AltH.tsx"
-import { SoundToggle, ThemeToggle } from "./AppTools.tsx"
+import { ThemeToggle } from "./AppTools.tsx"
 import { Composer } from "./Composer.tsx"
 import { ProjectNotice, useProjects } from "./ProjectSwitcher.tsx"
 import { cycleSession, openNewSession, toggleSidebarPin, useSidebar } from "./Sidebar.tsx"
@@ -209,7 +209,6 @@ export function Shell() {
       </main>
       <RightBay>
         <ThemeToggle className={BAY_TOOL} side="bottom" />
-        <SoundToggle className={BAY_TOOL} side="bottom" />
       </RightBay>
     </div>
   )

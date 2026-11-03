@@ -1,17 +1,16 @@
 /**
- * The app's own switches: desktop notifications, full screen, the key list, light or dark and the prompt
- * sounds, things you reach for while working, so they live on the sidebar's rail. The look (mode, colour
+ * The app's own switches: desktop notifications, full screen, the key list, and light or dark,
+ * things you reach for while working, so they live on the sidebar's rail. The look (mode, colour
  * theme and typeface) is chosen in Settings, under Appearance.
  * They sit at the foot of the sidebar, and in the bar only on the sign-in and
  * loading pages, which have no sidebar. Each takes the look of where it sits.
  */
-import { Bell, BellOff, Keyboard, Maximize, Minimize, Moon, Sun, Volume2, VolumeX } from "lucide-react"
+import { Bell, BellOff, Keyboard, Maximize, Minimize, Moon, Sun } from "lucide-react"
 import { toast } from "@/lib/toast"
 import { useFullscreen } from "./install"
 import { disableNotifications, enableNotifications, useNotificationsEnabled } from "./notify"
 import { tip, type TipSide } from "@/ui/TipLayer"
 import { useTheme } from "@/components/theme-provider"
-import { setSoundMuted, useSoundMuted } from "./sound"
 
 type Side = TipSide
 
@@ -21,16 +20,6 @@ export function HelpButton({ hint, onHelp, className, side = "top" }: { hint: st
   return (
     <button {...tip("Keyboard shortcuts", { keys: hint, side })} type="button" aria-label="Keyboard shortcuts" aria-haspopup="dialog" aria-keyshortcuts={hint} aria-describedby="focused-action-help" onClick={onHelp} className={className}>
       <Keyboard aria-hidden="true" className={ICON} />
-    </button>
-  )
-}
-
-export function SoundToggle({ className, side = "top" }: { className: string; side?: Side }) {
-  const muted = useSoundMuted()
-  const label = muted ? "Unmute sounds" : "Mute sounds"
-  return (
-    <button {...tip(label, { side, keep: true })} type="button" aria-label={label} aria-pressed={muted} aria-describedby="focused-action-help" className={className} onClick={() => setSoundMuted(!muted)}>
-      {muted ? <VolumeX aria-hidden="true" className={ICON} /> : <Volume2 aria-hidden="true" className={ICON} />}
     </button>
   )
 }
