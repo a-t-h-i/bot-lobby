@@ -17,7 +17,7 @@ So bot-herdr does not remove pi. If the goal is to drop pi, bot-herdr alone does
 | pi | Stays (bot-herdr talks to today's server) | Goes completely |
 | Fit for Bot Lobby's UI | Bot Lobby's own screens, rebuilt natively, laid out as today (Lobby, Tasks, Plan, Knowledge, Settings, questionnaire, working indicators). Loses blur, goo, per-letter shimmer and other web effects | dsh's look and components; Bot Lobby keeps its questionnaire and working indicators, the rest uses dsh's sidebar, composer, panes. Bot Lobby's look outside those goes (spec "accepted losses") |
 | Code reuse | None of the React code; pure helpers and the whole HTTP API reused | Engine logic reused; React screens rewritten as dsh client components (TypeScript/React still) |
-| Effort | ~27 builder days (UI only) | ~40 builder days (engine + UI); 2 of 10 phases done |
+| Work size (agents build both) | Smaller: 12 phases, UI only, ~40 new mod files, 2 tiny engine changes. Bottleneck: the person trying each screen in herdr | Larger: 10 phases touching engine and UI; 2 done. Bottleneck: dsh API churn and checking engine behaviour, not just screens |
 | Engine changes | Two tiny ones (no browser under herdr, status to herdr's agent list) | Large: tools, prompts, subagents, compaction, models, sessions all move onto dsh APIs |
 | Speed | Native GPU UI: fast, light. Agents run as fast as pi runs them (no change) | In-process subagents (no `pi --mode rpc` child per worker): faster spawns; browser UI as today |
 | Terminals | herdr's real terminals, scrollback, splits, SSH machines | dsh's terminal and file panes |
@@ -36,6 +36,6 @@ So bot-herdr does not remove pi. If the goal is to drop pi, bot-herdr alone does
 - bot-herdr is a second UI for the same engine. Doing it now means building a UI against pi that you plan to remove, then re-pointing it at dsh.
 - bot-herdr is designed to switch hosts cheaply (only `lib/server.js` and `lib/auth.js` know the host; see `gaps.md` risk 3). So it can wait without losing anything.
 
-**When bot-herdr would be worth it:** after the dsh port works, if you want Bot Lobby to live in a native desktop app next to real terminals (instead of a browser tab), run bot-herdr's 2-day spike against the dsh plugin's `/bot-lobby/api` routes. If the spike passes, the rest is about 25 days of UI work.
+**When bot-herdr would be worth it:** after the dsh port works, if you want Bot Lobby to live in a native desktop app next to real terminals (instead of a browser tab), run bot-herdr's spike (phase 01) against the dsh plugin's `/bot-lobby/api` routes. If the spike passes, the rest is UI work only.
 
-**If you would rather keep pi and only want a better desktop UI**, then bot-herdr is the cheaper route (about 27 days, tiny engine changes) and the dsh port should stop. That is the one case where bot-herdr wins.
+**If you would rather keep pi and only want a better desktop UI**, then bot-herdr is the cheaper route (UI only, tiny engine changes) and the dsh port should stop. That is the one case where bot-herdr wins.

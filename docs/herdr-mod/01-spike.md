@@ -1,6 +1,6 @@
 # 01. Spike: go / no-go
 
-Goal: prove in 2 days that a herdr mod can sign in to Bot Lobby's server, call the API, follow the live event stream, and draw a chat list with markdown and a text box. If any **must** check fails, stop the whole plan and write why in `STATUS.md`.
+Goal: prove, before anything else is built, that a herdr mod can sign in to Bot Lobby's server, call the API, follow the live event stream, and draw a chat list with markdown and a text box. If any **must** check fails, stop the whole plan and write why in `STATUS.md`.
 
 ## Read first
 

@@ -88,6 +88,8 @@ Before you choose between this and the dsh port, read [`compare-dsh.md`](compare
 - Look: Claude-style light and dark from herdr's theme tokens, accent `#c96442` light / `#d97757` dark (Bot Lobby's own), radii 12 outer / 10 controls / 8 nested, flat cards (herdr has no blur), at most two levels of card nesting, no agent icons, agent names in their colour.
 - No screenshots or GIFs in the repo. Checks are `herdr-app check` + the person trying it.
 
-## Time
+## Size
 
-About 27 working days for one builder: 01 2 days, 02 3, 03 1, 04 3, 05 6, 06 2, 07 3, 08 2, 09 2, 10 2, 11 2, 12 1. Phase 05 is the hardest (composer and live chat).
+Built by agents, so the limit is not typing time. It is how much has to be checked by a person in the herdr window (agents can run `herdr-app check`, which loads and renders a mod once, but cannot judge how a screen looks or feels).
+
+Relative size by phase: small 01, 03, 06, 08, 09, 10, 11, 12; medium 02, 04, 07; large 05 (composer and live chat). About 40 new mod files, 2 small engine changes. Each phase ends with a "try it in herdr" check by the person.
