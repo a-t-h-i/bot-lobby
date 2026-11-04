@@ -1,4 +1,4 @@
-# 09. Knowledge
+# 12. Knowledge
 
 Goal: the Knowledge page: notes by agent, tags and filters, the inbox of proposed notes, the note sheet, editors, and asking what the agents know.
 

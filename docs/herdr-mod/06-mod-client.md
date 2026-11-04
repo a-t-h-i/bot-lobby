@@ -1,4 +1,4 @@
-# 02. Scaffold and client
+# 06. Mod scaffold and client
 
 Goal: the mod lives in the Bot Lobby repo, installs into herdr with one command, and has one tested client layer (find server, cookie, API calls, event stream, store) that every view uses.
 
@@ -13,8 +13,8 @@ Goal: the mod lives in the Bot Lobby repo, installs into herdr with one command,
 herdr/
   README.md                     how to install, herdr version built against
   install.mjs                   copies mods/ and layouts/ into the app home
-  layouts/bot-lobby.json        phase 04
-  keys.json                     phase 04 (merged, never overwritten)
+  layouts/bot-lobby.json        phase 07
+  keys.json                     phase 07 (merged, never overwritten)
   mods/bot-herdr/
     mod.json                    { "place": "none", "focusable": true }
     jsconfig.json               checkJs against the app home .d.ts files
@@ -40,7 +40,7 @@ herdr/
 - Copy `herdr/layouts/bot-lobby.json` to `<home>/layouts/` only if missing or if `--force` (the person's clicks live in `layouts/.state/` anyway).
 - Merge `herdr/keys.json` into `<home>/keys.json`: add missing sections and keys; never replace a key the person already bound (print it instead).
 - Add `"herdr:install": "node herdr/install.mjs"` to `package.json` scripts.
-- Do not ship `herdr/` in the npm package yet (phase 12 decides).
+- Do not ship `herdr/` in the npm package yet (phase 15 decides).
 
 ## Step 2. Find the server (`lib/server.js`)
 
@@ -49,7 +49,7 @@ herdr/
 export async function findServer(folder) { … }
 ```
 
-- Config dir: `home() + "/.pi/bot-lobby"`. A setting in `localStorage` (`bot-herdr.configDir`) overrides it (for `BOT_LOBBY_CONFIG_DIR` users; mods cannot read env vars, `exec("printenv", ["BOT_LOBBY_CONFIG_DIR"])` is the fallback).
+- Config dir: `home() + "/.bot-lobby"` (phase 02 step 3; before that phase lands, `home() + "/.pi/bot-lobby"`). A setting in `localStorage` (`bot-herdr.configDir`) overrides it (for `BOT_LOBBY_CONFIG_DIR` users; mods cannot read env vars, `exec("printenv", ["BOT_LOBBY_CONFIG_DIR"])` is the fallback).
 - List `<configDir>/web-projects/` with `fs.readdir`, read each `^[a-f0-9]{32}\.json$` with `readTextFile`. Keep records whose `cwd` equals `folder` (normalise: no trailing slash; on Windows compare lower-case with `/`).
 - The record's `pid` may be dead (the registry cleans up only on its own start). Confirm with `status.get`; on a refused connection treat it as not running.
 - Several records for one folder: the newest `startedAt` that answers.
@@ -77,9 +77,9 @@ export async function call(server, name, body = {}) {
 }
 ```
 
-- Body limit 1 MB (server). Uploads use `upload(server, path)` (phase 05): `POST /api/files.upload?name=<n>&type=<mime>` with the raw bytes (`fs.readFile(path)` → `Uint8Array`) and content-type of the file. `fetch` sends `Uint8Array` bodies; its limit is 8 MiB.
-- `503` with code `failed` and message "switching" means pi is between sessions: retry after 500 ms, up to 5 times.
-- `fetch` has a 30 s timeout and returns text/JSON only (no binary). Binary files are never fetched; see phase 05 for images.
+- Body limit 1 MB (server). Uploads use `upload(server, path)` (phase 08): `POST /api/files.upload?name=<n>&type=<mime>` with the raw bytes (`fs.readFile(path)` → `Uint8Array`) and content-type of the file. `fetch` sends `Uint8Array` bodies; its limit is 8 MiB.
+- `503` with code `failed` and message "switching" means the daemon is switching sessions: retry after 500 ms, up to 5 times.
+- `fetch` has a 30 s timeout and returns text/JSON only (no binary). Binary files are never fetched; see phase 08 for images.
 
 ## Step 5. Event stream (`lib/stream.js`)
 
@@ -100,7 +100,7 @@ export function openStream(server, query, onEvent, cx) { … }
 Two designs; choose by spike check 7.
 
 - **Copies share module state** (one runtime): one store object per server in a module-level `Map`. One stream per server for topics, opened by the first view that needs it and closed when the last view closes. Views subscribe and call `cx.notify()` on change.
-- **Each copy has its own runtime** (likely): the `strip` view (phase 04, always present in the layout) owns the topic stream and writes only small facts into herdr shared state: `setShared("bot-herdr/<port>/versions", {topic: version})` and `setShared("bot-herdr/<port>/notice", {text, level, at})`. Every view re-renders when shared state changes (herdr does that), compares versions with what it last loaded, and refetches only its own topics. The Lobby view opens the second stream (feed + reply) for itself. That keeps it at two streams.
+- **Each copy has its own runtime** (likely): the `strip` view (phase 07, always present in the layout) owns the topic stream and writes only small facts into herdr shared state: `setShared("bot-herdr/<port>/versions", {topic: version})` and `setShared("bot-herdr/<port>/notice", {text, level, at})`. Every view re-renders when shared state changes (herdr does that), compares versions with what it last loaded, and refetches only its own topics. The Lobby view opens the second stream (feed + reply) for itself. That keeps it at two streams.
 
 Topic → calls (from `webui/src/lib/store.ts`; check it):
 
@@ -134,6 +134,6 @@ Each view module is a plain class with `init`, `render`, `close`. Start with `vi
 ## Done when
 
 - `npm run herdr:install` installs; `herdr-app check` passes; `herdr-app status` shows no bot-herdr error.
-- A block `{ "mod": "bot-herdr", "props": { "view": "debug" } }` shows the port, "signed in", and the last stream event, live, in a space whose folder runs pi with Bot Lobby.
-- Kill pi: the debug view says "Not running" within 10 s and recovers when pi restarts, without reloading the mod.
+- A block `{ "mod": "bot-herdr", "props": { "view": "debug" } }` shows the port, "signed in", and the last stream event, live, in a space whose folder runs `bot-lobby serve`.
+- Stop the daemon: the debug view says "Not running" within 10 s and recovers when it restarts, without reloading the mod.
 - `node --test herdr/test/hmac.test.mjs` passes.

@@ -1,4 +1,4 @@
-# 12. Parity and release
+# 15. Parity and release
 
 Goal: prove bot-herdr covers today's web app (or names what it drops), then package it.
 
@@ -21,12 +21,12 @@ Fill `docs/herdr-mod/PARITY.md` with one row per feature: **works**, **changed**
 | Code | changes, code, unified diff, split diff, edit + save + conflict, open from links |
 | Terminal | herdr terminals in the side column, run-in-terminal |
 | Notices | `notice` events as herdr toasts |
-| Robustness | pi restart, `web reset`, server switching (503), two herdr windows, a browser open at the same time (streams ≤ 8) |
+| Robustness | daemon restart (Orchestrator session resumes), `web reset`, server switching (503), two herdr windows, a browser open at the same time (streams ≤ 8) |
 
 ## Step 2. Package
 
 - Keep `herdr/` in the Bot Lobby repo. `npm run herdr:install` stays the developer path.
-- Add `bot-lobby herdr install` (a pi command `/bot-lobby herdr install`) that runs the same copy from the installed npm package: add `herdr/` to `package.json` `files`, build `shared.js` in `prepack`.
+- Add `bot-lobby herdr install` (a daemon CLI subcommand) that runs the same copy from the installed npm package: add `herdr/` to `package.json` `files`, build `shared.js` in `prepack`.
 - Share it on herdr.dev: a public folder (or a small repo `bot-herdr`) with `layouts/bot-lobby.json`, `mods/bot-herdr/`, `keys.json`, a `RECIPE.md` written in herdr's recipe order (AGENTS.md "Layouts and mods other people made"), `preview.png` (only when the owner asks for a screenshot), GitHub topic `herdr-layout`. Owner's go-ahead first; it is public.
 - `herdr/README.md`: install, the herdr version built against, how to switch layouts (`ctrl-shift-l`), how to remove (delete the two folders and the layout file).
 
@@ -34,4 +34,4 @@ Fill `docs/herdr-mod/PARITY.md` with one row per feature: **works**, **changed**
 
 - `PARITY.md` has no unchecked row.
 - `npm run typecheck`, `npm test`, `herdr-app check` pass.
-- A clean machine with herdr + pi + Bot Lobby installs with one command and shows the Bot Lobby layout.
+- A clean machine with herdr, Node, one harness (no pi) and Bot Lobby installs with one command and shows the Bot Lobby layout.

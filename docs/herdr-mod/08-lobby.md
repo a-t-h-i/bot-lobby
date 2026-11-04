@@ -1,4 +1,4 @@
-# 05. Lobby
+# 08. Lobby
 
 Goal: the Lobby page: the live chat with the team, activity and thinking folded in place, the per-agent working indicators, the composer (with `/` and `@` suggestions and attachments), and the tasks and files cards on a wide pane.
 
@@ -21,7 +21,7 @@ Several web app files are pure TypeScript with no React: `tabs/lobby/weave.ts`, 
 
 ## Part B. Conversation (`views/lobby/conversation.js`)
 
-Data: `lobby.snapshot` once, then the Lobby's own stream (feed + reply, phase 02 step 6) appends `chat`, `activity`, `thoughts` and updates `reply`. Older chat: `lobby.history { before: <oldest id> }` when the person scrolls to the top and `hasOlderChat` is true.
+Data: `lobby.snapshot` once, then the Lobby's own stream (feed + reply, phase 06 step 6) appends `chat`, `activity`, `thoughts` and updates `reply`. Older chat: `lobby.history { before: <oldest id> }` when the person scrolls to the top and `hasOlderChat` is true.
 
 Layout (centred column, max width 900 px, like today):
 
@@ -30,7 +30,7 @@ Layout (centred column, max width 900 px, like today):
 - Your message: right-aligned bubble, `raised` background, radius 12, padding 10 / 14, max 80% width; "to <Agent>" in `dim` above it when not to the Master. Long messages fold after 12 lines with "Show more" (today's long-input fold).
 - Notes: one centred `dim` line with a hairline on each side.
 - Images in a message (`UploadInfo.kind === "image"`): see Part G.
-- Links: `.on_link_click((url, cx) => …)`: a link to a project file (`code://` or a relative path, as `webui/src/app/code/FileLink.tsx` decides) opens the code view (phase 11); others open in the system browser with `exec` (`open` on macOS, `xdg-open` on Linux, `cmd /c start ""` on Windows; check `window().platform`).
+- Links: `.on_link_click((url, cx) => …)`: a link to a project file (`code://` or a relative path, as `webui/src/app/code/FileLink.tsx` decides) opens the code view (phase 14); others open in the system browser with `exec` (`open` on macOS, `xdg-open` on Linux, `cmd /c start ""` on Windows; check `window().platform`).
 - Streaming reply: the last agent message shows `reply` text and ends in a beating dot: `div().size(6).rounded(3).bg(<agent colour>).loop("opacity", { from: 0.3, to: 1, period: 900 })`.
 - Scroll: a `v_virtual_list` with a `VirtualListScrollHandle`; stick to bottom while the person is at the bottom; otherwise show a "Jump to latest" pill floating above the composer.
 - Empty session: today's empty state words (`webui/src/tabs/lobby/LobbyTab.tsx`).
@@ -58,7 +58,7 @@ The composer is shared by Lobby, Tasks, Plan and Knowledge (it sends to whoever 
 - `/` commands and `@` agents: on `change`, if the text starts with `/` or `@` (at the very start, like today), open a suggestions list above the box: a `Popup.new("suggest", box).anchor("bottom_left")` whose content is a column of 36 px rows (letter tile, name, what it does, a small source tag). Commands from `status.get` → `commands`; agents from the roles list in `status.get` / settings (check `ComposerCommandMenu.tsx` for the exact source). Up/Down/Enter/Tab/Esc: the textarea keeps focus; handle the keys with `.on_key_down` on the wrapper and `cx.stop_propagation()` for the ones you take. Width: the list's own width (owner: never stretch it to the composer's width). Rows fade in with `.transition("opacity", { duration: 120, delay: i * 20 })`.
 - `@Agent` chips: use the textarea's inline tokens (`replace_range_with_token({ id: "agent:dev", text: "@Dev", label: "Dev" })`) so a picked agent shows as a chip; on send, the plain text (`value()`) still starts with `@Dev`, which is what the server reads.
 - Long paste (over the web app's limit, `webui/src/app/Composer.tsx` → paste handling): on `change`, if one change added more than that many characters, take the pasted run out of the box, write it to `appHome()/data/bot-herdr/paste-<time>.txt` (`fs.writeFile`), upload it (Part F), and show it as an attachment chip.
-- Questionnaire takes the composer's place when a prompt waits (phase 06).
+- Questionnaire takes the composer's place when a prompt waits (phase 09).
 
 ## Part F. Attachments
 
@@ -72,7 +72,7 @@ The composer is shared by Lobby, Tasks, Plan and Knowledge (it sends to whoever 
 
 `image()` reads only files under the app home. For an image in chat or an attachment thumbnail:
 
-- If its `UploadInfo` gives a local path (check `src/webui/uploads.ts` for where uploads are saved under the project's `.pi` folder): copy it with `exec("cp", [src, dest])` (Windows: `exec("cmd", ["/c", "copy", src, dest])`) to `appHome()/data/bot-herdr/img/<id>.<ext>` once, then `image("data/bot-herdr/img/<id>.<ext>")`.
+- If its `UploadInfo` gives a local path (check `src/webui/uploads.ts` for where uploads are saved under the project's `.bot-lobby` folder after phase 02): copy it with `exec("cp", [src, dest])` (Windows: `exec("cmd", ["/c", "copy", src, dest])`) to `appHome()/data/bot-herdr/img/<id>.<ext>` once, then `image("data/bot-herdr/img/<id>.<ext>")`.
 - Else (`/files/preview/<task>/<name>` URLs): `exec("curl", ["-sf", "-H", "Cookie: bl_session=…", "-o", dest, url])`. curl ships with macOS, Linux distros and Windows 10+.
 - Click an image: a herdr `window` overlay (`openOverlay({ kind: "window", key: "bl-image", mod: "bot-herdr", props: { view: "image", path } })`) showing it as large as fits, Esc closes. That replaces the lightbox.
 
@@ -80,10 +80,10 @@ The composer is shared by Lobby, Tasks, Plan and Knowledge (it sends to whoever 
 
 - Show only when the Lobby view is at least 1360 px wide (`on_size_change` on the root) and something applies, as a floating card at the top left of the chat area (owner asked top-left).
 - Tasks card: running tasks from `tasks.list`, one row each: name + "3 / 7". One open at a time (`Accordion`), open shows the plan as a checklist from `tasks.get` (`progress`, `activeSteps`): empty box = to do; accent outline + breathing halo (`.loop("opacity")` on a 2 px accent ring) = current; amber outline = waiting; filled accent + tick = done. Real bordered boxes, not dots (owner rejected dots).
-- Files card under it: "Attached" and "Edited" folds (one open at a time). Edited files from `code.changes` filtered to this session's agents' edits (check `SessionFiles.tsx` for the source); click opens the code view on the diff (phase 11). Attached images open the image window.
+- Files card under it: "Attached" and "Edited" folds (one open at a time). Edited files from `code.changes` filtered to this session's agents' edits (check `SessionFiles.tsx` for the source); click opens the code view on the diff (phase 14). Attached images open the image window.
 
 ## Done when
 
 - `herdr-app check` passes; `npx tsc -p herdr/mods/bot-herdr --noEmit` passes.
-- In herdr, against a real pi + Bot Lobby: send a message, watch the activity row and working mark while agents work, the reply streams with the beating dot, thinking opens with `alt-t`, `/` and `@` suggestions work by keyboard, an attached file reaches the agent, an image shows and opens, Stop works with a confirm.
+- In herdr, against a real `bot-lobby serve` with a harness Orchestrator: send a message, watch the activity row and working mark while agents work, the reply streams with the beating dot, thinking opens with `alt-t`, `/` and `@` suggestions work by keyboard, an attached file reaches the agent, an image shows and opens, Stop works with a confirm.
 - 1000-message session scrolls smoothly; jumping to latest works.

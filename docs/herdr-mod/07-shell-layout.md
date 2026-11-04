@@ -1,4 +1,4 @@
-# 04. Shell: layout, page strip, sessions, project binding
+# 07. Shell: layout, page strip, sessions, project binding
 
 Goal: a herdr layout named **Bot Lobby** that frames every page, a page strip, the sessions list, and a clean "not running here" state with a Start button.
 
@@ -49,8 +49,8 @@ Start from `herdr-app do layout.clone '{"name":"main","as":"bot-lobby"}'`, then 
 
 - Left: page pills **Lobby, Tasks, Plan, Knowledge, Settings**. Each runs `run("layout.select", { stack: "pages", child: "<id>" })` and remembers it in `setShared("bot-herdr/page", id)`. The chosen pill is a neutral recess (`selected` bg, radius 10), not accent-filled, like today's tab pills. Icons from `webui/src/app/TabIcons.tsx` redrawn as one-colour SVGs in `icons/`. Show a count badge on Tasks (running tasks) and Knowledge (inbox items), from the shared versions.
 - Right: **Terminal** and **Code** toggles. Terminal: `layout.show {id: "side"}` + `layout.select {stack: "side", child: "terminals"}`; again hides it. If the space has no terminal tab yet, `terminal.open { folder: <space folder>, place: "tab" }` first. Code: same with child `code`.
-- Far right: the Orchestrator status (from `agents()` filtered to the space, `app === "bot-lobby"`): working mark when working (phase 05 part D), "Needs you" in `blocked` colour when blocked. Click → `agent.focus { terminal }`.
-- This view owns the topic stream when copies do not share state (phase 02 step 6). It also turns `notice` events into `notify({ title: text, level })`.
+- Far right: the Orchestrator status (from `agents()` filtered to the space, `app === "bot-lobby"`): working mark when working (phase 08 part D), "Needs you" in `blocked` colour when blocked. Click → `agent.focus { terminal }`.
+- This view owns the topic stream when copies do not share state (phase 06 step 6). It also turns `notice` events into `notify({ title: text, level })`.
 
 ## Step 3. Space ↔ project binding
 
@@ -58,7 +58,7 @@ Every view resolves its server the same way:
 
 1. `focused().space` → `spaces().find(s => s.id === …)`.
 2. Folder = the space's first terminal's live folder (`panes().find(p => p.tab === activeTab && p.cwd)?.cwd`), else `space.folder`. Walk up to the git root with `exec("git", ["rev-parse", "--show-toplevel"], { cwd })` (Bot Lobby's project root is the git root; see `detectProjectRoot`).
-3. `findServer(root)` (phase 02).
+3. `findServer(root)` (phase 06).
 4. Remote spaces (`space.machine` not null): not supported in v1. Show "Bot Lobby runs on this computer only" (see `gaps.md`).
 
 Cache the answer per space id; re-resolve when the space's folder changes or the stream drops.
@@ -68,16 +68,17 @@ Cache the answer per space id; re-resolve when the space's folder changes or the
 When no server answers for the space:
 
 - Title "Bot Lobby isn't running here", one line "Start it to use this project with Bot Lobby.", button **Start Bot Lobby**.
-- Start: `run("tab.new", { space, name: "Orchestrator", folder: root, argv: ["pi"] })`. The person's shell runs pi; phase 03 keeps the browser shut. Then wait for a new `web-projects` record for `root`: `watchFolder(<configDir>/web-projects)` in a `cx.spawn` loop, up to 30 s, then resolve again.
-- If `pi` is not installed (`exec("pi", ["--version"])` rejects): show "pi isn't installed" and the install line from `README.md`.
-- Never start pi on your own. Only the button does.
+- Start: `run("tab.new", { space, name: "Bot Lobby", folder: root, argv: ["bot-lobby", "serve"] })`. herdr-core keeps the daemon running when the window closes; the tab shows its log, and the daemon reports the Orchestrator's state there (phase 02 step 4). Then wait for a new `web-projects` record for `root`: `watchFolder(<configDir>/web-projects)` in a `cx.spawn` loop, up to 30 s, then resolve again.
+- If `bot-lobby` is not installed (`exec("bot-lobby", ["--version"])` rejects): show "Bot Lobby isn't installed" and the install line from `README.md`.
+- No harness installed: read `knownAgents()` (herdr's list of installed agents) and show "No coding agent found" with the ones herdr knows how to start; the person installs one and presses Start again.
+- Never start the daemon on your own. Only the button does.
 
 ## Step 5. Sessions list (`views/sessions.js`)
 
 Port of `webui/src/app/Sidebar.tsx` sessions part:
 
 - Header row: "Sessions", **New session** row button (`sessions.new`, then `sessions.switch`).
-- Rows 36 px, 14 px text, one line, truncated; current session in `selected`; a busy session shows the working mark on the left (phase 05 part D); a session waiting on the person shows `blocked` text "needs you".
+- Rows 36 px, 14 px text, one line, truncated; current session in `selected`; a busy session shows the working mark on the left (phase 08 part D); a session waiting on the person shows `blocked` text "needs you".
 - Hover "…" menu (a `Popover` anchored to the button): Rename (inline `Input`), Archive, Delete (confirm with herdr's `confirm` mod: `openOverlay({ mod: "confirm", kind: "dialog", props: {…} })`; read `mods/confirm/main.js` for its props). Keys R / A / D inside the menu.
 - Archived shelf collapsed at the bottom ("Archived (n)").
 - Click a row: `sessions.switch { sessionId }`; the Lobby page refetches on the `sessions` / `lobby` topic change.
@@ -102,6 +103,6 @@ Check each against today's shortcuts (`status.get` → `keys`, and `webui/src/li
 ## Done when
 
 - `npm run herdr:install`, then `herdr-app do layout.switch '{"name":"bot-lobby"}'` shows the layout with no `layout.error`.
-- In a space running pi + Bot Lobby: pills switch pages, Terminal opens herdr terminals beside the page, sessions list switches sessions.
-- In a space without Bot Lobby: every page shows the Start state; Start opens an "Orchestrator" tab and the pages come alive within 30 s.
+- In a space running `bot-lobby serve`: pills switch pages, Terminal opens herdr terminals beside the page, sessions list switches sessions.
+- In a space without Bot Lobby: every page shows the Start state; Start opens a "Bot Lobby" tab and the pages come alive within 30 s.
 - `ctrl-shift-l` switches back to herdr's own layout and nothing of bot-herdr is left on screen.

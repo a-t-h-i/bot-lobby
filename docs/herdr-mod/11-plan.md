@@ -1,4 +1,4 @@
-# 08. Plan
+# 11. Plan
 
 Goal: the Plan page: the planning panel's seating, its conversation, the draft plan in a slide-over with line comments, and previous plans.
 
@@ -15,7 +15,7 @@ Goal: the Plan page: the planning panel's seating, its conversation, the draft p
 4. **Plan sheet**: "View plan" pill above the composer (key `v` via `nextCommand`) opens the draft. A herdr `window` overlay cannot dock to an edge, so use the page's own right column instead: when open, the Plan view splits into conversation | draft (draft 55%), with a close button, so nothing floats over the chat. Draft = `TextView.markdown` per paragraph so each line can take a comment.
 5. **Line comments**: hover a paragraph shows a "+" at its left; click opens an `Input` right under it; Enter sends `planner.commentLine { line, text }` (check the body shape).
 6. **Previous plans**: a "Previous" pill in the page header lists `planner.previous` (archived behind a toggle), opening one with `planner.previousGet` in the same split; actions open / archive / delete (`planner.previousOpen`, `previousArchive`, `previousDelete`).
-7. Panel questions arrive as prompts (phase 06), already handled.
+7. Panel questions arrive as prompts (phase 09), already handled.
 
 ## Done when
 

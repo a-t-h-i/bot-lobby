@@ -1,4 +1,4 @@
-# 11. Code view and terminal
+# 14. Code view and terminal
 
 Goal: see what the agents changed (list, file, diff, light edits) beside the page, and use real terminals, all inside the Bot Lobby layout.
 
@@ -28,7 +28,8 @@ Bot Lobby's terminal drawer (server-side ptys streamed to xterm.js) is **not** p
 - The strip's **Terminal** toggle shows the `side` stack's `terminals` child, which is the space's active tab (`{ "tab": "active" }`).
 - If the space has no plain shell tab, Terminal runs `terminal.open { folder: <project root>, place: "tab", name: "Terminal" }` first.
 - "Run in terminal" actions (today's `runInTerminal.ts`, e.g. a command in a task): `terminal.open { argv: [...], folder, place: "down" }`; or send to an existing shell with `hc(["send", <terminal>, text])`.
-- The Orchestrator's own tab ("Orchestrator", phase 04) is a terminal too; the strip's status opens it with `agent.focus`.
+- The daemon's tab ("Bot Lobby", phase 07) is a terminal too; the strip's status opens it with `agent.focus`.
+- **Open in herdr** (on a finished worker run or an idle Orchestrator session): opens the harness's own interactive TUI on that session in a new herdr tab, e.g. `tab.new { argv: ["claude", "--resume", sessionId] }` or `["codex", "resume", threadId]`, so the person can look inside or take over. Only when the run is not active (two clients on one session clash). The session id comes from the run record (`collector.session`).
 
 ## Done when
 

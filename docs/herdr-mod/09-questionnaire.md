@@ -1,4 +1,4 @@
-# 06. Questionnaire
+# 09. Questionnaire
 
 Goal: when an agent asks (`ask_user_question`, a choose/text prompt, a session dialog), the question shows in place of the composer on every page, as today: who asks and from where, "n of N", the question large, numbered options, mockups, notes, put away and reopen.
 
@@ -22,7 +22,7 @@ Takes the composer's place, same width, radius 12, `popover` background, 1 px `b
 - Free reply: the drawer has no text box. Under the options, a slim "Type your own answer" field (an `Input`) that sends on Enter. (Today the composer itself is used; herdr's composer is hidden while the drawer shows, so the field lives here.)
 - Notes: a "Add a note" link opens a small `Textarea` under the picked option; the note goes with the answer (`answer` shape as in `payload.ts`).
 - Answers for a questionnaire are collected and sent together after the last question (`prompts.answer { id, answer }`), as today.
-- Put away: the composer comes back with a "1 question waiting" pill above it; click to reopen. A put-away prompt still marks the Orchestrator as blocked in herdr (phase 03).
+- Put away: the composer comes back with a "1 question waiting" pill above it; click to reopen. A put-away prompt still marks the Orchestrator as blocked in herdr (phase 02).
 - Dismiss (×) → `prompts.dismiss { id }`, asks first.
 
 ## Step 3. Mockups
@@ -32,7 +32,7 @@ Options may carry three kinds of preview:
 | Kind | In bot-herdr |
 |---|---|
 | `preview` (Markdown sketch) | `TextView.markdown` in a card under the option; expanded view in a herdr `window` overlay |
-| `image` | copied into the app home and shown with `image()` (phase 05 part G); click opens the image window |
+| `image` | copied into the app home and shown with `image()` (phase 08 part G); click opens the image window |
 | `htmlPreview { html, css }` | herdr cannot render HTML+CSS. Show a thumbnail card with the option name and **Open mockup**. Open writes `appHome()/data/bot-herdr/mockups/<prompt>-<n>.html` with the html, the css in a `<style>`, and `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">` (no scripts, no network, like today's `sandbox=""` iframe), then opens it in the system browser (`open` / `xdg-open` / `start`). If spike check 9 showed `TextView.html` handles simple markup, also draw `TextView.html` of the html (without CSS) as a rough inline thumbnail |
 
 The expanded viewer (one option per slide, ←/→, digits, Enter chooses) is a `window` overlay with one option at a time and pills to step.
@@ -40,4 +40,4 @@ The expanded viewer (one option per slide, ←/→, digits, Enter chooses) is a 
 ## Done when
 
 - `herdr-app check` passes.
-- Ask a questionnaire with three questions (one multi-select, one with Markdown previews, one with an HTML mockup) from pi: the drawer replaces the composer on every page, keys work, the HTML mockup opens in the browser with no scripts running, answers arrive in one go, put away / reopen works.
+- Ask a questionnaire with three questions (one multi-select, one with Markdown previews, one with an HTML mockup) from the Orchestrator: the drawer replaces the composer on every page, keys work, the HTML mockup opens in the browser with no scripts running, answers arrive in one go, put away / reopen works.

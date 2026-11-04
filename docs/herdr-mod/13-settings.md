@@ -1,4 +1,4 @@
-# 10. Settings
+# 13. Settings
 
 Goal: Bot Lobby's settings inside herdr: Agents, Harnesses, Tools & skills, Workflow (with the lint wizard), Lobby, Classifier, Appearance & notifications.
 
@@ -17,14 +17,14 @@ Goal: Bot Lobby's settings inside herdr: Agents, Harnesses, Tools & skills, Work
    - Thresholds (Compact at, limits): `NumberInput` with styled − / + buttons, never sliders (owner rule).
    - On/off: `Switch`.
    - Lists (MCP tools, skills, grants): `Checkbox` rows.
-4. **Harnesses**: `settings.harnesses` status rows (installed, signed in, models).
+4. **Harnesses**: `settings.harnesses` status rows (installed, signed in, models). There is no model-key setting any more: each harness uses its own sign-in. Every agent row (Orchestrator included) has a **Harness** picker listing installed harnesses, then the model and effort that harness offers (phase 03 step 4, phase 04 step 4).
 5. **Tools & skills**: `settings.grants`.
 6. **Workflow → Linting wizard**: `settings.linters`, `settings.lintSetup`, `settings.lintRule`, `settings.lintCreate`, step by step as `LintWizard.tsx`.
 7. **Lobby**: chat retention (`lobby.retention`, `lobby.setRetention`) and the rest of `LobbyGroup`.
-8. **Appearance & notifications**: Bot Lobby's own theme picker and fonts are **dropped** (herdr owns the look; its theme picker is in herdr's Settings). Keep: "Calm motion" (phase 05 part D), notification choices that are about the engine. Add one line: "Colours and fonts follow herdr. Change them in herdr's Settings" with a button `run("app.settings", { section: "look" })`.
+8. **Appearance & notifications**: Bot Lobby's own theme picker and fonts are **dropped** (herdr owns the look; its theme picker is in herdr's Settings). Keep: "Calm motion" (phase 08 part D), notification choices that are about the engine. Add one line: "Colours and fonts follow herdr. Change them in herdr's Settings" with a button `run("app.settings", { section: "look" })`.
 9. Keyboard shortcuts page (today's `?` sheet): a `window` overlay listing `keys()` filtered to `layout:bot-lobby` and `mod:bot-herdr`.
 
 ## Done when
 
 - `herdr-app check` passes.
-- Change an agent's model and effort, a threshold, a harness setting and a lint rule from herdr; pi picks them up (check `~/.pi/bot-lobby/config.json` or the project's).
+- Change an agent's model and effort, a threshold, a harness setting and a lint rule from herdr; the daemon picks them up (check `~/.bot-lobby/config.json` or the project's).

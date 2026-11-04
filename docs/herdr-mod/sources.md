@@ -13,6 +13,8 @@ Read on 2026-11-04.
 ## Bot Lobby (main `94b436a`)
 
 - Server: `src/webui/server.ts`, `auth.ts`, `events.ts`, `protocol.ts`, `projects.ts`, `command.ts`, `api/index.ts` (every call name and body schema), `api/*.ts`.
-- Engine bits touched by phase 03: `src/pi/events.ts`, `src/lobby/prompt-hub.ts`, `src/lobby/topics.ts`, `src/state/project.ts`, `src/schemas/configuration.ts`, `src/ask/types.ts`.
+- Engine: `src/index.ts`, every pi-importing file (`grep -rl "@earendil-works/pi" src`: 34 files; 31 test files), `src/harness/*` (runners for Claude Code incl. Agent SDK, Codex, ACP), `src/execution/pi-runner.ts` (harness routing, assigned-execution refusal), `src/pi/events.ts`, `src/lobby/prompt-hub.ts`, `src/lobby/topics.ts`, `src/state/project.ts`, `src/schemas/configuration.ts`, `src/ask/types.ts`.
+- The removed oracle bridge, commit `b72c8c3` (`src/harness/bridge/mcp-host.ts`, `mcp-stdio.mjs`, `provider.ts`, `transcript.ts`), removed in `36ea826`.
+- Project memory: headless Claude Code billing note from the PR #91 harness work (2026-10-21).
 - Web app: `webui/src/app/*`, `webui/src/tabs/*`, `webui/src/prompts/*`, `webui/src/ui/*`, `webui/src/lib/*` (file headers and API calls per screen).
 - dsh port: `docs/dsh-migration/*` (v2) and branch `dsh-port` `docs/dsh-migration/STATUS.md` (phases 01-02).
