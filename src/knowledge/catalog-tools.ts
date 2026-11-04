@@ -8,8 +8,8 @@
  * on every call. The engine grants them only where the run already carries
  * knowledge access; an agent without the grant never reaches them.
  */
-import type { HostAPI } from "../host/api.ts";
-import { CONFIG_DIR_NAME } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { detectProjectRoot, readDataRoots } from "../state/project.ts";
 import { activeTask } from "../state/persistence.ts";
@@ -43,7 +43,7 @@ function currentCatalogue(access: Access, signal?: AbortSignal): { catalogue: Ca
   return { catalogue: refreshed.catalogue, coverage: refreshed.coverage };
 }
 
-function registerSearchTool(pi: HostAPI, configDir: string): void {
+function registerSearchTool(pi: ExtensionAPI, configDir: string): void {
   pi.registerTool({
     name: SEARCH_KNOWLEDGE_TOOL,
     label: "Search project knowledge",
@@ -72,7 +72,7 @@ function registerSearchTool(pi: HostAPI, configDir: string): void {
   });
 }
 
-function registerOpenTool(pi: HostAPI, configDir: string): void {
+function registerOpenTool(pi: ExtensionAPI, configDir: string): void {
   pi.registerTool({
     name: OPEN_KNOWLEDGE_TOOL,
     label: "Open knowledge passage",
@@ -108,7 +108,7 @@ function activeTaskId(ctx: { cwd: string; sessionManager: { getSessionId(): stri
   return activeTask(root, configDir, ctx.sessionManager.getSessionId())?.id;
 }
 
-function registerListTool(pi: HostAPI, configDir: string): void {
+function registerListTool(pi: ExtensionAPI, configDir: string): void {
   pi.registerTool({
     name: LIST_BOOKMARKS_TOOL,
     label: "List assignment bookmarks",
@@ -138,7 +138,7 @@ function callerKeyOf(configDir: string): string {
   return callerKey;
 }
 
-export function registerKnowledgeTools(pi: HostAPI, configDir: string = CONFIG_DIR_NAME): void {
+export function registerKnowledgeTools(pi: ExtensionAPI, configDir: string = CONFIG_DIR_NAME): void {
   registerSearchTool(pi, configDir);
   registerOpenTool(pi, configDir);
   registerListTool(pi, configDir);

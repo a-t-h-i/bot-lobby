@@ -12,7 +12,7 @@ import { dataRoot } from "../src/state/project.ts";
 import type { AgentRun } from "../src/schemas/findings.ts";
 import { normalizeMcpTools } from "../src/schemas/configuration.ts";
 import { registerAgentPermissions } from "../src/pi/delegation.ts";
-import type { HostAPI, ToolCallEvent } from "../src/host/api.ts";
+import type { ExtensionAPI, ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import { runAgent } from "../src/execution/agent-runner.ts";
 import { Classifier } from "../src/classifier/classifier.ts";
 import { effortRouter } from "../src/classifier/effort.ts";
@@ -62,7 +62,7 @@ test("the permission hook blocks nested writes, hidden and unknown tools and uns
         { name: "mcp__github__hidden", exposure: "hidden" },
         { name: "read_mcp_resource" },
       ],
-    } as unknown as HostAPI);
+    } as unknown as ExtensionAPI);
     const call = (toolName: string, input = {}) => check({ type: "tool_call", toolCallId: "nested", parentToolCallId: "code", toolName, input } as ToolCallEvent);
     assert.equal(call("read"), undefined);
     assert.equal(call("mcp__github__get_issue"), undefined);

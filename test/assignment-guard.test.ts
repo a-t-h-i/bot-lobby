@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI } from "../src/host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { checkAssignedCall, payloadToolNames, registerAssignmentGuard, type AssignmentGuardSpec } from "../src/pi/assignment-guard.ts";
 import { prepareAssignmentDiscovery, readAssignmentDiscovery } from "../src/execution/assignment-discovery.ts";
 
@@ -29,7 +29,7 @@ function fakePi(active: string[], all: { name: string; exposure?: string }[] = a
     getActiveTools: () => current,
     setActiveTools: (names: string[]) => { current = names; },
     getAllTools: () => all,
-  } as unknown as HostAPI;
+  } as unknown as ExtensionAPI;
   const ctx = { abort: () => { aborted = true; } };
   return {
     pi,

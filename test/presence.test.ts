@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { transition } from "../src/state/task-state.ts";
@@ -45,20 +45,20 @@ test("a heartbeat says a session is running until it goes quiet, its process end
 
 function fakeSession(root: string, sessionId: string) {
   const sent: string[] = [];
-  const handlers = new Map<string, Array<(event: unknown, ctx: HostContext) => unknown>>();
+  const handlers = new Map<string, Array<(event: unknown, ctx: ExtensionContext) => unknown>>();
   const pi = {
-    on: (event: string, handler: (event: unknown, ctx: HostContext) => unknown) => void handlers.set(event, [...(handlers.get(event) ?? []), handler]),
+    on: (event: string, handler: (event: unknown, ctx: ExtensionContext) => unknown) => void handlers.set(event, [...(handlers.get(event) ?? []), handler]),
     sendUserMessage: (text: string) => void sent.push(text),
     registerShortcut: () => {},
     getSessionName: () => "add login",
-  } as unknown as HostAPI;
+  } as unknown as ExtensionAPI;
   const ctx = {
     cwd: root,
     mode: "tui",
     isIdle: () => true,
     sessionManager: { getSessionId: () => sessionId, getSessionFile: () => `/sessions/${sessionId}.jsonl` },
     ui: { notify: () => {} },
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   return { pi, ctx, sent, handlers };
 }
 

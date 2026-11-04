@@ -537,7 +537,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
   const knowledge = { ...DEFAULT_CONFIG.knowledge, ...(src.knowledge as Partial<KnowledgeConfig> | undefined) };
   const srcAgents = (src.agents ?? {}) as Partial<BotLobbyConfig["agents"]>;
   return {
-    master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined),
+    master: normalizeAgent(DEFAULT_CONFIG.master, src.master as Partial<AgentModelConfig> | undefined, false),
     agents: {
       designer: normalizeAgent(DEFAULT_CONFIG.agents.designer, srcAgents.designer),
       backend: normalizeAgent(DEFAULT_CONFIG.agents.backend, srcAgents.backend),
@@ -545,7 +545,7 @@ export function resolveConfig(partial: unknown): BotLobbyConfig {
     },
     scout: normalizeScout(src.scout as Partial<ScoutConfig> | undefined),
     researcher: normalizeAgent(DEFAULT_CONFIG.researcher, src.researcher as Partial<AgentModelConfig> | undefined),
-    planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined),
+    planner: normalizeAgent(DEFAULT_CONFIG.planner, src.planner as Partial<AgentModelConfig> | undefined, false),
     workflow,
     lint: normalizeLint(src.lint),
     knowledge,

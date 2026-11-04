@@ -5,7 +5,8 @@
  * extension. The oracle leaves them to the researcher while a task runs
  * (see `hideWebTools`).
  */
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { FetchOptions } from "./fetch.ts";
 import { checkSource, readPage, type ReadPage, type SourceStatus } from "./read.ts";
@@ -151,9 +152,38 @@ const CheckParams = Type.Object({
 
 type Details = { kind: "search"; id: string; provider: ProviderName; count: number } | { kind: "page"; url: string; chars: number } | { kind: "read"; id: string; read: number; failed: number } | { kind: "check"; ok: number; broken: number };
 
+function summary(details: Details | undefined): string {
+  if (!details) return "";
+  switch (details.kind) {
+    case "search":
+      return `${details.count} result${details.count === 1 ? "" : "s"} via ${details.provider} (${details.id})`;
+    case "page":
+      return `read ${details.chars.toLocaleString("en")} characters of ${host(details.url)}`;
+    case "read":
+      return `read ${details.read} page${details.read === 1 ? "" : "s"} from ${details.id}${details.failed ? `, ${details.failed} unreadable` : ""}`;
+    case "check":
+      return `${details.ok} reachable${details.broken ? `, ${details.broken} broken` : ""}`;
+  }
+}
+
+type RenderTheme = { fg: (color: never, text: string) => string; bold: (text: string) => string };
+
+function callLine(theme: RenderTheme, name: string, detail: string): Text {
+  const fg = theme.fg as (color: string, text: string) => string;
+  return new Text(`${fg("toolTitle", theme.bold(name))} ${fg("accent", detail)}`, 0, 0);
+}
+
+function resultView(result: { content: Array<{ type: string; text?: string }>; details?: unknown }, expanded: boolean, theme: RenderTheme): Text {
+  const fg = theme.fg as (color: string, text: string) => string;
+  const line = fg("muted", summary(result.details as Details | undefined));
+  if (!expanded) return new Text(line, 0, 0);
+  const text = result.content.map((part) => part.text ?? "").join("\n");
+  const lines = text.split("\n");
+  return new Text([line, ...lines.slice(0, 60).map((entry) => fg("dim", entry)), ...(lines.length > 60 ? [fg("dim", `… ${lines.length - 60} more lines`)] : [])].join("\n"), 0, 0);
+}
 
 /** Register the four web tools. `options` (fetch, DNS lookup, env) is swappable for tests. */
-export function registerWebTools(pi: HostAPI, options: FetchOptions & { env?: Record<string, string | undefined> } = {}): void {
+export function registerWebTools(pi: ExtensionAPI, options: FetchOptions & { env?: Record<string, string | undefined> } = {}): void {
   pi.registerTool({
     name: WEB_SEARCH,
     label: "Web search",
@@ -171,6 +201,8 @@ export function registerWebTools(pi: HostAPI, options: FetchOptions & { env?: Re
       const details: Details = { kind: "search", id: search.id, provider: search.provider, count: search.hits.length };
       return { content: [{ type: "text", text: searchText(search, outcome.failed) }], details };
     },
+    renderCall: (args, theme) => callLine(theme as unknown as RenderTheme, "web search", `"${clip((args as { query?: string }).query ?? "", 60)}"`),
+    renderResult: (result, render, theme) => resultView(result, render.expanded, theme as unknown as RenderTheme),
   });
 
   pi.registerTool({
@@ -189,6 +221,8 @@ export function registerWebTools(pi: HostAPI, options: FetchOptions & { env?: Re
       const details: Details = { kind: "page", url: page.url, chars: Math.min(maxChars, Math.max(0, page.text.length - offset)) };
       return { content: [{ type: "text", text }], details };
     },
+    renderCall: (args, theme) => callLine(theme as unknown as RenderTheme, "fetch", clip((args as { url?: string }).url ?? "", 80)),
+    renderResult: (result, render, theme) => resultView(result, render.expanded, theme as unknown as RenderTheme),
   });
 
   pi.registerTool({
@@ -220,6 +254,8 @@ export function registerWebTools(pi: HostAPI, options: FetchOptions & { env?: Re
       const details: Details = { kind: "read", id: search.id, read, failed: sections.length - read };
       return { content: [{ type: "text", text: [`From search ${search.id} ("${search.query}"):`, ...sections.map((section) => section.text)].join("\n\n") }], details };
     },
+    renderCall: (args, theme) => callLine(theme as unknown as RenderTheme, "read results", `${(args as { searchId?: string }).searchId ?? "latest"} ${((args as { results?: number[] }).results ?? [1, 2, 3]).join(", ")}`),
+    renderResult: (result, render, theme) => resultView(result, render.expanded, theme as unknown as RenderTheme),
   });
 
   pi.registerTool({
@@ -237,5 +273,7 @@ export function registerWebTools(pi: HostAPI, options: FetchOptions & { env?: Re
       const head = `${sources.length} source${sources.length === 1 ? "" : "s"}: ${ok} reachable${ok < sources.length ? `, ${sources.length - ok} broken or unreachable` : ""}.`;
       return { content: [{ type: "text", text: [head, ...sources.map(sourceLine)].join("\n") }], details };
     },
+    renderCall: (args, theme) => callLine(theme as unknown as RenderTheme, "check sources", `${((args as { urls?: string[] }).urls ?? []).length} URLs`),
+    renderResult: (result, render, theme) => resultView(result, render.expanded, theme as unknown as RenderTheme),
   });
 }

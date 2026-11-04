@@ -10,7 +10,6 @@
  */
 import type { HarnessDriver, HarnessIO } from "./process.ts";
 import type { HarnessAccess, HarnessCollector, HarnessPlan } from "./runner.ts";
-import { codexWorkerMcp, type WorkerMcpServer } from "./worker-mcp.ts";
 
 /** Longest instructions passed on the command line; longer ones lead the prompt instead. */
 const MAX_ARG_BYTES = 100_000;
@@ -23,7 +22,7 @@ export function tomlString(value: string): string {
   return JSON.stringify(value);
 }
 
-export function codexArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: string[], mcp?: WorkerMcpServer): { args: string[]; promptPrefix: string } {
+export function codexArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: string[]): { args: string[]; promptPrefix: string } {
   const { settings } = plan.harness;
   const args = ["exec", ...launchArgs, "--json", "--skip-git-repo-check", "-s", access.writes ? "workspace-write" : "read-only", "-c", 'approval_policy="never"'];
   if (plan.model) args.push("--model", plan.model);
@@ -33,7 +32,6 @@ export function codexArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: 
   else if (provider) args.push("-c", `model_provider=${tomlString(provider)}`);
   if (plan.autoCompact === false) args.push("-c", `model_auto_compact_token_limit=${NO_COMPACTION}`);
   else if (settings.compactAt > 0) args.push("-c", `model_auto_compact_token_limit=${settings.compactAt}`);
-  if (mcp) args.push(...codexWorkerMcp(mcp));
   let promptPrefix = "";
   if (plan.instructions) {
     if (Buffer.byteLength(plan.instructions) <= MAX_ARG_BYTES) args.push("-c", `developer_instructions=${tomlString(plan.instructions)}`);

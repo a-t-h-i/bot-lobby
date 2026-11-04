@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { askUser, setCanAsk } from "../src/ask/web.ts";
 import { answerSummary, ASK_TOOL, invalidQuestions, registerAskTool } from "../src/ask/tool.ts";
 import type { AskQuestion, AskResult } from "../src/ask/types.ts";
@@ -16,7 +16,7 @@ const auth: AskQuestion = {
 };
 const features: AskQuestion = { question: "Which features?", header: "Features", options: [{ label: "Dark mode" }, { label: "Search" }, { label: "Export" }], multiSelect: true };
 
-const ctx = { cwd: "/work/app" } as unknown as HostContext;
+const ctx = { cwd: "/work/app" } as unknown as ExtensionContext;
 
 test("a questionnaire goes to the page and resolves with the answer given there", async () => {
   setCanAsk(() => true);
@@ -83,7 +83,7 @@ test("with no page to answer, nobody is asked and nothing waits", async () => {
 
 test("ask_user_question: registered outside subagents, refuses malformed questions, and tells the model what was answered", async () => {
   const tools: Array<{ name: string; execute: (...args: unknown[]) => Promise<{ content: Array<{ text: string }>; details: AskResult }> }> = [];
-  const pi = { registerTool: (tool: never) => tools.push(tool) } as unknown as HostAPI;
+  const pi = { registerTool: (tool: never) => tools.push(tool) } as unknown as ExtensionAPI;
   const result: AskResult = { cancelled: false, answers: [{ questionIndex: 0, question: auth.question, kind: "custom", answer: "Supabase" }] };
   registerAskTool(pi, async () => result);
   assert.deepEqual(tools.map((tool) => tool.name), [ASK_TOOL]);
@@ -104,7 +104,7 @@ test("ask_user_question: registered outside subagents, refuses malformed questio
   const previous = process.env.BOT_LOBBY_SUBAGENT;
   process.env.BOT_LOBBY_SUBAGENT = "1";
   const sub: unknown[] = [];
-  registerAskTool({ registerTool: (tool: unknown) => sub.push(tool) } as unknown as HostAPI);
+  registerAskTool({ registerTool: (tool: unknown) => sub.push(tool) } as unknown as ExtensionAPI);
   if (previous === undefined) delete process.env.BOT_LOBBY_SUBAGENT;
   else process.env.BOT_LOBBY_SUBAGENT = previous;
   assert.equal(sub.length, 0, "a subagent cannot reach the user");

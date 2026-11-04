@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerCommands, parseCommand } from "../src/pi/commands.ts";
 import { setMinimized } from "../src/pi/ui.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
@@ -53,14 +53,14 @@ function makePi() {
   const state = {
     sent: [] as string[],
     sessionName: undefined as string | undefined,
-    handlers: {} as Record<string, (args: string | undefined, ctx: HostContext) => unknown>,
+    handlers: {} as Record<string, (args: string | undefined, ctx: ExtensionContext) => unknown>,
     sendUserMessage: (message: string) => void state.sent.push(message),
     getSessionName: () => state.sessionName,
     setSessionName: (name: string) => void (state.sessionName = name),
     appendEntry: () => {},
     setThinkingLevel: () => {},
     registerShortcut: () => {},
-    registerCommand: (name: string, options?: { handler: (args: string | undefined, ctx: HostContext) => unknown }) => {
+    registerCommand: (name: string, options?: { handler: (args: string | undefined, ctx: ExtensionContext) => unknown }) => {
       if (options?.handler) state.handlers[name] = options.handler;
     },
     on: () => () => {},
@@ -72,7 +72,7 @@ function makePi() {
 function makeCtx(cwd: string) {
   const notes: string[] = [];
   const ui = { notify: (message: string) => void notes.push(message), setStatus: () => {}, setWidget: () => {} };
-  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => "session-1", getBranch: () => [] }, isIdle: () => true } as unknown as HostContext, notes };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => "session-1", getBranch: () => [] }, isIdle: () => true } as unknown as ExtensionContext, notes };
 }
 
 /** Run `/bot-lobby <args>` in a repository, with `isolation` as the configured default. */
@@ -82,7 +82,7 @@ async function startIn(root: string, args: string, isolation?: string) {
   setMinimized(false);
   ensureProjectStructure(root, ".pi");
   const pi = makePi();
-  registerCommands(pi as unknown as HostAPI, ".pi");
+  registerCommands(pi as unknown as ExtensionAPI, ".pi");
   const { ctx, notes } = makeCtx(root);
   await pi.handlers["bot-lobby"]!(args, ctx);
   return { pi, notes, task: listTasks(root, ".pi")[0] };
@@ -218,7 +218,7 @@ test("starting a part of a split plan tells the oracle which part it is, and war
   savePlannedTask(root, ".pi", { title: "Foundation", brief: "### Part 1 of 2 — Foundation\n### Steps\n1. a", split: split(1, []) });
   const second = savePlannedTask(root, ".pi", { title: "Screens", brief: "### Part 2 of 2 — Screens\n### Steps\n1. b", split: split(2, [1]) });
   const pi = makePi();
-  registerCommands(pi as unknown as HostAPI, ".pi");
+  registerCommands(pi as unknown as ExtensionAPI, ".pi");
   const { ctx, notes } = makeCtx(root);
   await pi.handlers["bot-lobby"]!(`start-plan ${second.id}`, ctx);
   const task = listTasks(root, ".pi")[0]!;

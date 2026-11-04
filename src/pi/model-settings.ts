@@ -4,7 +4,7 @@
  * live session, the subagents pinned to the session model, and the
  * classifier's one-line summary.
  */
-import type { HostAPI, HostContext } from "../host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   INHERIT_MODEL,
   isThinkingLevel,
@@ -52,7 +52,7 @@ export function patchEntry(config: BotLobbyConfig, kind: SettingsKind, patch: En
 }
 
 /** Apply the master model/thinking to the live session; "inherit" leaves it alone. */
-export async function applyMasterModel(pi: HostAPI, ctx: HostContext, config: BotLobbyConfig): Promise<void> {
+export async function applyMasterModel(pi: ExtensionAPI, ctx: ExtensionContext, config: BotLobbyConfig): Promise<void> {
   const { model, thinking } = config.master;
   if (model !== INHERIT_MODEL) {
     const found = modelLookup(ctx)(model);

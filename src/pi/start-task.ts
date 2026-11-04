@@ -4,7 +4,7 @@
  * planner.
  */
 import { existsSync } from "node:fs";
-import type { HostAPI, HostContext } from "../host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask, taskRequest, type Task, type TaskTrack, type TaskTriage, type TrackPath } from "../schemas/task.ts";
 import type { Domain } from "../schemas/agent.ts";
 import { chooseTrack, fastPathRecord, qaRequired, rosterWords, trackLine, trackSummary } from "../workflow/track.ts";
@@ -105,7 +105,7 @@ export function kickoff(task: Task, options: { fastTrack?: boolean; cwd?: string
  * repository, no commits, a refused checkout) is said once and the task runs
  * without: git must never stop a task from starting.
  */
-async function giveWorkspace(ctx: HostContext, root: string, configDir: string, task: Task, isolation: GitIsolation): Promise<void> {
+async function giveWorkspace(ctx: ExtensionContext, root: string, configDir: string, task: Task, isolation: GitIsolation): Promise<void> {
   if (isolation === "off") return;
   const made = await createWorkspace({ cwd: ctx.cwd, root, configDir, name: task.id, mode: isolation });
   if (typeof made === "string") {
@@ -142,14 +142,14 @@ export interface StartOptions {
   isolation?: GitIsolation;
 }
 
-function alreadyOwnsTask(ctx: HostContext, root: string, configDir: string, sessionId: string): boolean {
+function alreadyOwnsTask(ctx: ExtensionContext, root: string, configDir: string, sessionId: string): boolean {
   const existing = ownedTask(root, configDir, sessionId);
   if (!existing) return false;
   ctx.ui.notify(`bot-lobby ${existing.id} is already active in this session. Finish it or run /bot-lobby cancel ${existing.id} first.`, "warning");
   return true;
 }
 
-export async function startTask(pi: HostAPI, ctx: HostContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
+export async function startTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, request: string, options: StartOptions = {}): Promise<Task | undefined> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   ensureProjectStructure(root, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
@@ -218,7 +218,7 @@ export function unfinishedBefore(root: string, configDir: string, plan: PlannedT
  * parts not yet finished starts anyway, with a warning: the order is the
  * user's to keep. Returns the task, or a reason.
  */
-export async function startPlannedTask(pi: HostAPI, ctx: HostContext, configDir: string, planId: string, options: { auto?: boolean } = {}): Promise<Task | string> {
+export async function startPlannedTask(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, planId: string, options: { auto?: boolean } = {}): Promise<Task | string> {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const plan = loadPlannedTask(root, configDir, planId);
   if (!plan) return `no planned task ${planId}`;

@@ -12,7 +12,7 @@ import { randomBytes } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { savePlannedTask } from "../src/state/backlog.ts";
@@ -78,7 +78,7 @@ function fakeState() {
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
     isIdle: () => true,
     abort() {},
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   let name = "test window";
   const pi = {
     sendUserMessage() {},
@@ -86,7 +86,7 @@ function fakeState() {
     setSessionName: (next: string) => {
       name = next;
     },
-  } as unknown as HostAPI;
+  } as unknown as ExtensionAPI;
   const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [] });
   return { root, ctx, pi, chat };
 }

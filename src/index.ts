@@ -1,5 +1,6 @@
 import { registerAgentPermissions, registerDelegation } from "./pi/delegation.ts";
-import { CONFIG_DIR_NAME, type HostAPI } from "./host/api.ts";
+import { registerAutoCompaction } from "./pi/auto-compaction.ts";
+import { CONFIG_DIR_NAME, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCommands } from "./pi/commands.ts";
 import { registerLifecycle } from "./pi/events.ts";
 import { registerOrchestrateTool } from "./pi/tools.ts";
@@ -23,9 +24,10 @@ import { registerToolBudget } from "./pi/tool-budget.ts";
 import { bindGrants } from "./pi/grants.ts";
 import { registerAssignmentGuard } from "./pi/assignment-guard.ts";
 
-export default function (pi: HostAPI): void {
+export default function (pi: ExtensionAPI): void {
   registerAgentPermissions(pi);
   registerDelegation(pi);
+  registerAutoCompaction(pi);
   // Settings lists this session's MCP tools and skills to grant, and agents find their granted skills through it.
   if (!isSubagentProcess()) bindGrants(pi);
   let root = detectProjectRoot(process.cwd(), CONFIG_DIR_NAME);

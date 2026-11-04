@@ -16,7 +16,6 @@
 import { THINKING_LEVELS } from "../schemas/configuration.ts";
 import type { HarnessDriver, HarnessIO } from "./process.ts";
 import type { HarnessAccess, HarnessCollector, HarnessPlan } from "./runner.ts";
-import { acpWorkerMcp, type WorkerMcpServer } from "./worker-mcp.ts";
 
 export const ACP_PROTOCOL_VERSION = 1;
 
@@ -114,7 +113,7 @@ function toolArgs(update: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, ...(typeof path === "string" ? { path } : {}), ...(typeof update.title === "string" ? { title: update.title } : {}) };
 }
 
-export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, collector: HarnessCollector, access: HarnessAccess, cwd: string, mcp?: WorkerMcpServer): HarnessDriver {
+export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, collector: HarnessCollector, access: HarnessAccess, cwd: string): HarnessDriver {
   let nextId = 1;
   const pending = new Map<number, (message: RpcMessage) => void>();
   const tools = new Map<string, string>();
@@ -240,7 +239,7 @@ export function acpDriver(io: HarnessIO, plan: HarnessPlan, prompt: string, coll
     start() {
       request("initialize", { protocolVersion: ACP_PROTOCOL_VERSION, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: "bot-lobby", version: "1" } }, (reply) => {
         if (reply.error) return fail(`the agent did not start: ${reply.error.message ?? "initialize failed"}`);
-        request("session/new", { cwd, mcpServers: mcp ? [acpWorkerMcp(mcp)] : [] }, (created) => {
+        request("session/new", { cwd, mcpServers: [] }, (created) => {
           if (created.error || typeof created.result?.sessionId !== "string") return fail(`the agent did not open a session: ${created.error?.message ?? "no session id"}${/auth|key|sign|log ?in/i.test(created.error?.message ?? "") ? " (sign in to it once in a terminal)" : ""}`);
           sessionId = created.result.sessionId;
           collector.session = sessionId;
