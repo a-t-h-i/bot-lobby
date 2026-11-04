@@ -17,5 +17,19 @@ DeepSeek Harness (github.com/deepseek-ai/deepseek-harness, main `8bd07339`; npm 
 - Bot Lobby: `src/state/project.ts` (data folders), `src/web/fetch.ts`, test imports
 - npm dist-tags and release times
 
+Build-spec pass 2026-11-04 (dsh main `8bd07339`):
+- Creator mode: `packages/preset/agent-preset/README.md`, skill `cordis-plugin-development` (`SKILL.md`, `references/host-plugin.md`, `references/practices.md`, `templates/decoration/*`), `packages/bundle/web-app/README.md`
+- `packages/core/agent/src/index.ts` (`create`, `resume`, `CreateAgentOptions`, `AgentHandle`, `AgentSetup`), `runtime-types.ts` (`Agent`, `AgentOptions`, `AgentStatus`, `agent/*` events, `AssistantStreamFrame`)
+- `packages/core/tools/src/contracts.ts` + `index.ts` (`ToolDefinition`, `ToolRunContext`, `PreToolDecision`, `ToolRestriction`, `ToolGuard`, `register`, `restrict`, `guard`)
+- `packages/core/system-prompt/src/index.ts` (`PromptSection`, `section()`)
+- `packages/core/session/src/types.ts` (`AgentCancelCause`), `session/src/index.ts` (`session/event`)
+- `packages/interaction/commands/src/index.ts`, `types.ts`; `interaction/user-questions/src/index.ts`, `types.ts`
+- `packages/host/webserver/src/index.ts`, `docs/subsystems/web-server.md` (`ctx.connection`)
+- `packages/llm/llm/src/types.ts`, `index.ts` (`GenerateOptions`, `stream`, chunk types)
+- `packages/compaction/compaction-basic/README.md`, `src/config.ts`; `docs/subsystems/permission-presets.md`
+- `packages/bundle/base/cordis.patch.yml`, `bundle/web-app/presets/standard.patch.yml`
+- `packages/preset/agent-preset-registry/src/index.ts`, `subagent/subagent/src/manager.ts`
+- Bot Lobby: `src/lobby/host.ts` (`LobbyService`), `src/lobby/service.ts`, `src/lobby/runtime.ts`, `src/lobby/sessions.ts` (pi RPC protocol), `src/execution/pi-runner.ts` (`buildPiArgs`, `spawnPiProcess`, `parsePiStream`, `runPiAgent`), `src/pi/events.ts`, `src/pi/auto-compaction.ts`, `src/pi/quiet.ts`, `src/webui/server.ts`, `src/webui/command.ts`, `src/webui/dev/*`, `src/webui/notices.ts`; env var and module-state greps
+
 Earlier project notes:
 - 2026-11-02 verdict "stay on pi" (thread "Assess migrating Bot Lobby to DeepSeek harness")
