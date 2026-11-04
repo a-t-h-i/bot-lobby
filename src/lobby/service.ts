@@ -3,7 +3,8 @@
  * server drives from the runtime's state. Questions go to the page through
  * the prompt hub (see ../ask/web.ts).
  */
-import { SessionManager, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostContext } from "../host/api.ts";
+import { listSessions } from "../host/session-store.ts";
 import { MAX_SKIP_REASON, TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { updateBlockingRequest } from "../state/blocking-requests.ts";
 import { randomUUID } from "node:crypto";
@@ -93,7 +94,7 @@ export function lobbyNotify(state: Runtime, message: string, level: "info" | "wa
   }
 }
 
-function sessionModel(ctx: ExtensionContext): string | undefined {
+function sessionModel(ctx: HostContext): string | undefined {
   return ctx.model ? modelRef(ctx.model) : undefined;
 }
 
@@ -317,10 +318,7 @@ const exitsSaid = new Set<string>();
 async function listSessionFiles(): Promise<SessionFileInfo[]> {
   const state = serviceState;
   if (!state) return [];
-  const dirs = new Map<string, string | undefined>([[state.ctx.cwd, state.ctx.sessionManager.getSessionDir()]]);
-  if (!dirs.has(state.root)) dirs.set(state.root, undefined);
-  const lists = await Promise.all([...dirs].map(([cwd, dir]) => SessionManager.list(cwd, dir).catch(() => [])));
-  return lists.flat();
+  return listSessions(state.ctx.cwd, state.ctx.sessionManager.getSessionDir()).catch(() => []);
 }
 
 /** Other sessions' conversations, read from their files. */
@@ -1259,12 +1257,11 @@ export function createLobbyService(state: Runtime): LobbyService {
     },
     sessionModel: () => sessionModel(state.ctx),    models: () => {
       try {
-        const scoped = state.ctx.scopedModels;
-        const usable = scoped.length > 0 ? scoped.map((entry) => entry.model) : state.ctx.modelRegistry.getAvailable();
-        return usable.map((model) => {
-          const id = modelRef(model);
-          return { id, label: model.name && model.name !== id ? model.name : id, thinkingLevels: supportedThinking(model) };
-        });
+        // Models are each harness's own (Settings lists them per harness); the Orchestrator's session model is the only one known here.
+        const model = state.ctx.model;
+        if (!model) return [];
+        const id = modelRef(model);
+        return [{ id, label: model.name && model.name !== id ? model.name : id, thinkingLevels: supportedThinking(model) }];
       } catch {
         // No model registry in this process (tests): the page falls back to custom ids.
         return [];

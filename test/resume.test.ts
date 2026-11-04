@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask } from "../src/state/persistence.ts";
 import { writePresence } from "../src/state/presence.ts";
@@ -46,8 +46,8 @@ function setup() {
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
     isIdle: () => true,
     abort() {},
-  } as unknown as ExtensionContext;
-  const pi = { sendUserMessage: (text: string) => void sent.push(text), getSessionName: () => "test window" } as unknown as ExtensionAPI;
+  } as unknown as HostContext;
+  const pi = { sendUserMessage: (text: string) => void sent.push(text), getSessionName: () => "test window" } as unknown as HostAPI;
   const launched: Array<{ args: string[]; proc: FakeSessionProcess }> = [];
   setSessionLauncher((args) => {
     const proc = new FakeSessionProcess();
@@ -163,22 +163,22 @@ test("/bot-lobby carry-on takes over a task nothing runs, unpauses it and starts
   setMinimized(false);
   const sent: string[] = [];
   const notes: string[] = [];
-  const handlers: Record<string, (args: string | undefined, ctx: ExtensionContext) => unknown> = {};
+  const handlers: Record<string, (args: string | undefined, ctx: HostContext) => unknown> = {};
   const pi = {
     sendUserMessage: (message: string) => void sent.push(message),
-    registerCommand: (name: string, options?: { handler: (args: string | undefined, ctx: ExtensionContext) => unknown }) => {
+    registerCommand: (name: string, options?: { handler: (args: string | undefined, ctx: HostContext) => unknown }) => {
       if (options?.handler) handlers[name] = options.handler;
     },
     registerShortcut: () => {},
     on: () => () => {},
   };
-  registerCommands(pi as unknown as ExtensionAPI, ".pi");
+  registerCommands(pi as unknown as HostAPI, ".pi");
   const ctx = {
     cwd: root,
     ui: { notify: (message: string) => void notes.push(message), setStatus() {}, setWidget() {} },
     sessionManager: { getSessionId: () => "session-new", getBranch: () => [] },
     isIdle: () => true,
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
 
   task(TIDY, { ownerSessionId: "session-gone", paused: true });
   await handlers["bot-lobby"]!(`carry-on ${TIDY}`, ctx);

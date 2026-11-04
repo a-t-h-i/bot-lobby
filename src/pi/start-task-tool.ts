@@ -8,8 +8,7 @@
  * While it drives a task, a message that is separate work starts its task in
  * a new background session instead, and the current task carries on.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Container, Text } from "@earendil-works/pi-tui";
+import type { HostAPI } from "../host/api.ts";
 import { Type } from "typebox";
 import { isSubagentProcess } from "./quiet.ts";
 import { isMinimized } from "./ui.ts";
@@ -40,7 +39,7 @@ const DESCRIPTION = [
   "After calling it, tell the user in one short line that you started a task and why. With no task running, end your turn: the task's kickoff follows.",
 ].join(" ");
 
-export function registerStartTaskTool(pi: ExtensionAPI, configDir: string): void {
+export function registerStartTaskTool(pi: HostAPI, configDir: string): void {
   if (isSubagentProcess()) return;
   pi.registerTool({
     name: START_TASK_TOOL,
@@ -79,16 +78,6 @@ export function registerStartTaskTool(pi: ExtensionAPI, configDir: string): void
         content: [{ type: "text", text: `Started ${task.id} (${task.title}), ${path}. Tell the user in one line and end your turn; the kickoff follows.` }],
         details: { taskId: task.id, title: task.title, track: task.track?.path },
       };
-    },
-    renderCall(args, theme) {
-      const call = args as Partial<StartTaskParams>;
-      return new Text(`${theme.fg("toolTitle", theme.bold("start task"))}${call.title ? ` ${theme.fg("accent", call.title)}` : ""}`, 0, 0);
-    },
-    renderResult(result, _options, theme) {
-      const details = result.details as { taskId?: string; track?: string; session?: string } | undefined;
-      if (details?.session) return new Text(`${theme.fg("success", "✓")} ${theme.fg("accent", details.session)} ${theme.fg("muted", "new session")}`, 0, 0);
-      if (!details?.taskId) return new Container();
-      return new Text(`${theme.fg("success", "✓")} ${theme.fg("accent", details.taskId)}${details.track ? ` ${theme.fg("muted", details.track)}` : ""}`, 0, 0);
     },
   });
 }

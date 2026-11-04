@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext, SlashCommandInfo } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext, SlashCommandInfo } from "../host/api.ts";
 import { pushNotice } from "../webui/notices.ts";
 
 export interface LobbySlashCommand {
@@ -35,7 +35,7 @@ const NATIVE_COMMANDS = [
   ["quit", "Quit Pi"],
 ] as const;
 
-function resources(pi?: ExtensionAPI): SlashCommandInfo[] {
+function resources(pi?: HostAPI): SlashCommandInfo[] {
   try {
     return pi?.getCommands?.() ?? [];
   } catch {
@@ -43,7 +43,7 @@ function resources(pi?: ExtensionAPI): SlashCommandInfo[] {
   }
 }
 
-export function piCommands(pi?: ExtensionAPI): LobbySlashCommand[] {
+export function piCommands(pi?: HostAPI): LobbySlashCommand[] {
   const commands = new Map<string, LobbySlashCommand>(NATIVE_COMMANDS.map(([name, description]) => [
     name, { name, description, ...(name === "compact" ? {} : { terminal: true }) },
   ]));
@@ -53,17 +53,12 @@ export function piCommands(pi?: ExtensionAPI): LobbySlashCommand[] {
   return [...commands.values()];
 }
 
-function compact(ctx: ExtensionContext, instructions: string): string {
-  if (!ctx.isIdle()) return "the orchestrator is working — stop it before compacting";
-  ctx.compact({
-    ...(instructions ? { customInstructions: instructions } : {}),
-    onComplete: () => pushNotice("Session context compacted", "success"),
-    onError: (error) => pushNotice(`Context compaction failed — ${error.message}`, "error"),
-  });
-  return "compacting the session context…";
+function compact(_ctx: HostContext, _instructions: string): string {
+  // The Orchestrator's coding agent keeps and compacts its own context.
+  return "the coding agent compacts its own context; start a new session to clear it";
 }
 
-function handoff(ctx: ExtensionContext, text: string): string {
+function handoff(ctx: HostContext, text: string): string {
   if (ctx.mode !== "tui") return `${text.split(/\s+/)[0]} requires Pi's terminal UI; this session has no terminal`;
   const draft = ctx.ui.getEditorText();
   if (draft.trim() && draft !== text) return "Pi's terminal has an unfinished draft — clear it before handing off this command";
@@ -71,7 +66,7 @@ function handoff(ctx: ExtensionContext, text: string): string {
   return `prepared ${text.split(/\s+/)[0]} in Pi — press Enter in Pi's terminal to run it`;
 }
 
-export function sendPiCommand(pi: ExtensionAPI, ctx: ExtensionContext, text: string): string {
+export function sendPiCommand(pi: HostAPI, ctx: HostContext, text: string): string {
   const input = text.trim();
   const name = input.slice(1).split(/\s+/)[0]!;
   if (name === "compact") return compact(ctx, input.slice(name.length + 1).trim());

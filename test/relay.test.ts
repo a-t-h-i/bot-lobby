@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { ASK_ENV, previewDir, readRelayAnswer, readRelayRequest, relayAsker, RELAY_TITLE } from "../src/ask/relay.ts";
 import { answerSummary, registerAskTool } from "../src/ask/tool.ts";
 import { ASK_TOOL, type AskQuestion, type AskResult } from "../src/ask/types.ts";
@@ -38,7 +38,7 @@ function withEnv<T>(values: Record<string, string | undefined>, fn: () => T): T 
 
 test("a subagent's questions travel as an RPC editor dialog, image paths made absolute, and its answers come back", async () => {
   let sent: { title: string; prefill: string } | undefined;
-  const ctx = { cwd: "/repo", ui: { editor: async (title: string, prefill: string) => ((sent = { title, prefill }), JSON.stringify(picked)) } } as unknown as ExtensionContext;
+  const ctx = { cwd: "/repo", ui: { editor: async (title: string, prefill: string) => ((sent = { title, prefill }), JSON.stringify(picked)) } } as unknown as HostContext;
   assert.deepEqual(await relayAsker([layout], ctx), picked);
   assert.equal(sent!.title, RELAY_TITLE);
   const carried = readRelayRequest(sent!.title, sent!.prefill)!;
@@ -48,14 +48,14 @@ test("a subagent's questions travel as an RPC editor dialog, image paths made ab
   assert.equal(readRelayRequest(RELAY_TITLE, JSON.stringify({ questions: [{ question: "Q?", header: "H", options: "nope" }] })), undefined, "malformed questions are not asked");
   assert.deepEqual(readRelayRequest(RELAY_TITLE, JSON.stringify({ questions: [{ question: "Q?", header: "H", options: [{ label: "A", extra: 1 }, { nolabel: true }], run: "rm -rf /" }] })), [{ question: "Q?", header: "H", options: [{ label: "A" }] }], "only what the questionnaire shows is kept");
   assert.equal(readRelayAnswer("{\"nope\":1}"), undefined);
-  const cancelled = { cwd: "/repo", ui: { editor: async () => undefined } } as unknown as ExtensionContext;
+  const cancelled = { cwd: "/repo", ui: { editor: async () => undefined } } as unknown as HostContext;
   assert.deepEqual(await relayAsker([layout], cancelled), { answers: [], cancelled: true });
 });
 
 test("in a subagent the tool exists only when the master relays it, and says so", () => {
   const register = () => {
     const tools: Array<{ name: string; description: string }> = [];
-    registerAskTool({ registerTool: (tool: { name: string; description: string }) => tools.push(tool) } as unknown as ExtensionAPI);
+    registerAskTool({ registerTool: (tool: { name: string; description: string }) => tools.push(tool) } as unknown as HostAPI);
     return tools;
   };
   assert.equal(withEnv({ BOT_LOBBY_SUBAGENT: "1", [ASK_ENV]: undefined }, register).length, 0);

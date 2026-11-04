@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostCommandContext, HostContext } from "../src/host/api.ts";
 import { LobbyFeed, lobbyFeed } from "../src/lobby/feed.ts";
 import { loadConfig, saveConfig } from "../src/state/project.ts";
 import { currentWebServer } from "../src/webui/server.ts";
@@ -25,10 +25,10 @@ const service = fakeWebService(new LobbyFeed());
 const opened: string[] = [];
 const deps = { service, open: (url: string) => { opened.push(url); return true; } };
 
-function fakeCtx(): { ctx: ExtensionCommandContext; notices: Array<{ message: string; level?: string }>; statuses: Array<string | undefined> } {
+function fakeCtx(): { ctx: HostCommandContext; notices: Array<{ message: string; level?: string }>; statuses: Array<string | undefined> } {
   const notices: Array<{ message: string; level?: string }> = [];
   const statuses: Array<string | undefined> = [];
-  const ctx = { ui: { notify: (message: string, level?: string) => void notices.push({ message, level }), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as ExtensionCommandContext;
+  const ctx = { ui: { notify: (message: string, level?: string) => void notices.push({ message, level }), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as HostCommandContext;
   return { ctx, notices, statuses };
 }
 
@@ -138,8 +138,8 @@ test("a session starting brings the page up on its own, opens the browser once a
   useConfig({ port: 0, openBrowser: true });
   const notices: string[] = [];
   const statuses: Array<string | undefined> = [];
-  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as ExtensionContext;
-  const printed = { mode: "print", ui: interactive.ui } as unknown as ExtensionContext;
+  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: (_key: string, text?: string) => void statuses.push(text) } } as unknown as HostContext;
+  const printed = { mode: "print", ui: interactive.ui } as unknown as HostContext;
   opened.length = 0;
   webSessionStarted(printed, deps);
   assert.equal(currentWebServer(), undefined, "a one-shot run serves nothing");
@@ -159,7 +159,7 @@ test("a session starting brings the page up on its own, opens the browser once a
 test("switching sessions: a call the replaced session cannot answer is a quiet 503; a session with bot-lobby off stops the page; a reload brings it back on the same port", async () => {
   useConfig({ port: 0, openBrowser: true });
   const notices: string[] = [];
-  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: () => {} } } as unknown as ExtensionContext;
+  const interactive = { mode: "tui", ui: { notify: (message: string) => void notices.push(message), setStatus: () => {} } } as unknown as HostContext;
   // The lobby service of a session pi has replaced: every use of its context throws pi's refusal.
   const stale = { ...fakeWebService(new LobbyFeed()), planner: () => { throw new Error("This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession()."); } };
   opened.length = 0;
@@ -175,7 +175,7 @@ test("switching sessions: a call the replaced session cannot answer is a quiet 5
 
   // pi reloads the extension: this copy's server closes and leaves its port for the next copy.
   const handlers = new Map<string, (event: unknown) => unknown>();
-  registerWebServer({ on: (name: string, handler: (event: unknown) => unknown) => void handlers.set(name, handler) } as unknown as ExtensionAPI);
+  registerWebServer({ on: (name: string, handler: (event: unknown) => unknown) => void handlers.set(name, handler) } as unknown as HostAPI);
   const port = server.port;
   await handlers.get("session_shutdown")!({ type: "session_shutdown", reason: "reload" });
   assert.equal(currentWebServer(), undefined, "the reloaded copy's server is closed");

@@ -14,7 +14,7 @@ import { treeState } from "../src/execution/git.ts";
 import { MAX_REFUSALS, registerToolBudget, TOOL_BUDGET_ENV, toolBudgetEnv } from "../src/pi/tool-budget.ts";
 import { DEFAULT_CONFIG, resolveConfig } from "../src/schemas/configuration.ts";
 import type { ProcessRunner } from "../src/execution/pi-runner.ts";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../src/host/api.ts";
 
 function repo(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "bl-speed-"));
@@ -185,7 +185,7 @@ test("a scout asked the same thing on an unchanged tree reuses its findings; any
 test("a tool budget warns once at 60%, refuses past the limit, and stops a run that keeps calling", async () => {
   assert.deepEqual(toolBudgetEnv(0), {}, "0 is no limit");
   const handlers = new Map<string, (event: Record<string, unknown>) => unknown>();
-  const pi = { on: (name: string, handler: (event: Record<string, unknown>) => unknown) => handlers.set(name, handler) } as unknown as ExtensionAPI;
+  const pi = { on: (name: string, handler: (event: Record<string, unknown>) => unknown) => handlers.set(name, handler) } as unknown as HostAPI;
   registerToolBudget(pi, { warnAt: 3, max: 5 });
   const call = (nested = false) => handlers.get("tool_call")!({ toolName: "read", toolCallId: "c", ...(nested ? { parentToolCallId: "p" } : {}) }) as { block?: boolean; reason?: string; terminate?: boolean } | undefined;
   const result = () => handlers.get("tool_result")!({ content: [{ type: "text", text: "file" }] }) as { content: Array<{ text: string }> } | undefined;

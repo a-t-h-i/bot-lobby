@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../host/api.ts";
 import { Type } from "typebox";
 import { createDeskClient } from "../desk/ipc.ts";
 import { AGENT_ENV, DELEGATION_ENV, DELEGATE_TOOL, MAX_CHILDREN, type AgentPolicy } from "../execution/delegation.ts";
@@ -13,7 +13,7 @@ export function allowedAgentTool(policy: AgentPolicy, name: string, readOnlyHint
 }
 
 /** Enforce the same permissions on direct, discovered and codemode-nested calls. */
-export function registerAgentPermissions(pi: ExtensionAPI): void {
+export function registerAgentPermissions(pi: HostAPI): void {
   const raw = process.env[AGENT_ENV];
   let policy: AgentPolicy | undefined;
   if (raw) {
@@ -32,7 +32,7 @@ export function registerAgentPermissions(pi: ExtensionAPI): void {
       return { block: true, reason: "Specify an MCP server with an explicit tool grant to read its resources." };
     }
     if (policy) {
-      if (allowedAgentTool(policy, event.toolName, info?.annotations?.readOnlyHint, info?.exposure === "hidden")) return;
+      if (allowedAgentTool(policy, event.toolName, info?.annotations?.readOnlyHint === true, info?.exposure === "hidden")) return;
       return { block: true, reason: `This agent is not granted ${event.toolName}.` };
     }
     if (event.toolName.startsWith("mcp__")) {
@@ -44,7 +44,7 @@ export function registerAgentPermissions(pi: ExtensionAPI): void {
   });
 }
 
-export function registerDelegation(pi: ExtensionAPI): void {
+export function registerDelegation(pi: HostAPI): void {
   if (!isSubagentProcess() || !process.env[DELEGATION_ENV]) return;
   const target = JSON.parse(process.env[DELEGATION_ENV]!) as { address: string; token: string };
   const client = createDeskClient(target.address, target.token);

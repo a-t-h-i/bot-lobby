@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../src/host/api.ts";
 import { agentProfile, DEFAULT_CONFIG, lobbyAgentProfile, resolveConfig } from "../src/schemas/configuration.ts";
 import { buildPiArgs, runPiAgent, type ProcessRunner } from "../src/execution/pi-runner.ts";
 import { bindGrants, grantableSkills, grantableTools, mcpGrant, skillFiles, unbindGrants } from "../src/pi/grants.ts";
@@ -66,7 +66,7 @@ test("the grantable MCP tools are pi's connected ones, by server, with their rea
     { name: "mcp__github__get_issue", description: "Read one issue.\nMore.", exposure: "codemode", annotations: { readOnlyHint: true } },
     { name: "mcp__figma__export", description: "Export.", exposure: "deferred" },
     { name: "mcp__secret__hidden", description: "", exposure: "hidden" },
-  ] } as unknown as ExtensionAPI;
+  ] } as unknown as HostAPI;
   assert.deepEqual(grantableTools(pi), [
     { name: "mcp__figma__export", server: "figma", description: "Export.", readOnly: false },
     { name: "mcp__github__get_issue", server: "github", description: "Read one issue.", readOnly: true },
@@ -77,7 +77,7 @@ test("the grantable MCP tools are pi's connected ones, by server, with their rea
 const CONNECTED = { getAllTools: () => [
   { name: "mcp__github__get_issue", description: "Read one issue.", exposure: "codemode", annotations: { readOnlyHint: true } },
   { name: "mcp__github__create_pull_request", description: "Open a PR.", exposure: "codemode" },
-] } as unknown as ExtensionAPI;
+] } as unknown as HostAPI;
 
 const ok: ProcessRunner = async () => ({ exitCode: 0, killed: false, stderr: "", stdout: JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } }) });
 

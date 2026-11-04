@@ -6,7 +6,7 @@
  * classifier is off or does not answer, the tool says so and the agent
  * searches as usual.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../host/api.ts";
 import { Type } from "typebox";
 import { classifier, sessionScope } from "./instance.ts";
 import { FIND_FILES_TOOL, likelyFiles, type LikelyFiles } from "./files.ts";
@@ -39,7 +39,7 @@ export async function findRelevantFiles(jev: Classifier, scope: FileScope | unde
   return formatLikely(query, result);
 }
 
-export function registerClassifierTools(pi: ExtensionAPI): void {
+export function registerClassifierTools(pi: HostAPI): void {
   pi.registerTool({
     name: FIND_FILES_TOOL,
     label: "Find relevant files",

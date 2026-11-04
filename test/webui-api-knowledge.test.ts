@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { ensureProjectStructure } from "../src/state/persistence.ts";
 import { dataRoot } from "../src/state/project.ts";
 import { knowledgeDir } from "../src/knowledge/paths.ts";
@@ -83,9 +83,9 @@ async function setup(busy = false) {
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
     isIdle: () => !busy,
     abort() {},
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
   const sent: Array<{ text: string; options?: { deliverAs?: string } }> = [];
-  const pi = { sendUserMessage(text: string, options?: { deliverAs?: string }) { sent.push({ text, options }); }, getSessionName: () => "test window" } as unknown as ExtensionAPI;
+  const pi = { sendUserMessage(text: string, options?: { deliverAs?: string }) { sent.push({ text, options }); }, getSessionName: () => "test window" } as unknown as HostAPI;
   const chat = new ChatAgents({ cwd: root, root, configDir: ".pi", profile: () => ({ thinking: "low" }), history: () => [], runProcess: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "", killed: false }) });
   const knowledge = new KnowledgeBook({ root, configDir: ".pi", threshold: () => 20_000, backups: () => 3, sessionId: () => "session-1" });
   const service = createLobbyService({ root, ctx, pi, chat, knowledge, configDir: ".pi" } as unknown as Runtime);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext, ToolDefinition } from "../src/host/api.ts";
 import { isQuiet, isSubagentProcess, setQuiet, toggleQuiet, visibleTools, WEB_TOOL_NAMES, webToolsFor } from "../src/pi/quiet.ts";
 import { registerQuietTools } from "../src/pi/tool-renderers.ts";
 import { LOBBY_CHAT_NOTE, registerLifecycle } from "../src/pi/events.ts";
@@ -44,9 +44,9 @@ function makePi(available: string[], active: string[] = [...available]) {
       state.entries.push({ customType, data });
     },
     handlers: new Map<string, (...args: unknown[]) => unknown>(),
-    shortcutHandler: undefined as ((ctx: ExtensionContext) => unknown) | undefined,
-    shortcutHandlers: {} as Record<string, (ctx: ExtensionContext) => unknown>,
-    commandHandlers: {} as Record<string, (args: string | undefined, ctx: ExtensionContext) => unknown>,
+    shortcutHandler: undefined as ((ctx: HostContext) => unknown) | undefined,
+    shortcutHandlers: {} as Record<string, (ctx: HostContext) => unknown>,
+    commandHandlers: {} as Record<string, (args: string | undefined, ctx: HostContext) => unknown>,
     on(event: string, handler: (...args: unknown[]) => unknown): () => void {
       state.handlers.set(event, handler);
       return () => {};
@@ -54,12 +54,12 @@ function makePi(available: string[], active: string[] = [...available]) {
     registerTool(tool: AnyTool): void {
       state.tools.push(tool);
     },
-    registerShortcut(shortcut: string, options: { description?: string; handler: (ctx: ExtensionContext) => unknown }): void {
+    registerShortcut(shortcut: string, options: { description?: string; handler: (ctx: HostContext) => unknown }): void {
       state.shortcuts.push(shortcut);
       state.shortcutHandler = options.handler;
       state.shortcutHandlers[shortcut] = options.handler;
     },
-    registerCommand(name: string, options?: { handler: (args: string | undefined, ctx: ExtensionContext) => unknown }): void {
+    registerCommand(name: string, options?: { handler: (args: string | undefined, ctx: HostContext) => unknown }): void {
       state.commands.push(name);
       if (options?.handler) state.commandHandlers[name] = options.handler;
     },
@@ -78,7 +78,7 @@ function makePi(available: string[], active: string[] = [...available]) {
 }
 
 type FakePi = ReturnType<typeof makePi>;
-const asPi = (fake: FakePi): ExtensionAPI => fake as unknown as ExtensionAPI;
+const asPi = (fake: FakePi): HostAPI => fake as unknown as HostAPI;
 
 function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
   const ui = {
@@ -105,7 +105,7 @@ function makeCtx(cwd: string, expanded = false, sessionId = "session-1") {
       ui.notifications.push({ message, type });
     },
   };
-  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId, getBranch: () => [] }, isIdle: () => true } as unknown as ExtensionContext, ui };
+  return { ctx: { cwd, ui, sessionManager: { getSessionId: () => sessionId, getBranch: () => [] }, isIdle: () => true } as unknown as HostContext, ui };
 }
 
 function tempDir(prefix: string): string {
@@ -493,7 +493,7 @@ test("/bot-lobby switch runs a saved session in this window, and only when the o
       switched.push(path);
       return { cancelled: false };
     },
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
   await fake.commandHandlers["bot-lobby"]!(`switch ${file}`, ctx);
   assert.deepEqual(switched, [file]);
   await fake.commandHandlers["bot-lobby"]!(`switch ${join(root, "missing.jsonl")}`, ctx);

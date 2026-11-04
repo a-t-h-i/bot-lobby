@@ -7,8 +7,7 @@
  * ends before the task is done. Subagents never own tasks or show up as
  * sessions, so none of this runs in them.
  */
-import type { KeyId } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../host/api.ts";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { peekOwnedTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
@@ -36,8 +35,8 @@ export type OwnerEvent =
   | { kind: "held"; taskId: string };
 
 interface Owner {
-  pi: ExtensionAPI;
-  ctx: ExtensionContext;
+  pi: HostAPI;
+  ctx: HostContext;
   /** The session this clock runs for, kept so its heartbeat can be removed after its context goes stale. */
   sessionId: string;
   root: string;
@@ -285,7 +284,7 @@ function stop(): void {
 }
 
 /** Start the owner's clock for this session (called on session_start; exported for tests). */
-export function startOwner(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string, pollMs = OWNER_POLL_MS): void {
+export function startOwner(pi: HostAPI, ctx: HostContext, configDir: string, pollMs = OWNER_POLL_MS): void {
   stop();
   if (isSubagentProcess()) return;
   owner = { pi, ctx, sessionId: ctx.sessionManager.getSessionId(), root: detectProjectRoot(ctx.cwd, configDir), configDir };
@@ -296,9 +295,9 @@ export function startOwner(pi: ExtensionAPI, ctx: ExtensionContext, configDir: s
   }
 }
 
-export function registerOwner(pi: ExtensionAPI, configDir: string): void {
+export function registerOwner(pi: HostAPI, configDir: string): void {
   if (isSubagentProcess()) return;
-  const track = (ctx: ExtensionContext) => {
+  const track = (ctx: HostContext) => {
     if (owner) owner.ctx = ctx;
   };
   pi.on("session_start", (_event, ctx) => startOwner(pi, ctx, configDir));
@@ -318,7 +317,7 @@ export function registerOwner(pi: ExtensionAPI, configDir: string): void {
     if (!live(task) || !isAutoMode(owner.root, owner.configDir, task.id)) return undefined;
     return { block: true, reason: `Auto mode is on for ${task.id}: nobody will answer. Decide this yourself from the request, the plan and your reconnaissance, record the decision, and continue.` };
   });
-  pi.registerShortcut((loadConfig().lobby.keys.toggleAuto ?? AUTO_KEY) as KeyId, {
+  pi.registerShortcut((loadConfig().lobby.keys.toggleAuto ?? AUTO_KEY), {
     description: "bot-lobby: switch auto mode for this session's task",
     handler: (ctx) => ctx.ui.notify(`bot-lobby: ${toggleOwnAuto()}`, "info"),
   });

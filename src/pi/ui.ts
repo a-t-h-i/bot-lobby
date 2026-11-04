@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../host/api.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Task } from "../schemas/task.ts";
 import { activeTask } from "../state/persistence.ts";
@@ -96,7 +96,7 @@ export function setMinimized(value: boolean): void {
  * own agents: without retention the qa/reviewer call that follows the workers would
  * evict their successes and the checklist would reset. A new task starts clean.
  */
-export function applyStatus(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[] = []): void {
+export function applyStatus(ctx: HostContext, root: string, configDir: string, runs: AgentRun[] = []): void {
   const sessionId = ctx.sessionManager.getSessionId();
   const task = isSubagentProcess() || minimized ? undefined : activeTask(root, configDir, sessionId);
   const sameTask = zenState.task?.id === task?.id;
@@ -122,7 +122,7 @@ export function onRunUpdates(listener: ((runs: readonly AgentRun[]) => void) | u
  * merges the runs and repaints; `applyStatus` rereads the task once the call ends.
  * Before any task is loaded it falls back to `applyStatus` so the status appears.
  */
-export function reportRuns(ctx: ExtensionContext, root: string, configDir: string, runs: AgentRun[]): void {
+export function reportRuns(ctx: HostContext, root: string, configDir: string, runs: AgentRun[]): void {
   runListener?.(runs);
   if (!zenState.task && !minimized) {
     applyStatus(ctx, root, configDir, runs);
@@ -131,13 +131,13 @@ export function reportRuns(ctx: ExtensionContext, root: string, configDir: strin
   setZenState(zenState.task, mergeRuns(zenState.live, slim(runs)));
 }
 
-export function clearStatus(ctx: ExtensionContext): void {
+export function clearStatus(ctx: HostContext): void {
   zenState = { task: undefined, live: [], runs: [] };
   ctx.ui.setStatus(STATUS_KEY, undefined);
 }
 
 /** Register `alt+t`, the reveal-on-demand toggle for built-in tool rows. */
-export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): void {
+export function registerRevealShortcut(pi: HostAPI, configDir: string): void {
   if (isSubagentProcess()) return;
   pi.registerShortcut("alt+t", {
     description: "bot-lobby: reveal or hide built-in tool rows",
@@ -145,7 +145,7 @@ export function registerRevealShortcut(pi: ExtensionAPI, configDir: string): voi
   });
 }
 
-function revealTools(ctx: ExtensionContext, configDir: string): void {
+function revealTools(ctx: HostContext, configDir: string): void {
   const quiet = toggleQuiet();
   const expanded = ctx.ui.getToolsExpanded();
   ctx.ui.setToolsExpanded(!expanded);

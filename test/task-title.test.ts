@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostContext } from "../src/host/api.ts";
 import { loadConfig } from "../src/state/project.ts";
 import { generateTaskTitle } from "../src/pi/task-title.ts";
 
@@ -14,13 +14,13 @@ function context(text: string, overrides: Record<string, unknown> = {}) {
         return { result: async () => ({ content: [{ type: "text", text }], stopReason: "stop" }) };
       },
       ...overrides,
-  } } as unknown as ExtensionContext;
+  } } as unknown as HostContext;
   return { ctx, calls, model };
 }
 
 test("task titles summarize the full request using low reasoning and the cheap model", async () => {
   const { ctx, calls, model } = context("Improve task naming");
-  ctx.model = { ...model, id: "large" } as NonNullable<ExtensionContext["model"]>;
+  ctx.model = { ...model, id: "large" } as NonNullable<HostContext["model"]>;
   const config = loadConfig();
   config.classifier.effort.cheapModel = "test/small";
   const request = "I was looking at the lobby today. Task names should capture the gist instead of the first few words.";
@@ -49,7 +49,7 @@ test("task naming falls back on missing models, failures and invalid replies", a
   }
   const failed = context("", { streamSimple: () => { throw new Error("offline"); } });
   assert.equal(await generateTaskTitle(failed.ctx, request, loadConfig()), "fix task names");
-  assert.equal(await generateTaskTitle({} as ExtensionContext, request, loadConfig()), "fix task names");
+  assert.equal(await generateTaskTitle({} as HostContext, request, loadConfig()), "fix task names");
 });
 
 test("task naming times out even when the provider ignores cancellation", async (t) => {

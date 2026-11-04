@@ -5,7 +5,7 @@
  * owns a task and records each Master turn in the metrics log. The web server
  * (src/webui) is its only surface.
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../host/api.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { appendMetrics, type MetricStatus } from "../state/metrics.ts";
 import { describeToolCall } from "../pi/activity.ts";
@@ -34,9 +34,9 @@ import { PlanningSession, type PlanningSnapshot } from "./planner.ts";
 export { deliverComments };
 
 export interface Runtime {
-  pi: ExtensionAPI;
+  pi: HostAPI;
   configDir: string;
-  ctx: ExtensionContext;
+  ctx: HostContext;
   root: string;
   /** The lobby chat's agents other than the oracle, answering one at a time. */
   chat: ChatAgents;
@@ -110,7 +110,7 @@ function shutdown(carryOn: boolean): void {
  * Start the lobby's backend: state, service and background wiring. Runs for
  * every interactive master session, not a subagent.
  */
-export function startLobbyService(pi: ExtensionAPI, ctx: ExtensionContext, configDir: string): Runtime | undefined {
+export function startLobbyService(pi: HostAPI, ctx: HostContext, configDir: string): Runtime | undefined {
   shutdown(false);
   if (isSubagentProcess() || !servesPage(ctx)) return undefined;
   const root = detectProjectRoot(ctx.cwd, configDir);
@@ -238,7 +238,7 @@ function nudgeWhenIdle(state: Runtime, message: string): void {
  * starts (RPC) are shown by the page of the window that started them.
  * Explicitly opened project folders get their own managed RPC web server.
  */
-export function servesPage(ctx: ExtensionContext): boolean {
+export function servesPage(ctx: HostContext): boolean {
   return ctx.mode === "tui" || (ctx.mode === "rpc" && process.env.BOT_LOBBY_WEB_PROJECT === "1");
 }
 
@@ -263,10 +263,10 @@ function turnStatus(messages: readonly unknown[]): MetricStatus {
 }
 
 /** Narrate the Master's own turn into the feed and record it as a metric. */
-export function registerLobbyEvents(pi: ExtensionAPI, configDir: string): void {
+export function registerLobbyEvents(pi: HostAPI, configDir: string): void {
   if (isSubagentProcess()) return;
   let turn: MasterTurn | undefined;
-  const track = (ctx: ExtensionContext) => {
+  const track = (ctx: HostContext) => {
     if (runtime) runtime.ctx = ctx;
   };
   pi.on("session_start", (_event, ctx) => {
