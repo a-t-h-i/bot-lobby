@@ -6,7 +6,7 @@
  * `ack_board` records the events the worker actually incorporated — reading
  * alone proves receipt, not incorporation.
  */
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient, type DeskClient } from "./ipc.ts";
 import { appendPost, BOARD_ENV, formatPosts, isPostKind, POST_KINDS, recentPost, readBoard, subscriptionFor, type BoardPost, type PostKind } from "./board.ts";
@@ -33,7 +33,7 @@ function recordRead(path: string, self: string, kinds: readonly PostKind[], show
   for (const post of shownPosts) if (post.seq > through) markSeen(statePath, self, post.seq);
 }
 
-export function registerBoardClient(pi: HostAPI, env: NodeJS.ProcessEnv = process.env, client?: DeskClient): void {
+export function registerBoardClient(pi: ExtensionAPI, env: NodeJS.ProcessEnv = process.env, client?: DeskClient): void {
   const path = env[BOARD_ENV];
   if (!path) return;
   const target = deskAddress(env);

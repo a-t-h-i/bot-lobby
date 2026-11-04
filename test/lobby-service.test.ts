@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
 import { createLobbyService } from "../src/lobby/service.ts";
 import { lobbyFeed } from "../src/lobby/feed.ts";
@@ -34,11 +34,11 @@ function fakeState(): Runtime {
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
     isIdle: () => true,
     abort() {},
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   const pi = {
     sendUserMessage() {},
     getSessionName: () => "test window",
-  } as unknown as HostAPI;
+  } as unknown as ExtensionAPI;
   return { root, configDir: ".pi", ctx, pi } as unknown as Runtime;
 }
 
@@ -50,13 +50,15 @@ test("the service exposes data and actions with no TUI", () => {
   assert.equal(service.comment("TASK-nope", "hello"), "no task TASK-nope");
 });
 
-test("web chat compact answers that the coding agent compacts itself, without prompting it", () => {
-  const state = fakeState();
-  state.pi.sendUserMessage = () => { assert.fail("compact must not prompt the model"); };
+test("web chat compact reaches Pi compaction, not a model prompt, including leading whitespace", () => {
+  const state = fakeState(); const instructions: Array<string | undefined> = [];
+  state.ctx.compact = (options) => { instructions.push(options?.customInstructions); };
+  state.pi.sendUserMessage = () => { assert.fail("native compact must not prompt the model"); };
   const service = createLobbyService(state);
   assert.ok(service.commands!().some((command) => command.name === "compact"));
-  assert.match(String(service.toOracle("  /compact keep decisions")), /compacts its own context/);
-  assert.match(String(service.toOracle("/compact")), /compacts its own context/);
+  assert.match(String(service.toOracle("  /compact keep decisions")), /compacting/);
+  assert.match(String(service.toOracle("/compact")), /compacting/);
+  assert.deepEqual(instructions, ["keep decisions", undefined]);
 });
 
 test("accept persists explicit waivers and audit through a stale worker save without completing", async () => {

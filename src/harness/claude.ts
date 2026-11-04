@@ -10,7 +10,6 @@
  * `apps/server/src/orchestration-v2/Adapters/ClaudeAdapterV2.ts`.
  */
 import type { HarnessDriver, HarnessIO } from "./process.ts";
-import { claudeWorkerMcp, type WorkerMcpServer } from "./worker-mcp.ts";
 import type { HarnessAccess, HarnessCollector, HarnessPlan } from "./runner.ts";
 
 /** pi's tool names and Claude Code's for the same job. */
@@ -46,16 +45,15 @@ export function claudeTools(tools: readonly string[]): string[] {
   return [...new Set(tools.map((tool) => CLAUDE_TOOLS[tool]).filter((tool): tool is string => Boolean(tool)))];
 }
 
-export function claudeArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: string[], promptFile: string | undefined, mcp?: WorkerMcpServer): { args: string[]; env: Record<string, string> } {
+export function claudeArgs(plan: HarnessPlan, access: HarnessAccess, launchArgs: string[], promptFile: string | undefined): { args: string[]; env: Record<string, string> } {
   const args = ["-p", "--output-format", "stream-json", "--input-format", "stream-json", "--verbose", "--no-session-persistence", ...launchArgs];
   if (plan.model) args.push("--model", plan.model);
   if (plan.effort) args.push("--effort", plan.effort);
   if (promptFile) args.push("--append-system-prompt-file", promptFile);
-  if (mcp) args.push("--mcp-config", JSON.stringify({ mcpServers: claudeWorkerMcp(mcp) }));
   if (access.writes) args.push("--permission-mode", "bypassPermissions");
   else {
     const tools = claudeTools(access.tools ?? []).join(",");
-    args.push("--tools", tools, "--allowedTools", mcp ? `${tools},mcp__${mcp.name}` : tools, "--permission-mode", "dontAsk");
+    args.push("--tools", tools, "--allowedTools", tools, "--permission-mode", "dontAsk");
   }
   const compact = claudeCompactSettings(plan);
   if (compact) args.push("--settings", JSON.stringify(compact));

@@ -21,7 +21,7 @@
  */
 import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { consumeAssignmentDiscovery } from "../execution/assignment-discovery.ts";
 
 export const ASSIGNMENT_ENV = "BOT_LOBBY_ASSIGNMENT";
@@ -116,7 +116,7 @@ function writeAttestation(path: string, attestation: AssignmentAttestation): voi
   renameSync(temporary, path);
 }
 
-export function registerAssignmentGuard(pi: HostAPI, spec = parseAssignmentGuard(process.env[ASSIGNMENT_ENV])): void {
+export function registerAssignmentGuard(pi: ExtensionAPI, spec = parseAssignmentGuard(process.env[ASSIGNMENT_ENV])): void {
   if (!spec) return;
   const allowed = new Set(spec.tools);
   let failure: string | undefined;
@@ -133,6 +133,13 @@ export function registerAssignmentGuard(pi: HostAPI, spec = parseAssignmentGuard
       failure = `Assigned execution compatibility: ${unauthorized.join(", ")} stayed declared after the allowlist was reapplied; the worker was stopped.`;
       ctx.abort();
     }
+  });
+
+  pi.on("before_provider_request", (event) => {
+    if (failure) throw new Error(failure);
+    const names = payloadToolNames(event.payload);
+    if (!names || names.every((name) => allowed.has(name))) return undefined;
+    return filterPayload(event.payload, allowed);
   });
 
   pi.on("tool_call", async (event) => {

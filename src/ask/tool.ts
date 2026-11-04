@@ -6,7 +6,8 @@
  * the tool only when the master lets it ask (the designer), and its questions
  * are relayed through the master (see relay.ts).
  */
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Container, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { isSubagentProcess } from "../pi/quiet.ts";
 import { askUser } from "./web.ts";
@@ -123,7 +124,7 @@ export function answerSummary(questions: readonly AskQuestion[], result: AskResu
  * Register `ask_user_question` in this pi session; in a subagent only when
  * the master relays its questions. `ask` is swappable for tests.
  */
-export function registerAskTool(pi: HostAPI, ask?: Asker, configDir = ".pi"): void {
+export function registerAskTool(pi: ExtensionAPI, ask?: Asker, configDir = ".pi"): void {
   const subagent = isSubagentProcess();
   if (subagent && !relayEnabled()) return;
   const asker = ask ?? (subagent ? relayAsker : askUser);
@@ -148,6 +149,18 @@ export function registerAskTool(pi: HostAPI, ask?: Asker, configDir = ".pi"): vo
       const run = () => asker(questions, ctx, signal, "oracle");
       const result = tracked ? await withBlockingRequest(tracked, run) : await run();
       return { content: [{ type: "text", text: answerSummary(questions, result) }], details: result };
+    },
+    renderCall(args, theme) {
+      const questions = (args as { questions?: AskQuestion[] }).questions ?? [];
+      const heads = questions.map((question) => question.header).filter(Boolean).join(", ");
+      return new Text(`${theme.fg("toolTitle", theme.bold("ask"))} ${theme.fg("accent", `${questions.length} question${questions.length === 1 ? "" : "s"}`)}${heads ? ` ${theme.fg("muted", heads)}` : ""}`, 0, 0);
+    },
+    renderResult(result, _options, theme) {
+      const details = result.details as AskResult | undefined;
+      if (!details) return new Container();
+      if (details.cancelled && details.answers.length === 0) return new Text(theme.fg("warning", "put away without answering"), 0, 0);
+      const lines = details.answers.map((answer) => `${theme.fg("success", "✓")} ${theme.fg("muted", answer.question.replace(/\s+/g, " ").slice(0, 60))} ${theme.fg("dim", "→")} ${theme.fg("accent", answer.kind === "multi" ? (answer.selected ?? []).join(", ") : answer.answer ?? "")}`);
+      return new Text(lines.join("\n"), 0, 0);
     },
   });
 }

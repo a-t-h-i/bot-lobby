@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { HostAPI, HostCommandContext } from "../host/api.ts";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { TERMINAL_STATES, type Task } from "../schemas/task.ts";
 import { detectProjectRoot, globalConfigPath, loadConfig, readDataRoots, readRawConfig } from "../state/project.ts";
 import { hasScoutThinking, SCOUT_THINKING } from "../schemas/configuration.ts";
@@ -118,7 +118,7 @@ export function parseCommand(args: string): ParsedCommand {
 
 export { kickoff };
 
-function showStatus(ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function showStatus(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
   const task = selectTask(root, configDir, taskId, sessionId) ?? (taskId ? undefined : ownerlessTask(root, configDir));
@@ -141,13 +141,13 @@ export function runsReport(task: Task | undefined, limit = 20): string {
   return [`${task.id} — last ${entries.length} run${entries.length === 1 ? "" : "s"}:`, ...entries.map((entry) => describeRun(runFromLog(entry, task.id)))].join("\n");
 }
 
-function showRuns(ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function showRuns(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId()) ?? (taskId ? undefined : ownerlessTask(root, configDir));
   ctx.ui.notify(runsReport(task), task ? "info" : "warning");
 }
 
-function showTasks(ctx: HostCommandContext, configDir: string): void {
+function showTasks(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const { tasks, corrupted } = taskHealth(root, configDir);
   if (tasks.length === 0 && corrupted.length === 0) return ctx.ui.notify("No bot-lobby tasks yet.", "info");
@@ -156,7 +156,7 @@ function showTasks(ctx: HostCommandContext, configDir: string): void {
   ctx.ui.notify(lines.join("\n"), "info");
 }
 
-function setPaused(ctx: HostCommandContext, configDir: string, paused: boolean, taskId?: string): void {
+function setPaused(ctx: ExtensionCommandContext, configDir: string, paused: boolean, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId());
   if (task?.ownerSessionId && task.ownerSessionId !== ctx.sessionManager.getSessionId()) {
@@ -171,7 +171,7 @@ function setPaused(ctx: HostCommandContext, configDir: string, paused: boolean, 
   ctx.ui.notify(`${task.id} ${paused ? "paused" : "resumed"}.`, "info");
 }
 
-function cancelTask(ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function cancelTask(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = selectTask(root, configDir, taskId, ctx.sessionManager.getSessionId());
   if (task?.ownerSessionId && task.ownerSessionId !== ctx.sessionManager.getSessionId()) {
@@ -186,7 +186,7 @@ function cancelTask(ctx: HostCommandContext, configDir: string, taskId?: string)
 }
 
 /** Explicit takeover of an orphaned task (ownerless, or owned by a dead session). */
-function claimTaskCommand(ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function claimTaskCommand(ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   if (!isTaskId(taskId)) return ctx.ui.notify("Usage: /bot-lobby claim <taskId>", "warning");
   const root = detectProjectRoot(ctx.cwd, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
@@ -205,7 +205,7 @@ function claimTaskCommand(ctx: HostCommandContext, configDir: string, taskId?: s
  * and have the orchestrator carry it on. A background session resumed from the
  * Tasks screen runs it as its first message.
  */
-function carryOnCommand(pi: HostAPI, ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function carryOnCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   if (!isTaskId(taskId)) return ctx.ui.notify("Usage: /bot-lobby carry-on <taskId>", "warning");
   const root = detectProjectRoot(ctx.cwd, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
@@ -230,7 +230,7 @@ function carryOnCommand(pi: HostAPI, ctx: HostCommandContext, configDir: string,
 }
 
 function answerProposal(
-  ctx: HostCommandContext,
+  ctx: ExtensionCommandContext,
   configDir: string,
   choice: ApprovalChoice,
   amendment?: string,
@@ -253,7 +253,7 @@ function answerProposal(
  * without a QA pass (QA keeps asking for more, and the user has seen enough).
  * The gate is waived and blockers cleared; the oracle is asked to complete it.
  */
-function acceptWork(pi: HostAPI, ctx: HostCommandContext, configDir: string, taskId?: string): void {
+function acceptWork(pi: ExtensionAPI, ctx: ExtensionCommandContext, configDir: string, taskId?: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const sessionId = ctx.sessionManager.getSessionId();
   const task = selectTask(root, configDir, taskId, sessionId);
@@ -274,7 +274,7 @@ function acceptWork(pi: HostAPI, ctx: HostCommandContext, configDir: string, tas
   pi.sendUserMessage(message, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
 }
 
-function showKnowledge(ctx: HostCommandContext, configDir: string): void {
+function showKnowledge(ctx: ExtensionCommandContext, configDir: string): void {
   const root = detectProjectRoot(ctx.cwd, configDir);
   const cfg = loadConfig();
   const roots = readDataRoots(root, configDir);
@@ -292,7 +292,7 @@ function showKnowledge(ctx: HostCommandContext, configDir: string): void {
   ctx.ui.notify(lines.join("\n"), "info");
 }
 
-function showConfig(ctx: HostCommandContext): void {
+function showConfig(ctx: ExtensionCommandContext): void {
   const config = loadConfig();
   const warnings = thinkingMismatches(config, modelLookup(ctx), ctx.model ? modelRef(ctx.model) : undefined);
   if (hasScoutThinking(readRawConfig())) warnings.push(`Scout: thinking is fixed at "${SCOUT_THINKING}"; the scout.thinking value in the file is ignored.`);
@@ -307,7 +307,7 @@ function showConfig(ctx: HostCommandContext): void {
  * switch through this command. The context is stale once the switch starts.
  * The command never touches the stale context after a switch that landed.
  */
-async function switchCommand(ctx: HostCommandContext, path: string): Promise<void> {
+async function switchCommand(ctx: ExtensionCommandContext, path: string): Promise<void> {
   if (!existsSync(path)) {
     switchFailed();
     return ctx.ui.notify(`bot-lobby: no session file at ${path}`, "warning");
@@ -320,7 +320,6 @@ async function switchCommand(ctx: HostCommandContext, path: string): Promise<voi
   // the session to the background (see switchTo in src/lobby/service.ts).
   let result: { cancelled: boolean };
   try {
-    if (!ctx.switchSession) throw new Error("this host cannot switch sessions");
     result = await ctx.switchSession(path);
   } catch (error) {
     switchFailed();
@@ -336,10 +335,9 @@ async function switchCommand(ctx: HostCommandContext, path: string): Promise<voi
  * `/bot-lobby new`: open a fresh session in this window, as the lobby's New
  * session asks. Like a switch, the context is stale once it lands.
  */
-async function newCommand(ctx: HostCommandContext): Promise<void> {
+async function newCommand(ctx: ExtensionCommandContext): Promise<void> {
   let result: { cancelled: boolean };
   try {
-    if (!ctx.newSession) throw new Error("this host cannot open a new session");
     result = await ctx.newSession();
   } catch (error) {
     switchFailed();
@@ -352,7 +350,7 @@ async function newCommand(ctx: HostCommandContext): Promise<void> {
 }
 
 /** `/bot-lobby auto [on|off]`: switch (or set) auto mode for this session's task. */
-function autoCommand(ctx: HostCommandContext, configDir: string, value: string | undefined): void {
+function autoCommand(ctx: ExtensionCommandContext, configDir: string, value: string | undefined): void {
   if (!value) return ctx.ui.notify(`bot-lobby: ${toggleOwnAuto()}`, "info");
   const root = detectProjectRoot(ctx.cwd, configDir);
   const task = activeTask(root, configDir, ctx.sessionManager.getSessionId());
@@ -362,7 +360,7 @@ function autoCommand(ctx: HostCommandContext, configDir: string, value: string |
   ctx.ui.notify(`bot-lobby: auto mode ${on ? "on" : "off"} for ${task.id}`, "info");
 }
 
-export function registerCommands(pi: HostAPI, configDir: string): void {
+export function registerCommands(pi: ExtensionAPI, configDir: string): void {
   registerRevealShortcut(pi, configDir);
   registerSwitch(pi, configDir);
   registerWebServer(pi);

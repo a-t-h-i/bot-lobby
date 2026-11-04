@@ -11,7 +11,7 @@ import { isAbsolute, resolve } from "node:path";
 import { currentWebServer } from "../webui/server.ts";
 import { promptHub } from "../lobby/prompt-hub.ts";
 import { relayAsker } from "./relay.ts";
-import type { HostContext } from "../host/api.ts";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { validHtmlPreview, type AskAnswer, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 let availability: (() => boolean) | undefined;
@@ -69,7 +69,7 @@ export const askUser: Asker = async (questions, ctx, signal, from) => {
 };
 
 /** A free-text answer (possibly several lines) in the page; undefined when put away. */
-export async function askText(question: string, from = "orchestrate", ctx?: Pick<HostContext, "ui">): Promise<string | undefined> {
+export async function askText(question: string, from = "orchestrate", ctx?: Pick<ExtensionContext, "ui">): Promise<string | undefined> {
   if (!canAsk()) return undefined;
   if (viaWindow()) return ctx ? (await ctx.ui.editor(question, ""))?.trim() || undefined : undefined;
   const outcome = await promptHub.ask("text", from, { question });
@@ -77,7 +77,7 @@ export async function askText(question: string, from = "orchestrate", ctx?: Pick
 }
 
 /** One of `options` picked in the page; undefined when put away. */
-export async function askChoice(title: string, options: string[], from = "orchestrate", ctx?: Pick<HostContext, "ui">): Promise<string | undefined> {
+export async function askChoice(title: string, options: string[], from = "orchestrate", ctx?: Pick<ExtensionContext, "ui">): Promise<string | undefined> {
   if (!canAsk()) return undefined;
   if (viaWindow()) return ctx ? ctx.ui.select(title, options) : undefined;
   const outcome = await promptHub.ask("choose", from, { title, options });

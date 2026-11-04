@@ -1,0 +1,153 @@
+import { compact, CONFIG_DIR_NAME, DEFAULT_COMPACTION_SETTINGS, estimateTokens, findCutPoint, type ExtensionAPI, type ExtensionContext, type TurnEndEvent } from "@earendil-works/pi-coding-agent";
+import { AUTO_COMPACT_ENV, COMPACT_AT_ENV, isSubagentProcess } from "./quiet.ts";
+import { dataRoot, detectProjectRoot, loadConfig } from "../state/project.ts";
+import { normalizeCompactAt } from "../schemas/configuration.ts";
+import { describeShared, DIGEST_INSTRUCTION, parseDigest, shareDigest, type DigestItem } from "../knowledge/oracle-digest.ts";
+
+const CHECKPOINT = "Write a concise checkpoint with: Requirements and constraints; Decisions; Files changed; Verification and evidence; Failed approaches (do not repeat); Unfinished work and next action; Outstanding children and their assignments. Preserve concrete file references and distinguish verified facts from guesses. The parent remains responsible for integration and verification.";
+
+export interface AutoCompactionOptions {
+  /** Whether this agent compacts on its own: a subagent by its environment, the oracle by its settings. */
+  enabled?: () => boolean;
+  /** The token count set in this agent's settings to compact at; by default its environment, or the oracle's settings. */
+  target?: () => number | undefined;
+  /** Where the oracle's shared knowledge goes; by default the project's knowledge files. */
+  share?: (items: DigestItem[], ctx: ExtensionContext) => string;
+}
+
+function enabledBySettings(): boolean {
+  if (isSubagentProcess()) return process.env[AUTO_COMPACT_ENV] !== "0";
+  try {
+    return loadConfig().master.autoCompact !== false;
+  } catch {
+    return true;
+  }
+}
+
+function targetBySettings(): number | undefined {
+  if (isSubagentProcess()) return normalizeCompactAt(Number(process.env[COMPACT_AT_ENV]));
+  try {
+    return loadConfig().master.compactAt;
+  } catch {
+    return undefined;
+  }
+}
+
+function shareWithAgents(items: DigestItem[], ctx: ExtensionContext): string {
+  const root = detectProjectRoot(ctx.cwd, CONFIG_DIR_NAME);
+  return describeShared(shareDigest(dataRoot(root, CONFIG_DIR_NAME), items));
+}
+
+export const CONTEXT_TARGET = 64_000;
+
+/**
+ * When to compact: a threshold set in Settings, else 64K or 60% of the window, whichever is smaller. Either way it
+ * stays below the window less pi's reserve, so the checkpoint still has room to be written.
+ */
+export function compactionThreshold(window: number, reserve = DEFAULT_COMPACTION_SETTINGS.reserveTokens, target?: number): number {
+  const room = window - Math.min(reserve, Math.floor(window / 2));
+  return Math.max(1, Math.min(target ?? Math.min(CONTEXT_TARGET, Math.floor(window * 0.6)), room));
+}
+
+/**
+ * Compact at a settled tool boundary, below pi's own threshold (pi 1.3 still sets that only per model in settings, and
+ * ctx.compact() would abort the turn we need to continue). Each agent's settings can turn it off or set the token count it starts at. Compactions pi
+ * starts itself get the same checkpoint through `session_before_compact`. The oracle's checkpoint also lists what it learned that is worth keeping, tagged by agent, and
+ * that goes into the knowledge base: its own, and the designer's, backend's and QA's where it concerns them.
+ */
+export function registerAutoCompaction(pi: ExtensionAPI, summarize: typeof compact = compact, options: AutoCompactionOptions = {}): void {
+  const enabled = options.enabled ?? enabledBySettings;
+  const target = options.target ?? targetBySettings;
+  const share = options.share ?? shareWithAgents;
+  const oracle = !isSubagentProcess();
+  let busy = false;
+  let lastLeaf: string | null | undefined;
+  pi.on("session_start", () => { busy = false; lastLeaf = undefined; });
+  pi.on("turn_end", async (event: TurnEndEvent, ctx) => {
+    if (busy || !ctx.model || !enabled()) return;
+    const leaf = ctx.sessionManager.getLeafId();
+    if (leaf === lastLeaf) return;
+    const configured = pi.getSettings().compaction;
+    const override = configured?.modelOverrides?.[`${ctx.model.provider}/${ctx.model.id}`];
+    const reserve = Math.min(override?.reserveTokens ?? configured?.reserveTokens ?? DEFAULT_COMPACTION_SETTINGS.reserveTokens, Math.floor(ctx.model.contextWindow / 2));
+    const threshold = compactionThreshold(ctx.model.contextWindow, reserve, target());
+    const estimate = event.context.contextMessages.reduce((total, message) => total + estimateTokens(message), 0) + Math.ceil(ctx.getSystemPrompt().length / 4);
+    const usage = ctx.getContextUsage();
+    if (Math.max(estimate, usage?.tokens ?? 0) < threshold) return;
+    const entries = ctx.sessionManager.buildContextEntries();
+    if (entries.length < 2) return;
+    const keepRecentTokens = Math.min(16_000, override?.keepRecentTokens ?? configured?.keepRecentTokens ?? DEFAULT_COMPACTION_SETTINGS.keepRecentTokens, Math.floor(threshold / 4));
+    const cut = findCutPoint(entries, 0, entries.length, keepRecentTokens);
+    if (cut.firstKeptEntryIndex <= 0) return;
+    const prefix = entries.slice(0, cut.firstKeptEntryIndex);
+    const messages = prefix.flatMap((entry) => entry.type === "message" ? [entry.message] : []);
+    if (!messages.length) return;
+    const previous = [...entries].reverse().find((entry) => entry.type === "compaction");
+    const firstKeptEntryId = entries[cut.firstKeptEntryIndex]!.id;
+    const fileOps = { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() };
+    const details = previous?.type === "compaction" ? previous.details as { readFiles?: string[]; modifiedFiles?: string[] } | undefined : undefined;
+    for (const path of details?.readFiles ?? []) fileOps.read.add(path);
+    for (const path of details?.modifiedFiles ?? []) fileOps.edited.add(path);
+    for (const message of messages) {
+      const calls = message.role === "assistant" ? message.content.filter((part) => part.type === "toolCall") : message.role === "toolResult" ? message.nestedCalls?.calls ?? [] : [];
+      for (const call of calls) {
+        const path = call.arguments?.path;
+        if (typeof path !== "string") continue;
+        if (call.name === "read") fileOps.read.add(path);
+        if (call.name === "write") fileOps.written.add(path);
+        if (call.name === "edit") fileOps.edited.add(path);
+      }
+    }
+    lastLeaf = leaf;
+    busy = true;
+    ctx.ui.notify("Compacting agent context", "info");
+    try {
+      const result = await checkpoint({ firstKeptEntryId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: estimate, previousSummary: previous?.type === "compaction" ? previous.summary : undefined, fileOps, settings: { enabled: true, reserveTokens: reserve, keepRecentTokens } }, ctx, ctx.signal);
+      ctx.ui.notify("Agent context compacted", "info");
+      learn(result.summary, ctx);
+      return { entries: [...event.entries, { type: "compaction" as const, summary: result.summary, firstKeptEntryId, usage: result.usage, details: result.details }] };
+    } catch (error) {
+      ctx.ui.notify(`Context compaction failed: ${(error as Error).message}`, "warning");
+    } finally { busy = false; }
+  });
+  // pi's own compactions (its context threshold, overflow recovery, /compact) write the same checkpoint from pi's
+  // preparation, so every summary an agent continues from has the same shape and the oracle's still feeds knowledge.
+  pi.on("session_before_compact", async (event, ctx) => {
+    if (!ctx.model) return undefined;
+    try {
+      const compaction = await checkpoint(event.preparation, ctx, event.signal, event.customInstructions);
+      learn(compaction.summary, ctx);
+      return { compaction };
+    } catch (error) {
+      if (event.signal.aborted) throw error;
+      ctx.ui.notify(`Checkpoint failed, using pi's summary: ${(error as Error).message}`, "warning");
+      return undefined;
+    }
+  });
+
+  /** Summarize with the checkpoint prompt (and, for the oracle, its knowledge digest) on the session's model. */
+  async function checkpoint(preparation: Parameters<typeof compact>[0], ctx: ExtensionContext, signal: AbortSignal | undefined, extra?: string) {
+    const model = ctx.model!;
+    const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok) throw new Error(auth.error);
+    const headers = auth.headers ? Object.fromEntries(Object.entries(auth.headers).filter((entry): entry is [string, string] => entry[1] !== null)) : undefined;
+    const retry = pi.getSettings().retry;
+    const retryPolicy = { enabled: retry?.enabled ?? true, maxRetries: retry?.maxRetries ?? 3, baseDelayMs: retry?.baseDelayMs ?? 2_000, maxAgentDelayMs: retry?.maxAgentDelayMs };
+    const instructions = [oracle ? `${CHECKPOINT} ${DIGEST_INSTRUCTION}` : CHECKPOINT, extra].filter(Boolean).join("\n\n");
+    const result = await summarize(preparation, auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model, auth.apiKey, headers, instructions, signal, undefined, undefined, auth.env, retryPolicy);
+    signal?.throwIfAborted();
+    return result;
+  }
+
+  /** The oracle's digest from a checkpoint, shared into the knowledge base. */
+  function learn(summary: string, ctx: ExtensionContext): void {
+    if (!oracle) return;
+    try {
+      const items = parseDigest(summary);
+      const shared = items.length ? share(items, ctx) : "";
+      if (shared) ctx.ui.notify(`Knowledge updated: ${shared}`, "info");
+    } catch (error) {
+      ctx.ui.notify(`Could not update knowledge: ${(error as Error).message}`, "warning");
+    }
+  }
+}

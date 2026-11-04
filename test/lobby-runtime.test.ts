@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTask } from "../src/schemas/task.ts";
 import { taskName } from "../src/text.ts";
 import { createTaskDir, ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
@@ -37,7 +37,7 @@ after(() => {
   else process.env.BOT_LOBBY_CONFIG_DIR = ambientConfig;
 });
 
-type Handler = (event: any, ctx: HostContext) => unknown;
+type Handler = (event: any, ctx: ExtensionContext) => unknown;
 
 function fakePi() {
   const handlers = new Map<string, Handler[]>();
@@ -54,10 +54,10 @@ function fakePi() {
     getThinkingLevel: () => "high",
     getSessionName: () => "my window",
   };
-  const emit = async (event: string, payload: unknown, ctx: HostContext) => {
+  const emit = async (event: string, payload: unknown, ctx: ExtensionContext) => {
     for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
   };
-  return { pi: pi as unknown as HostAPI, emit, sent };
+  return { pi: pi as unknown as ExtensionAPI, emit, sent };
 }
 
 function fakeUi() {
@@ -97,7 +97,7 @@ function context(root: string, ui: ReturnType<typeof fakeUi>["ui"], idle = true)
     sessionManager: { getSessionId: () => "session-1", getSessionDir: () => join(root, "sessions"), getBranch: () => [{ type: "message", message: { role: "user", content: "hello" } }] },
     isIdle: () => idle,
     abort: () => void (aborted += 1),
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   return { ctx, aborted: () => aborted };
 }
 
@@ -114,7 +114,7 @@ async function start(owned: boolean, idle = true) {
   return { root, fake, ui, ctx };
 }
 
-async function stop(fake: ReturnType<typeof fakePi>, ctx: HostContext): Promise<void> {
+async function stop(fake: ReturnType<typeof fakePi>, ctx: ExtensionContext): Promise<void> {
   await fake.emit("session_shutdown", { type: "session_shutdown" }, ctx);
   clearStatus(ctx);
 }
@@ -138,7 +138,7 @@ test("a session that is not an interactive terminal runs no lobby service", asyn
   const { ui } = fakeUi();
   const { ctx } = context(root, ui);
   registerLobbyEvents(fake.pi, ".pi");
-  await fake.emit("session_start", { type: "session_start" }, { ...ctx, mode: "print" } as unknown as HostContext);
+  await fake.emit("session_start", { type: "session_start" }, { ...ctx, mode: "print" } as unknown as ExtensionContext);
   assert.equal(currentLobbyService(), undefined);
 });
 
@@ -312,7 +312,7 @@ test("switching while this window works stops its turn, switches, and carries th
       aborted += 1;
       setTimeout(() => { idle = true; }, 20);
     },
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   registerLobbyEvents(fake.pi, ".pi");
   await fake.emit("session_start", { type: "session_start" }, ctx);
   try {
@@ -403,7 +403,7 @@ test("switching while this window's task runs between turns carries the session 
     abort: () => {
       aborted += 1;
     },
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   registerLobbyEvents(fake.pi, ".pi");
   await fake.emit("session_start", { type: "session_start" }, ctx);
   try {

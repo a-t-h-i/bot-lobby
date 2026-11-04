@@ -10,7 +10,7 @@ import { randomBytes } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { HostAPI, HostContext } from "../src/host/api.ts";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ensureProjectStructure, saveTask } from "../src/state/persistence.ts";
 import { updateWork } from "../src/state/work-time.ts";
 import { addPlanComment, readPlanComments } from "../src/state/comments.ts";
@@ -62,11 +62,11 @@ function fakeState() {
     sessionManager: { getSessionId: () => "session-1", getBranch: () => [] },
     isIdle: () => true,
     abort() {},
-  } as unknown as HostContext;
+  } as unknown as ExtensionContext;
   const pi = {
     sendUserMessage() {},
     getSessionName: () => "test window",
-  } as unknown as HostAPI;
+  } as unknown as ExtensionAPI;
   return { root, ctx, pi };
 }
 

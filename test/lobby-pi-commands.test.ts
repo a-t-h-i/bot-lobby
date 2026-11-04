@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { CompactOptions, HostAPI, HostContext } from "../src/host/api.ts";
+import type { CompactOptions, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { piCommands, sendPiCommand } from "../src/lobby/pi-commands.ts";
 import { onNotice } from "../src/webui/notices.ts";
 
@@ -8,19 +8,19 @@ function fake(mode = "tui") {
   const sent: unknown[] = [];
   const editor: string[] = [];
   const compactions: CompactOptions[] = [];
-  const pi = { getCommands: () => [], sendUserMessage: (...args: unknown[]) => sent.push(args) } as unknown as HostAPI;
+  const pi = { getCommands: () => [], sendUserMessage: (...args: unknown[]) => sent.push(args) } as unknown as ExtensionAPI;
   const ctx = { mode, isIdle: () => true, compact: (options: CompactOptions) => compactions.push(options),
-    ui: { getEditorText: () => "", setEditorText: (text: string) => editor.push(text) } } as unknown as HostContext;
+    ui: { getEditorText: () => "", setEditorText: (text: string) => editor.push(text) } } as unknown as ExtensionContext;
   return { pi, ctx, sent, editor, compactions };
 }
 
-function installed(pi: HostAPI) {
+function installed(pi: ExtensionAPI) {
   pi.getCommands = () => [
     { name: "skill:pdf-tools", description: "Read PDFs", source: "skill", sourceInfo: { path: "/skills/pdf/SKILL.md" } },
     { name: "review", description: "Review code", source: "prompt", sourceInfo: { path: "/prompts/review.md" } },
     { name: "mcp", description: "MCP servers", source: "extension", sourceInfo: { path: "/extensions/mcp.ts" } },
     { name: "compact", description: "collision", source: "prompt", sourceInfo: { path: "/prompts/compact.md" } },
-  ] as ReturnType<HostAPI["getCommands"]>;
+  ] as ReturnType<ExtensionAPI["getCommands"]>;
 }
 
 test("Pi command discovery includes every native command and installed resources without paths or duplicates", () => {

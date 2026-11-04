@@ -4,7 +4,7 @@
  * refuses `edit`/`write` on files the worker has not checked out, and gives
  * the worker the tools to claim, hand over and wait for files.
  */
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createDeskClient, type DeskClient } from "./ipc.ts";
 import { DESK_ENV, isEditTool, MAX_WAIT_MS } from "./session.ts";
@@ -27,7 +27,7 @@ export function deskAddress(env: NodeJS.ProcessEnv = process.env): { address: st
   return address && worker ? { address, worker } : undefined;
 }
 
-export function registerDeskClient(pi: HostAPI, client?: DeskClient): void {
+export function registerDeskClient(pi: ExtensionAPI, client?: DeskClient): void {
   const target = deskAddress();
   if (!target && !client) return;
   const desk = client ?? createDeskClient(target!.address, target!.worker);

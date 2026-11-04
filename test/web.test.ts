@@ -1,6 +1,6 @@
 import { beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
-import type { HostAPI } from "../src/host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { decodeEntities, parseHtml, textOf, type HtmlElement } from "../src/web/html.ts";
 import { htmlToMarkdown } from "../src/web/extract.ts";
 import { blockedReason, fetchPage, isPrivateAddress, type Fetcher, type Lookup } from "../src/web/fetch.ts";
@@ -195,7 +195,7 @@ type Tool = { name: string; execute: (...args: unknown[]) => Promise<{ content: 
 
 function tools(fetch: Fetcher, env: Record<string, string> = {}): Record<string, Tool> {
   const registered: Tool[] = [];
-  registerWebTools({ registerTool: (tool: Tool) => registered.push(tool) } as unknown as HostAPI, { fetch, lookup: publicLookup, env });
+  registerWebTools({ registerTool: (tool: Tool) => registered.push(tool) } as unknown as ExtensionAPI, { fetch, lookup: publicLookup, env });
   return Object.fromEntries(registered.map((tool) => [tool.name, tool]));
 }
 

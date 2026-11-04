@@ -45,8 +45,7 @@
     "web:build": "vite build --config webui/vite.config.ts && node webui/scripts/build-info.mjs",
     "web:typecheck": "tsc -p webui --noEmit",
     "web:check": "playwright test",
-    "test": "node --test --test-reporter=dot test/*.test.ts",
-    "serve": "node --experimental-strip-types src/daemon/main.ts serve"
+    "test": "node --test --test-reporter=dot test/*.test.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=1.4.0 <1.5.0",
@@ -107,8 +106,5 @@
   },
   "optionalDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.306"
-  },
-  "bin": {
-    "bot-lobby": "./src/daemon/main.ts"
   }
 }

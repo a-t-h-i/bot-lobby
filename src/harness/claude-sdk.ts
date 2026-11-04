@@ -16,7 +16,6 @@ import type { PiStreamEvent } from "../execution/pi-runner.ts";
 import { claudeCompactSettings, claudeEnv, claudeEvents, claudeTools, type ClaudeEvent } from "./claude.ts";
 import type { HarnessOutcome, HarnessProcessOptions } from "./process.ts";
 import type { HarnessAccess, HarnessCollector, HarnessPlan } from "./runner.ts";
-import { claudeWorkerMcp, type WorkerMcpServer } from "./worker-mcp.ts";
 import { findCommand } from "./status.ts";
 
 type QueryFn = (params: { prompt: AsyncIterable<SDKUserMessage>; options?: Options }) => Query;
@@ -56,7 +55,7 @@ export function extraArgsOf(tokens: readonly string[]): Record<string, string | 
   return out;
 }
 
-export function claudeSdkOptions(plan: HarnessPlan, access: HarnessAccess, input: { cwd: string; env: Record<string, string | undefined>; launchArgs: string[]; abort: AbortController; stderr: (data: string) => void; mcp?: WorkerMcpServer }): Options {
+export function claudeSdkOptions(plan: HarnessPlan, access: HarnessAccess, input: { cwd: string; env: Record<string, string | undefined>; launchArgs: string[]; abort: AbortController; stderr: (data: string) => void }): Options {
   const { settings } = plan.harness;
   const executable = settings.binaryPath || findCommand("claude");
   const options: Options = {
@@ -73,14 +72,13 @@ export function claudeSdkOptions(plan: HarnessPlan, access: HarnessAccess, input
   };
   const compact = claudeCompactSettings(plan);
   if (compact) options.settings = compact as Options["settings"];
-  if (input.mcp) options.mcpServers = claudeWorkerMcp(input.mcp) as unknown as Options["mcpServers"];
   if (access.writes) {
     options.permissionMode = "bypassPermissions";
     options.allowDangerouslySkipPermissions = true;
   } else {
     const tools = claudeTools(access.tools ?? []);
     options.tools = tools;
-    options.allowedTools = input.mcp ? [...tools, `mcp__${input.mcp.name}`] : tools;
+    options.allowedTools = tools;
     options.permissionMode = "dontAsk";
   }
   return options;
@@ -120,7 +118,7 @@ function inputQueue(): { stream: AsyncIterable<SDKUserMessage>; push(text: strin
 const MAX_STDERR = 64_000;
 
 /** One turn on Claude Code through the SDK, watched like a harness process (stall, cancel, steer). */
-export async function runClaudeSdk(query: QueryFn, plan: HarnessPlan, access: HarnessAccess, input: { cwd: string; env: Record<string, string | undefined>; launchArgs: string[]; prompt: string; mcp?: WorkerMcpServer }, collected: HarnessCollector, options: HarnessProcessOptions): Promise<HarnessOutcome> {
+export async function runClaudeSdk(query: QueryFn, plan: HarnessPlan, access: HarnessAccess, input: { cwd: string; env: Record<string, string | undefined>; launchArgs: string[]; prompt: string }, collected: HarnessCollector, options: HarnessProcessOptions): Promise<HarnessOutcome> {
   const abort = new AbortController();
   const queue = inputQueue();
   let stderr = "";

@@ -8,7 +8,7 @@ import type { AddressInfo } from "node:net";
 import { ProjectRegistry, projectInfo } from "../src/webui/projects.ts";
 import { ProjectOpener } from "../src/webui/project-open.ts";
 import { servesPage } from "../src/lobby/runtime.ts";
-import type { HostContext } from "../src/host/api.ts";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 async function host(dir: string, root: string) {
   let registry: ProjectRegistry;
@@ -33,7 +33,7 @@ function temp() {
 test("only explicit managed RPC projects serve their own page", (t) => {
   const previous = process.env.BOT_LOBBY_WEB_PROJECT;
   t.after(() => { if (previous === undefined) delete process.env.BOT_LOBBY_WEB_PROJECT; else process.env.BOT_LOBBY_WEB_PROJECT = previous; });
-  const context = (mode: string) => ({ mode }) as HostContext;
+  const context = (mode: string) => ({ mode }) as ExtensionContext;
   delete process.env.BOT_LOBBY_WEB_PROJECT;
   assert.equal(servesPage(context("tui")), true);
   assert.equal(servesPage(context("rpc")), false);

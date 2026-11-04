@@ -7,7 +7,7 @@
  * Errors become a notice, never a throw; the link itself carries the secret,
  * so notices never name it beyond the link.
  */
-import type { HostAPI, HostCommandContext, HostContext } from "../host/api.ts";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadConfig } from "../state/project.ts";
 import { currentLobbyService, servesPage } from "../lobby/runtime.ts";
 import type { LobbyService } from "../lobby/host.ts";
@@ -17,12 +17,6 @@ import { currentWebServer, startWebServer } from "./server.ts";
 import { openBrowser } from "./open.ts";
 
 export type WebSubcommand = "start" | "stop" | "link" | "reset";
-
-/** The API's port: `bot-lobby serve --port` (BOT_LOBBY_PORT), else Settings. */
-function webPort(): number {
-  const given = Number(process.env.BOT_LOBBY_PORT);
-  return Number.isInteger(given) && given > 0 ? given : loadConfig().lobby.web.port;
-}
 
 /** The status-line entry that shows where the page is. */
 export const WEB_STATUS_KEY = "bot-lobby-web";
@@ -61,8 +55,7 @@ function resolveService(deps?: WebCommandDeps): LobbyService | undefined {
 }
 
 function openLink(url: string, deps?: WebCommandDeps): void {
-  // The daemon serves herdr, never a browser.
-  if (process.env.BOT_LOBBY_DAEMON === "1" || process.env.BOT_LOBBY_WEB_PROJECT === "1" || !loadConfig().lobby.web.openBrowser) return;
+  if (process.env.BOT_LOBBY_WEB_PROJECT === "1" || !loadConfig().lobby.web.openBrowser) return;
   try {
     (deps?.open ?? openBrowser)(url);
   } catch {
@@ -70,7 +63,7 @@ function openLink(url: string, deps?: WebCommandDeps): void {
   }
 }
 
-async function startCommand(ctx: HostCommandContext, deps?: WebCommandDeps): Promise<void> {
+async function startCommand(ctx: ExtensionCommandContext, deps?: WebCommandDeps): Promise<void> {
   const running = currentWebServer();
   if (running) {
     ctx.ui.notify(`bot-lobby web: ${webLink()}`, "info");
@@ -82,7 +75,7 @@ async function startCommand(ctx: HostCommandContext, deps?: WebCommandDeps): Pro
     ctx.ui.notify("bot-lobby web needs an interactive pi session.", "warning");
     return;
   }
-  const server = await startWebServer({ service, port: webPort() });
+  const server = await startWebServer({ service, port: loadConfig().lobby.web.port });
   latestLink = server.link;
   heartbeat();
   showAddress(ctx, server.port);
@@ -91,17 +84,17 @@ async function startCommand(ctx: HostCommandContext, deps?: WebCommandDeps): Pro
 }
 
 /** pi's status line names the page's address (not its secret: the link was printed once). */
-function showAddress(ctx: HostContext, port: number | undefined): void {
+function showAddress(ctx: ExtensionContext, port: number | undefined): void {
   ctx.ui.setStatus(WEB_STATUS_KEY, port ? `bot-lobby web ui: http://127.0.0.1:${port}` : undefined);
 }
 
-function linkCommand(ctx: HostCommandContext): void {
+function linkCommand(ctx: ExtensionCommandContext): void {
   const link = webLink();
   if (link) ctx.ui.notify(`bot-lobby web: ${link}`, "info");
   else ctx.ui.notify("bot-lobby web is not running; /bot-lobby web starts it.", "warning");
 }
 
-async function stopCommand(ctx: HostCommandContext): Promise<void> {
+async function stopCommand(ctx: ExtensionCommandContext): Promise<void> {
   const running = currentWebServer();
   if (!running) {
     ctx.ui.notify("bot-lobby web is not running.", "warning");
@@ -114,7 +107,7 @@ async function stopCommand(ctx: HostCommandContext): Promise<void> {
   ctx.ui.notify("bot-lobby web stopped; it starts again with the next session.", "info");
 }
 
-function resetCommand(ctx: HostCommandContext): void {
+function resetCommand(ctx: ExtensionCommandContext): void {
   const running = currentWebServer();
   if (!running) {
     ctx.ui.notify("bot-lobby web is not running; /bot-lobby web starts it.", "warning");
@@ -127,7 +120,7 @@ function resetCommand(ctx: HostCommandContext): void {
 }
 
 /** Close the page's server when bot-lobby is turned off; quiet, and nothing when it is not running. */
-export async function stopWebServer(ctx: HostContext): Promise<void> {
+export async function stopWebServer(ctx: ExtensionContext): Promise<void> {
   const running = currentWebServer();
   if (!running) return;
   await running.close();
@@ -137,7 +130,7 @@ export async function stopWebServer(ctx: HostContext): Promise<void> {
 }
 
 /** Run one `web` subcommand; a failure is a notice, never a throw. */
-export async function webCommand(ctx: HostCommandContext, word: string | undefined, deps?: WebCommandDeps): Promise<void> {
+export async function webCommand(ctx: ExtensionCommandContext, word: string | undefined, deps?: WebCommandDeps): Promise<void> {
   const action = webAction(word);
   if (!action) {
     ctx.ui.notify("Usage: /bot-lobby web [stop|link|reset]", "warning");
@@ -159,7 +152,7 @@ export async function webCommand(ctx: HostCommandContext, word: string | undefin
  * opening on it. The page runs while bot-lobby is on in an interactive
  * session; off, a subagent or a one-shot run serves nothing.
  */
-export function webSessionStarted(ctx: HostContext, deps?: WebCommandDeps): void {
+export function webSessionStarted(ctx: ExtensionContext, deps?: WebCommandDeps): void {
   if (isSubagentProcess() || !servesPage(ctx)) return;
   const service = resolveService(deps);
   const running = currentWebServer();
@@ -172,7 +165,7 @@ export function webSessionStarted(ctx: HostContext, deps?: WebCommandDeps): void
   if (!service) return;
   // Back after a reload: the same port, quietly (the open page reconnects to it).
   const reloaded = takeReloadedPort();
-  startWebServer({ service, port: reloaded ?? webPort() })
+  startWebServer({ service, port: reloaded ?? loadConfig().lobby.web.port })
     .then((server) => {
       latestLink = server.link;
       heartbeat();
@@ -199,7 +192,7 @@ function takeReloadedPort(): number | undefined {
 }
 
 /** Wire the web server's lifecycle; called with the other session wiring. */
-export function registerWebServer(pi: HostAPI): void {
+export function registerWebServer(pi: ExtensionAPI): void {
   if (isSubagentProcess()) return;
   pi.on("session_start", (_event, ctx) => webSessionStarted(ctx));
   pi.on("session_shutdown", async (event) => {

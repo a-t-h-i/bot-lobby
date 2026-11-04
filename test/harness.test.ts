@@ -66,7 +66,7 @@ const next = () => new Promise((resolve) => { if (lines.length) resolve(lines.sh
   return { path, log: () => JSON.parse(readFileSync(logFile, "utf8")) };
 }
 
-test("harness fields survive normalising for subagents, the Orchestrator and the planner", () => {
+test("harness fields survive normalising for subagents and are dropped for the oracle and planner", () => {
   const config = resolveConfig({
     master: { model: "inherit", thinking: "high", harness: "codex" },
     planner: { model: "inherit", thinking: "high", harness: "claude" },
@@ -75,8 +75,8 @@ test("harness fields survive normalising for subagents, the Orchestrator and the
     researcher: { model: "a/b", thinking: "low", harness: "nope" },
     harnesses: { codex: { binaryPath: " /opt/codex ", compactAt: 5, customModels: ["my-model", "my-model", "has space"] }, claude: { injectPrompts: false } },
   });
-  assert.equal(config.master.harness, "codex");
-  assert.equal(config.planner.harness, "claude");
+  assert.equal(config.master.harness, undefined);
+  assert.equal(config.planner.harness, undefined);
   assert.deepEqual([config.agents.backend.harness, config.agents.backend.harnessModel], ["codex", "gpt-6-astra"]);
   assert.equal(config.agents.qa.harness, undefined);
   assert.equal(config.scout.harness, "gemini");

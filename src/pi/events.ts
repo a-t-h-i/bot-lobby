@@ -1,4 +1,4 @@
-import type { HostAPI } from "../host/api.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { activeTask } from "../state/persistence.ts";
 import { detectProjectRoot, loadConfig, readDataRoots } from "../state/project.ts";
 import { compilePrompt } from "../prompts/compiler.ts";
@@ -15,6 +15,7 @@ import { truncate } from "../text.ts";
 import { applyStatus, clearStatus, isMinimized, setMinimized } from "./ui.ts";
 import { startsOn } from "./switch.ts";
 import { isSubagentProcess, webToolsFor } from "./quiet.ts";
+import { registerQuietTools } from "./tool-renderers.ts";
 import { taskRequest, type Task, type TaskState } from "../schemas/task.ts";
 import { pendingComments, readPlanComments, type PlanComment } from "../state/comments.ts";
 import { requestBesidePlan } from "../state/backlog.ts";
@@ -88,10 +89,12 @@ function masterBookmarks(root: string, configDir: string, dataRoots: readonly st
   }
 }
 
-export function registerLifecycle(pi: HostAPI, configDir: string): void {
+export function registerLifecycle(pi: ExtensionAPI, configDir: string): void {
   // Web tools the oracle put away for the task in hand, given back when it ends.
   let hiddenWeb: string[] = [];
   pi.on("session_start", (event, ctx) => {
+    // Master-only: subagents keep their own --tools allowlist (see quiet.ts).
+    if (!isSubagentProcess()) registerQuietTools(pi);
     const root = detectProjectRoot(ctx.cwd, configDir);
     // pi starting decides afresh: off unless settings or the session's own task say otherwise (switch.ts).
     // A session replaced in this window (switched to, new, forked, reloaded) keeps bot-lobby as it was,

@@ -6,7 +6,7 @@
  * diagram) shown beside the options.
  */
 
-import type { HostContext } from "../host/api.ts";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /** The questionnaire tool's name, in this session and in the agents that may ask. */
 export const ASK_TOOL = "ask_user_question";
@@ -73,7 +73,7 @@ export interface AskResult {
  * chose. `from` names who asks when it is not this session's model (an agent
  * whose questions the oracle relays).
  */
-export type Asker = (questions: readonly AskQuestion[], ctx: HostContext, signal?: AbortSignal, from?: string) => Promise<AskResult>;
+export type Asker = (questions: readonly AskQuestion[], ctx: ExtensionContext, signal?: AbortSignal, from?: string) => Promise<AskResult>;
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp)$/i;
 

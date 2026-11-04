@@ -4,8 +4,8 @@
  * skill settings are the user's); a skill grant is kept as names and turned
  * into files only when an agent starts, so a moved skill still loads.
  */
-import type { HostAPI } from "../host/api.ts";
-import { findSkills } from "../host/skills.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, loadSkills } from "@earendil-works/pi-coding-agent";
 
 /** An MCP tool an agent can be granted. */
 export interface GrantableTool {
@@ -25,10 +25,10 @@ export interface GrantableSkill {
   path: string;
 }
 
-let source: HostAPI | undefined;
+let source: ExtensionAPI | undefined;
 
 /** Read grants from this session's pi from now on. */
-export function bindGrants(pi: HostAPI): void {
+export function bindGrants(pi: ExtensionAPI): void {
   source = pi;
 }
 
@@ -42,8 +42,8 @@ function serverOf(name: string): string {
 }
 
 /** The MCP tools pi has connected, by server then name. */
-export function grantableTools(pi: HostAPI | undefined = source): GrantableTool[] {
-  let tools: ReturnType<HostAPI["getAllTools"]> = [];
+export function grantableTools(pi: ExtensionAPI | undefined = source): GrantableTool[] {
+  let tools: ReturnType<ExtensionAPI["getAllTools"]> = [];
   try {
     tools = pi?.getAllTools() ?? [];
   } catch {
@@ -60,7 +60,7 @@ export function grantableTools(pi: HostAPI | undefined = source): GrantableTool[
  * settings name none, every tool pi has connected now (only the read-only ones
  * for an agent that must not change anything).
  */
-export function mcpGrant(granted: readonly string[] | undefined, readOnly: boolean, pi: HostAPI | undefined = source): string[] {
+export function mcpGrant(granted: readonly string[] | undefined, readOnly: boolean, pi: ExtensionAPI | undefined = source): string[] {
   if (granted) return [...granted];
   return grantableTools(pi).filter((tool) => !readOnly || tool.readOnly).map((tool) => tool.name);
 }
@@ -70,19 +70,19 @@ export function mcpGrant(granted: readonly string[] | undefined, readOnly: boole
  * skill commands, which include packages and settings paths) and pi's default
  * folders for `cwd`, first one per name.
  */
-export function grantableSkills(cwd: string, pi: HostAPI | undefined = source): GrantableSkill[] {
+export function grantableSkills(cwd: string, pi: ExtensionAPI | undefined = source): GrantableSkill[] {
   const found = new Map<string, GrantableSkill>();
   try {
     for (const command of pi?.getCommands() ?? []) {
       if (command.source !== "skill") continue;
       const name = command.name.replace(/^skill:/, "");
-      if (!found.has(name)) found.set(name, { name, description: command.description ?? "", path: command.sourceInfo?.path ?? "" });
+      if (!found.has(name)) found.set(name, { name, description: command.description ?? "", path: command.sourceInfo.path });
     }
   } catch {
     // Not bound to a running session yet.
   }
   try {
-    for (const skill of findSkills(cwd)) {
+    for (const skill of loadSkills({ cwd, agentDir: getAgentDir(), skillPaths: [], includeDefaults: true }).skills) {
       if (!found.has(skill.name)) found.set(skill.name, { name: skill.name, description: skill.description, path: skill.filePath });
     }
   } catch {

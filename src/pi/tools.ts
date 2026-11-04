@@ -1,5 +1,6 @@
-import { StringEnum } from "../host/schema.ts";
-import type { HostAPI, HostContext, ToolUpdate } from "../host/api.ts";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { getMarkdownTheme, type AgentToolUpdateCallback, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { ProcessRunner } from "../execution/pi-runner.ts";
@@ -10,6 +11,7 @@ import { applyStatus, reportRuns, summarizeRun } from "./ui.ts";
 import { whileAsking } from "../state/work-clock.ts";
 import { askChoice, askText, askUser, canAsk } from "../ask/web.ts";
 import type { AskQuestion } from "../ask/types.ts";
+import { unescapeBreaks } from "../lobby/blocks.ts";
 import { isQuiet } from "./quiet.ts";
 import { checkThinking, createProfileResolver, modelRef, type ModelLookup } from "./model-support.ts";
 import { agentName, describeRun } from "./run-summary.ts";
@@ -143,14 +145,18 @@ const DESCRIPTION = [
   "The engine validates every step against the task state machine, so a rejected action means the workflow is not at that step yet.",
 ].join(" ");
 
-/** Models belong to the harnesses now, which check their own ids; nothing is looked up here. */
-export function modelLookup(_ctx: HostContext): ModelLookup {
-  return () => undefined;
+/** Resolve a `provider/id` (or bare id) against the models this session knows. */
+export function modelLookup(ctx: ExtensionContext): ModelLookup {
+  return (ref) => {
+    const slash = ref.indexOf("/");
+    if (slash > 0) return ctx.modelRegistry.find(ref.slice(0, slash), ref.slice(slash + 1));
+    return ctx.modelRegistry.getAvailable().find((model) => model.id === ref);
+  };
 }
 
 /** Build the engine dependencies from the current Pi context; every agent's model and thinking come from settings. */
 export function workflowDeps(
-  ctx: HostContext,
+  ctx: ExtensionContext,
   configDir: string,
   signal: AbortSignal | undefined,
   onUpdate: ((run: AgentRun) => void) | undefined,
@@ -202,7 +208,7 @@ export function workflowDeps(
 
 /** Accumulate agent runs so parallel scouts show as one progress list. */
 function runReporter(
-  update: ToolUpdate | undefined,
+  update: AgentToolUpdateCallback<unknown> | undefined,
   refresh: (runs: AgentRun[]) => void,
 ): (run: AgentRun) => void {
   const runs = new Map<string, AgentRun>();
@@ -218,8 +224,30 @@ function runReporter(
   };
 }
 
+/** A header line over Markdown, rendered as pi renders its own messages (a proposal's bullets, a report's code spans). */
+function headedMarkdown(header: string, body: string, color: (text: string) => string): Container {
+  const box = new Container();
+  box.addChild(new Text(header, 0, 0));
+  if (body.trim()) box.addChild(new Markdown(unescapeBreaks(body), 0, 0, getMarkdownTheme(), { color }));
+  return box;
+}
+
+/** TUI-only transcript entries; these never enter the model's context. */
+function registerBotLobbyEntries(pi: ExtensionAPI): void {
+  pi.registerEntryRenderer("bot-lobby", (entry, { expanded }, theme) => {
+    const data = entry.data as { kind?: string; taskId?: string; text?: string; ok?: boolean } | undefined;
+    if (data?.kind === "run") {
+      // One compact line per finished subagent run.
+      return new Text(theme.fg(data.ok ? "dim" : "warning", data.text ?? ""), 0, 0);
+    }
+    const header = `bot-lobby ${data?.taskId ?? ""} — ${data?.kind ?? "note"}`.trim();
+    const body = data?.text ?? "";
+    return headedMarkdown(theme.fg("accent", theme.bold(header)), expanded ? body : truncate(body, 600), (text) => theme.fg("toolOutput", text));
+  });
+}
+
 /** A transcript line per finished run, plus a warning for anything that stalled. */
-function reportFinishedRuns(pi: HostAPI, ctx: HostContext, result: WorkflowResult): void {
+function reportFinishedRuns(pi: ExtensionAPI, ctx: ExtensionContext, result: WorkflowResult): void {
   for (const run of result.runs ?? []) {
     const ok = run.status === "success";
     pi.appendEntry("bot-lobby", { kind: "run", taskId: result.taskId, text: describeRun(run), ok });
@@ -228,7 +256,8 @@ function reportFinishedRuns(pi: HostAPI, ctx: HostContext, result: WorkflowResul
   }
 }
 
-export function registerOrchestrateTool(pi: HostAPI, configDir: string, runProcess?: ProcessRunner): void {
+export function registerOrchestrateTool(pi: ExtensionAPI, configDir: string, runProcess?: ProcessRunner): void {
+  registerBotLobbyEntries(pi);
   pi.registerTool({
     name: "orchestrate",
     label: "Orchestrate",
@@ -238,6 +267,8 @@ export function registerOrchestrateTool(pi: HostAPI, configDir: string, runProce
       "Use orchestrate for every bot-lobby workflow step; it enforces the task state machine and records results.",
     ],
     parameters: OrchestrateSchema,
+    // Self shell: an empty renderer then yields zero lines (see quiet.ts).
+    renderShell: "self",
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const root = detectProjectRoot(ctx.cwd, configDir);
       const deps = workflowDeps(ctx, configDir, signal, runReporter(onUpdate, (runs) => reportRuns(ctx, root, configDir, runs)), runProcess);
@@ -251,6 +282,21 @@ export function registerOrchestrateTool(pi: HostAPI, configDir: string, runProce
         content: [{ type: "text", text: result.message }],
         details: { ok: result.ok, state: result.state, taskId: result.taskId },
       };
+    },
+    renderCall(args, theme) {
+      if (isQuiet()) return new Container();
+      const call = args as OrchestrateParams & { file?: string };
+      const target = call.domain ?? call.domains?.join(", ") ?? call.file ?? "";
+      const header = `${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", call.action)}${target ? ` ${theme.fg("muted", target)}` : ""}`;
+      return new Text(header, 0, 0);
+    },
+    renderResult(result, { expanded }, theme) {
+      if (isQuiet()) return new Container();
+      const details = result.details as Partial<WorkflowResult> | undefined;
+      const body = result.content[0]?.type === "text" ? result.content[0].text : "";
+      const icon = details?.ok ? theme.fg("success", "✓") : theme.fg("warning", "!");
+      const header = `${icon} ${theme.fg("toolTitle", theme.bold("orchestrate"))} ${theme.fg("accent", details?.taskId ?? "")} ${theme.fg("muted", `→ ${details?.state ?? "?"}`)}`;
+      return expanded && body ? headedMarkdown(header, truncate(body, 2000), (text) => theme.fg("dim", text)) : new Text(header, 0, 0);
     },
   });
 }
