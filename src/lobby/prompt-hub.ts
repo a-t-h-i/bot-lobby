@@ -45,6 +45,17 @@ export class PromptHub {
   private readonly pendingMap = new Map<string, Pending>();
   private readonly waiters = new Map<string, (outcome: Outcome) => void>();
   private readonly outcomes: Outcome[] = [];
+  private readonly changeListeners = new Set<() => void>();
+
+  /** Told after a prompt opens or settles (the daemon reports "blocked" to herdr). */
+  onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => this.changeListeners.delete(listener);
+  }
+
+  private changed(): void {
+    for (const listener of [...this.changeListeners]) listener();
+  }
 
   /** The questions still waiting for an answer, oldest first. */
   pending(): WebPrompt[] {
@@ -59,6 +70,7 @@ export class PromptHub {
       ...(identity ? { taskId: identity.taskId, sessionId: identity.sessionId, blockingRequestId: identity.requestId } : {}) };
     this.pendingMap.set(prompt.id, { prompt });
     lobbyTopics.bump("prompts");
+    this.changed();
     return prompt;
   }
 
@@ -93,6 +105,7 @@ export class PromptHub {
     this.waiters.delete(id);
     waiter?.(outcome);
     lobbyTopics.bump("prompts");
+    this.changed();
   }
 
   /**

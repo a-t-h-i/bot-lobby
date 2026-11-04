@@ -239,7 +239,7 @@ function nudgeWhenIdle(state: Runtime, message: string): void {
  * Explicitly opened project folders get their own managed RPC web server.
  */
 export function servesPage(ctx: HostContext): boolean {
-  return ctx.mode === "tui" || (ctx.mode === "rpc" && process.env.BOT_LOBBY_WEB_PROJECT === "1");
+  return ctx.mode === "daemon" || ctx.mode === "tui" || (ctx.mode === "rpc" && process.env.BOT_LOBBY_WEB_PROJECT === "1");
 }
 
 interface MasterTurn {

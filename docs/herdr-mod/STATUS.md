@@ -29,3 +29,20 @@ Owner check for A6 on your computer: `claude -p "say hi" --output-format stream-
 | 4 | pass (Node) | `lib/sse.js` reads a chunked Node `text/event-stream` fed 7 bytes at a time (head, chunk sizes, split frames, `:ping`, UTF-8). herdr's `net` (0.1.13) is promise-based: `connect(host, port): Promise<Socket>`, `socket.read(): Promise<Uint8Array \| null>`, `socket.write(text): Promise<void>` (spec phase 01 assumed callbacks) |
 | 5-7 | owner | Need the app (markdown, textarea, copies) |
 | 8-10 | owner | nice-to-have |
+
+## Phase 02: engine daemon (done)
+
+- Baseline: main `94b436a` already had 12 failing tests (13 names, listed by `node --test`); they are not from this work.
+- `src/host/api.ts` is the Host interface: pi's extension API shape (events, tools, commands, session entries), so engine logic is unchanged. Final list: `on`, `registerTool`, `registerCommand`, `registerShortcut` (no-op), `sendUserMessage`, `sendMessage`, `appendEntry`, session name, active tools, `getAllTools`, `getCommands`, model and thinking; context: `cwd`, `ui` (notify, questions through the Lobby's prompt hub), `sessionManager`, `isIdle`, `abort`, `newSession`, `switchSession`, `complete` (one-shot model call).
+- Step 1 (PiHost) was skipped: pi is removed outright (owner), so the engine went straight to the daemon host.
+- `bot-lobby serve [--project] [--port]` (`src/daemon/main.ts`, `npm run serve`): lock `<project>/.bot-lobby/daemon.lock`; a second serve prints the first one's port.
+- Data: `~/.bot-lobby` and `<project>/.bot-lobby`, copied once from `~/.pi/bot-lobby` and `<project>/.pi/bot-lobby`. Lobby chats: `<project>/.bot-lobby/chats/*.jsonl` (pi's session format).
+- OSC 7501 status (`src/daemon/herdr-status.ts`): not checked in a real herdr tab yet (no herdr here). `HC_TERMINAL_ID` assumed from the spec.
+
+## Phase 03: Orchestrator on a harness (Claude Code done)
+
+- `src/daemon/mcp/` serves Bot Lobby's tools over MCP (revived bridge). Claude Code needs the per-server `"timeout"` for long calls.
+- Found: Claude Code silently drops an MCP tool whose schema is not JSON Schema 2020-12. `orchestrate` used draft-07 tuples (`items: [...]`); `mcpSchema()` converts them to `prefixItems`.
+- Checked in the container (Claude Code 2.1.318): `lobby.send` → reply in the feed; second message remembers the first (resume); `start_task` → task in `tasks.list`; `/task … fast track, auto mode` → Orchestrator delegates to DEV (a Claude Code worker, haiku) → README edited → task completed. No pi anywhere.
+- Steering: Claude Code takes a message mid-turn (stdin stays open). Codex and ACP orchestrators: not built yet (only Claude Code can host the Orchestrator; the others still run workers).
+- `master.harness` / `master.harnessModel` and the planner's are now kept by the config (were pi-only).

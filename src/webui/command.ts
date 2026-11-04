@@ -18,6 +18,12 @@ import { openBrowser } from "./open.ts";
 
 export type WebSubcommand = "start" | "stop" | "link" | "reset";
 
+/** The API's port: `bot-lobby serve --port` (BOT_LOBBY_PORT), else Settings. */
+function webPort(): number {
+  const given = Number(process.env.BOT_LOBBY_PORT);
+  return Number.isInteger(given) && given > 0 ? given : loadConfig().lobby.web.port;
+}
+
 /** The status-line entry that shows where the page is. */
 export const WEB_STATUS_KEY = "bot-lobby-web";
 
@@ -55,7 +61,8 @@ function resolveService(deps?: WebCommandDeps): LobbyService | undefined {
 }
 
 function openLink(url: string, deps?: WebCommandDeps): void {
-  if (process.env.BOT_LOBBY_WEB_PROJECT === "1" || !loadConfig().lobby.web.openBrowser) return;
+  // The daemon serves herdr, never a browser.
+  if (process.env.BOT_LOBBY_DAEMON === "1" || process.env.BOT_LOBBY_WEB_PROJECT === "1" || !loadConfig().lobby.web.openBrowser) return;
   try {
     (deps?.open ?? openBrowser)(url);
   } catch {
@@ -75,7 +82,7 @@ async function startCommand(ctx: HostCommandContext, deps?: WebCommandDeps): Pro
     ctx.ui.notify("bot-lobby web needs an interactive pi session.", "warning");
     return;
   }
-  const server = await startWebServer({ service, port: loadConfig().lobby.web.port });
+  const server = await startWebServer({ service, port: webPort() });
   latestLink = server.link;
   heartbeat();
   showAddress(ctx, server.port);
@@ -165,7 +172,7 @@ export function webSessionStarted(ctx: HostContext, deps?: WebCommandDeps): void
   if (!service) return;
   // Back after a reload: the same port, quietly (the open page reconnects to it).
   const reloaded = takeReloadedPort();
-  startWebServer({ service, port: reloaded ?? loadConfig().lobby.web.port })
+  startWebServer({ service, port: reloaded ?? webPort() })
     .then((server) => {
       latestLink = server.link;
       heartbeat();

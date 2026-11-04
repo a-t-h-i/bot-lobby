@@ -65,7 +65,12 @@ export class SessionFile implements SessionManager {
   private entries: SessionEntry[];
   private leaf: string | undefined;
 
-  private constructor(readonly dir: string, readonly cwd: string, path: string, id: string, entries: SessionEntry[]) {
+  readonly dir: string;
+  readonly cwd: string;
+
+  private constructor(dir: string, cwd: string, path: string, id: string, entries: SessionEntry[]) {
+    this.dir = dir;
+    this.cwd = cwd;
     this.path = path;
     this.id = id;
     this.entries = entries;

@@ -29,7 +29,8 @@ export function isOn(): boolean {
  * its work is waiting to carry on.
  */
 export function startsOn(ctx: HostContext, configDir: string): boolean {
-  if (loadConfig().lobby.startOn) return true;
+  // The daemon is Bot Lobby: there is no plain mode to start in.
+  if (ctx.mode === "daemon" || loadConfig().lobby.startOn) return true;
   const root = detectProjectRoot(ctx.cwd, configDir);
   return Boolean(activeTask(root, configDir, ctx.sessionManager.getSessionId())) || (servesPage(ctx) && workToCarryOn(root, configDir));
 }

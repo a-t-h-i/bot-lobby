@@ -116,6 +116,8 @@ function processLaunch(plan: HarnessPlan, options: Pick<PiRunOptions, "cwd" | "e
   if (!command) throw new Error(`${info.label} has no command yet: set it in Settings > Harnesses`);
   const { access } = options;
   const env: Record<string, string | undefined> = { ...process.env, ...options.env };
+  // A parent coding agent's own session variables must not leak into the one Bot Lobby starts.
+  for (const key of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_(SESSION|REMOTE|CHILD|ENTRYPOINT|SDK|TEE)|CLAUDE_AUTO_BACKGROUND_TASKS|CLAUDE_CODE_BG_TASKS)/.test(key)) delete env[key];
   if (info.homeEnv && settings.homePath) env[info.homeEnv] = settings.homePath;
   if (id === "antigravity" && settings.harnessPath) env.ANTIGRAVITY_HARNESS_PATH = settings.harnessPath;
   const task = options.prompt;
