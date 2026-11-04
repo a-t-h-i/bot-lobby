@@ -2,39 +2,42 @@
 
 ## Goal
 
-Prove, in a throwaway bundle, the four things the whole port depends on. If any one fails, stop the port and write why in `STATUS.md`.
+Prove, in a throwaway bundle, the five things the port depends on. If one fails, stop and write why in `STATUS.md`.
 
-1. A plugin can create an in-process dsh agent with its own tools and its own prompt text.
-2. The plugin sees that agent's live tool calls and text, as they happen.
-3. The plugin can steer the agent while it runs.
-4. The plugin can answer a question the agent asks, from outside dsh's own web client.
+1. A bundle can declare an agent preset, and a session using it gets that preset's tools and prompt text.
+2. The plugin can start a dsh subagent (`ctx.subagents.startActivation`, `spawn` backend) with its own tools and prompt, and await its result without injecting a message into the parent.
+3. The plugin sees the subagent's live tool calls and text as they happen (`session/event`, `agent/assistant-stream`).
+4. The plugin can steer the running subagent.
+5. A client plugin can add a left sidebar panel with its own main page (like dsh's Schedule panel) that calls a host HTTP route and shows the answer.
 
 Nothing in Bot Lobby's `src/` changes in this phase.
 
 ## Read first
 
-- dsh: `docs/user/develop/basic/index.md`, `tool.md`, `publish.md`
-- dsh: `docs/agent-lifecycle.md` (event order of one turn)
-- dsh: `packages/core/agent/src/index.ts` (`CreateAgentOptions`, `AgentHandle`) and `packages/core/agent/src/runtime-types.ts` (`Agent`, `agent/created`, `agent/status`, `agent/assistant-stream`)
-- dsh: `packages/interaction/user-questions/src/types.ts` (`user-questions/request`)
-- dsh Creator skill `cordis-plugin-development`: `references/host-plugin.md`, `references/practices.md`
+- dsh `docs/user/develop/basic/index.md`, `tool.md`, `publish.md`
+- dsh Creator skill `cordis-plugin-development`: `SKILL.md`, `references/host-plugin.md`, `references/ui-plugin.md`, `references/practices.md`, `templates/decoration/*`
+- dsh `packages/subagent/subagent/src/types.ts` (`SubagentActivationSpec`, `SubagentStartRequest`, `SubagentActivation`), `src/index.ts` (`startActivation`, `prompt`, `interrupt`)
+- dsh `packages/core/agent/src/runtime-types.ts` (`agent/created`, `agent/assistant-stream`)
+- dsh `packages/client/ui-schedule/src/client/index.ts`: the reference for a sidebar panel (`sidebar.panellist`) with a keyed `main` page
+- dsh `packages/bundle/web-app/presets/standard.patch.yml`: preset rows
 
-Confirm each API you use with `cordis_inspect_query` (rules, section B).
+Confirm each API with `cordis_inspect_query` (rules, section B) before writing code.
 
 ## Build
 
-Create `spike/` at the Bot Lobby repo root (it is deleted at the end):
+Create `spike/` at the repo root (deleted at the end):
 
 ```
 spike/
 ├── package.json
 ├── cordis.patch.yml
-├── index.js
+├── index.js          # host plugin
+├── client.js         # browser plugin (hand-written module format, no build)
 ├── locale/en.json
 └── icon.svg
 ```
 
-`spike/package.json`:
+`spike/package.json` (copy the shape of the Creator `decoration` template):
 
 ```json
 {
@@ -42,11 +45,16 @@ spike/
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "exports": { ".": "./index.js", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg" },
-  "files": ["index.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+  "exports": { ".": "./index.js", "./client": "./client.js", "./locale/*.json": "./locale/*.json", "./icon": "./icon.svg" },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "immediately": true, "inject": ["@deepseek-ai/dsh-client-ui-workspace"] }
+  }
 }
 ```
+
+Check the right `dsh.client.inject` package for the sidebar with `Slots.listSubTree` (which package declares `sidebar.panellist` and `main`).
 
 `spike/cordis.patch.yml`:
 
@@ -54,105 +62,58 @@ spike/
 - insert:
     - id: bot-lobby-spike
       name: '@local/bot-lobby-spike'
-      config: {}
+    - id: preset-bot-lobby-spike
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: bot-lobby-spike
+        name: Bot Lobby spike
+        plugins:
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
 ```
 
-`spike/locale/en.json`:
+`spike/index.js` (host). In `apply(ctx)`:
 
-```json
-{ "meta": { "title": "Bot Lobby spike", "description": "Throwaway test of in-process agents for the Bot Lobby port." } }
-```
+1. On `agent/created`, if the agent's preset is `bot-lobby-spike` (find how to read it: `ctx.agentPresets` or the event's agent meta), register on `agent.ctx`:
+   - a prompt section `{ name: 'bot-lobby:spike', order: 900, text: 'You are the Bot Lobby spike orchestrator. When asked to delegate, call spike_delegate.' }`
+   - a tool `spike_delegate` (use `defineTool` from `@deepseek-ai/dsh-tools`) whose `execute(args, run)` calls:
+     ```js
+     const activation = await ctx.subagents.startActivation({
+       provider: 'spawn', label: 'spike worker', delivery: 'caller',
+       parent: run.agent, signal: run.signal, agentPreset: 'bot-lobby-spike',
+       prompt: [{ type: 'text', text: args.task + ' Call spike_ping first.' }],
+     })
+     const result = await activation.result
+     return { childId: String(activation.childId), result }
+     ```
+2. On `agent/created` for a subagent whose parent is a spike agent (check `meta.origin === 'subagent'`), register a tool `spike_ping` that returns `pong`.
+3. Record into an in-memory `log` array: `session/event` `tool/call`, `tool/result`, `turn/end` for subagent sessions, and `agent/assistant-stream` text deltas for them.
+4. Register `ctx.webServer.register({ kind: 'prefix', path: '/bot-lobby-spike', handler })`. The handler first calls `ctx.get('connection')?.admit(req)` (or `requestRejection`) and answers 401 when rejected. `/bot-lobby-spike/log` returns the log as JSON. `/bot-lobby-spike/steer?text=...` calls `ctx.subagents.prompt({ childSessionId, delivery: 'steer', content: [...] , requestId })` for the last child (check the exact request shape).
 
-`spike/icon.svg`: any small original SVG (a circle is fine).
+`spike/client.js` (browser): copy the module format from the Creator template (`window.__ModuleLoader__.load({ id, factory(require) {...} })`). In `apply(ctx)`:
 
-`spike/index.js` does all of this inside `apply(ctx)`:
-
-```js
-import { randomUUID } from 'node:crypto'
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { defineTool } from '@deepseek-ai/dsh-tools'
-
-export const name = 'bot-lobby-spike'
-export const inject = ['agents', 'tools', 'systemPrompt', 'webServer', 'userQuestions']
-
-export function apply(ctx) {
-  const log = []                         // everything we saw, newest last
-  const note = (kind, data) => log.push({ at: Date.now(), kind, data })
-  let handle                             // the spike agent
-
-  // 2. Live text and tool calls.
-  ctx.on('agent/assistant-stream', ({ agent, frame }) => {
-    if (agent !== handle?.agent) return
-    if (frame.type === 'chunk' && frame.chunk.type === 'text-delta') note('text', frame.chunk.text)
-  })
-  ctx.on('session/event', (session, event) => {
-    if (session !== handle?.agent.session) return
-    if (event.type === 'tool/call' || event.type === 'tool/result' || event.type === 'turn/end') note(event.type, event.data)
-  })
-
-  // 4. Answer questions from outside dsh's web client.
-  ctx.on('user-questions/request', async (request, next) => {
-    if (request.agent !== handle?.agent) return next()
-    note('question', request.questions)
-    return { answers: request.questions.map(q => ({ id: q.id, selected: [q.options?.[0]?.label ?? 'yes'] })) }
-  })
-
-  // Tiny HTTP surface to drive and read the spike.
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix', path: '/lobby-spike',
-    handler: async (req, res) => {
-      const url = new URL(req.url, 'http://x')
-      // Reject requests Connection does not trust (rules: never serve unauthenticated routes).
-      const rejection = ctx.get('connection')?.requestRejection(req)
-      if (rejection !== undefined) { res.statusCode = 401; return res.end() }
-      if (url.pathname.endsWith('/start')) await start(url.searchParams.get('task') ?? 'Count the files in this folder, then ask me one yes/no question with the ask tool, then say done.')
-      if (url.pathname.endsWith('/steer')) handle?.agent.steer(createUserMessage({ content: [{ type: 'text', text: url.searchParams.get('text') ?? 'Stop and say STEERED.' }], source: { kind: 'user' } }))
-      res.setHeader('content-type', 'application/json')
-      res.end(JSON.stringify(log))
-    },
-  }))
-
-  // 1. Create the agent with scoped tools and prompt text.
-  async function start(task) {
-    handle = await ctx.agents.create({
-      sessionId: brandString(randomUUID()),
-      meta: { cwd: process.cwd() },
-      setup(agentCtx) {
-        agentCtx.systemPrompt.section({ name: 'bot-lobby:spike', order: 500, text: 'You are a Bot Lobby test worker.' })
-        agentCtx.tools.register(defineTool({
-          name: 'spike_ping',
-          description: 'Returns pong.',
-          parameters: {},
-          output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: v }] },
-          async execute() { return 'pong' },
-        }))
-      },
-    })
-    ctx.effect(() => () => handle?.dispose())
-    handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: task + ' Call spike_ping first.' }], source: { kind: 'user' } }))
-  }
-}
-```
-
-The exact field names (`frame.chunk.text`, `event.data`, `requestRejection`, the `setup` signature, the answer shape) must be confirmed with `cordis_inspect_query` first. Fix the code to match what you find.
+- register a `sidebar.panellist` entry `{ id: 'bot-lobby-spike', order: 50 }` and a keyed `main` page with the same key, copying how `ui-schedule` registers `PANEL_ID`;
+- the page component fetches `/bot-lobby-spike/log` every 2 seconds and shows the entries in a list. (Polling is fine for the spike only.)
 
 ## Run
 
-1. Start dsh's web profile (`dsh web`) with a working model key.
-2. Install: `plugin_manager` → `install_bundle`, `target` = absolute path of `spike/`. Read `application` in the result.
-3. In a browser tab that is already signed in to dsh's web UI, open `/lobby-spike/start`.
-4. Open `/lobby-spike` a few times while it runs, then `/lobby-spike/steer`.
+1. `dsh web` with a working model key.
+2. `plugin_manager` → `install_bundle`, `target` = absolute path of `spike/`. Read `application`.
+3. Start a session with the `bot-lobby-spike` preset. Ask: "Delegate: list the files here."
+4. Open the Bot Lobby spike panel in the left sidebar. Call `/bot-lobby-spike/steer?text=Stop+and+say+STEERED` while the worker runs.
 
-## Done when (all four must be yes)
+## Done when (all five yes)
 
-- [ ] The log shows a `tool/call` for `spike_ping` (proves 1: scoped tool works).
-- [ ] The log shows `text` entries arriving while the agent is still running, before `turn/end` (proves 2).
-- [ ] After `/steer`, the agent's next text reacts to the steer message (proves 3).
-- [ ] The log shows a `question` entry and the agent continued with our answer, without dsh's web client showing the question (proves 4). If dsh's own `ask_user_question` was not in the agent's tool set, add the `@deepseek-ai/dsh-tool-ask-user` row to the spike's patch for this test.
+- [ ] The session has `spike_delegate` and the spike prompt text (proves 1).
+- [ ] `spike_delegate` returns the worker's result into the parent's tool result, and the parent got no extra injected message (proves 2).
+- [ ] The log shows the worker's `spike_ping` tool call and text deltas before its `turn/end` (proves 3).
+- [ ] After steering, the worker's next text reacts (proves 4).
+- [ ] The panel shows in the left sidebar, opens a main page, and lists the log (proves 5).
 
-Also write down (in `STATUS.md`) how long `ctx.agents.create` took, and the dsh version used.
+Write in `STATUS.md`: the dsh version, how long `startActivation` took, and any API differences from this spec.
 
 ## Clean up
 
-Remove the spike bundle with `plugin_manager` → `remove_bundle`. Delete `spike/`. Commit only `docs/dsh-migration/STATUS.md` with the results: `dsh port: phase 01 spike results`.
+`plugin_manager` → `remove_bundle`. Delete `spike/`. Commit only `STATUS.md`: `dsh port: phase 01 spike results`.
