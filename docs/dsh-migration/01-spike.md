@@ -1,4 +1,4 @@
-# 01. Spike: go / no-go (2 days)
+# 01. Spike: go / no-go (size: small)
 
 ## Goal
 

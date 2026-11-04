@@ -77,6 +77,14 @@ What stays: the engine. Tasks, roles, the master, the workflow, the classifier, 
 - Keep Bot Lobby's questionnaire design (drawer, mockups, notes) and the per-agent working indicators (role word, working mark, live activity and thought lines).
 - No screenshots or GIFs unless asked. UI checks: typecheck and build only.
 
-## Time
+## Size
 
-About 40 working days for one builder: 01 2 days, 02 3, 03 5, 04 4, 05 7, 06 3, 07 3, 08 8, 09 2, 10 3.
+No day estimates: an AI builder (dsh Creator mode) runs this, so speed depends on the model, not on a person's working days. Relative size per phase, to judge progress:
+
+| Size | Phases |
+|---|---|
+| Small | 01 spike, 02 bundle, 06 models and compaction, 09 remove pi |
+| Medium | 04 orchestrator, 07 client foundation, 10 parity and release |
+| Large | 03 tools and prompts, 05 subagents, 08 UI |
+
+Phase 08 is the biggest (most screens to port). Phase 01 decides whether to go on at all.

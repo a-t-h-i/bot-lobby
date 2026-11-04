@@ -1,4 +1,4 @@
-# 08. Bot Lobby screens inside dsh (8 days)
+# 08. Bot Lobby screens inside dsh (size: large)
 
 ## Goal
 

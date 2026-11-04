@@ -1,4 +1,4 @@
-# 02. Make the repo a dsh bundle (3 days)
+# 02. Make the repo a dsh bundle (size: small)
 
 ## Goal
 

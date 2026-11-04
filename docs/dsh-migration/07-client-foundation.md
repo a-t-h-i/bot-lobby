@@ -1,4 +1,4 @@
-# 07. Client foundation: host API, live updates, shared UI pieces (3 days)
+# 07. Client foundation: host API, live updates, shared UI pieces (size: medium)
 
 ## Goal
 

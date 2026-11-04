@@ -1,4 +1,4 @@
-# 06. Models, effort, classifier, compaction, knowledge (3 days)
+# 06. Models, effort, classifier, compaction, knowledge (size: small)
 
 ## Goal
 

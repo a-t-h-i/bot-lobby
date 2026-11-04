@@ -1,4 +1,4 @@
-# 03. Presets, per-agent setup, tools, gates, prompts, commands (5 days)
+# 03. Presets, per-agent setup, tools, gates, prompts, commands (size: large)
 
 ## Goal
 

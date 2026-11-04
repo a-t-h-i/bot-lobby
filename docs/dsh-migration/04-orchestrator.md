@@ -1,4 +1,4 @@
-# 04. The orchestrator: the Lobby chat is a dsh session (4 days)
+# 04. The orchestrator: the Lobby chat is a dsh session (size: medium)
 
 ## Goal
 

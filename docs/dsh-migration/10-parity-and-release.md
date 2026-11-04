@@ -1,4 +1,4 @@
-# 10. Parity check and release (3 days)
+# 10. Parity check and release (size: medium)
 
 ## Goal
 

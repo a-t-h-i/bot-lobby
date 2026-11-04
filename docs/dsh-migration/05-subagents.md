@@ -1,4 +1,4 @@
-# 05. Subagents on dsh (7 days)
+# 05. Subagents on dsh (size: large)
 
 ## Goal
 

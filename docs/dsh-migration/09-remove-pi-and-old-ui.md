@@ -1,4 +1,4 @@
-# 09. Remove pi, the old web app and the session code; move the data folders (2 days)
+# 09. Remove pi, the old web app and the session code; move the data folders (size: small)
 
 ## Goal
 
