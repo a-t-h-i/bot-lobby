@@ -1,4 +1,4 @@
-# Sources read (2026-11-03)
+# Sources read (2026-11-03 to 2026-11-04)
 
 Bot Lobby (github.com/a-t-h-i/bot-lobby, main `3c33033`):
 - `package.json`, `src/index.ts`, `src/execution/pi-runner.ts`
@@ -30,6 +30,11 @@ Build-spec pass 2026-11-04 (dsh main `8bd07339`):
 - `packages/bundle/base/cordis.patch.yml`, `bundle/web-app/presets/standard.patch.yml`
 - `packages/preset/agent-preset-registry/src/index.ts`, `subagent/subagent/src/manager.ts`
 - Bot Lobby: `src/lobby/host.ts` (`LobbyService`), `src/lobby/service.ts`, `src/lobby/runtime.ts`, `src/lobby/sessions.ts` (pi RPC protocol), `src/execution/pi-runner.ts` (`buildPiArgs`, `spawnPiProcess`, `parsePiStream`, `runPiAgent`), `src/pi/events.ts`, `src/pi/auto-compaction.ts`, `src/pi/quiet.ts`, `src/webui/server.ts`, `src/webui/command.ts`, `src/webui/dev/*`, `src/webui/notices.ts`; env var and module-state greps
+
+Version 2 pass 2026-11-04 (dsh-only, dsh UI):
+- dsh client: `packages/client/web/src/platform.ts` (`PLATFORM_MODULES`), `tsdown.client.ts`, `ui-schedule/src/client/index.ts` (panel, `main`, right pane tab, turn tail, session row mark), `ui-goal` (`conversation.input.dock`), `ui-plan`, `ui-approval` (`registerPendingInteraction`, `conversation.composer` chain), `ui-user-questions`, `ui-tool` toolviews (`tool.call.toolview`), `ui-agent-preset` (`settings.section`), `ui-workspace` toasts, `ui-conversation/src/client/apply.ts` (slot kinds), slot inject counts across `packages/client/*`
+- dsh host: `host/open-in-app` and `experimental/inspector` (prefix routes, `requestRejection`, `registerUpgrade`), `interaction/user-questions/src/types.ts`, `interaction/tool-ask-user/src/index.ts`, `compaction/command-compact` (`compactNow`), `llm/llm/src/types.ts` (`LlmModelInfo`, `LlmResolvedModelInfo`, `reasoning.efforts`), `core/agent/src/runtime-types.ts` (`AgentOptions`)
+- Bot Lobby: `src/webui/api/index.ts` and `protocol.ts` (all API names), `src/webui/events.ts`, `src/lobby/topics.ts`, `src/ask/web.ts`, `src/ask/types.ts`, `src/classifier/models.ts`, `src/classifier/instance.ts`, `src/state/project.ts`, `webui/src/prompts/*`, `webui/src/tabs/*`, `package.json`; pi import greps per folder
 
 Earlier project notes:
 - 2026-11-02 verdict "stay on pi" (thread "Assess migrating Bot Lobby to DeepSeek harness")

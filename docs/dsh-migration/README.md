@@ -1,77 +1,82 @@
-# Bot Lobby on DeepSeek Harness: build spec
+# Bot Lobby as a DeepSeek Harness plugin: build spec
 
-Written 2026-11-03, rewritten as a build spec 2026-11-04.
-Checked against Bot Lobby main `3c33033` (v0.7.9, pi 1.4) and DeepSeek Harness (dsh) main `8bd07339` (npm `latest` 0.2.1-rc.5, `alpha` 0.2.2-alpha.3).
+Version 2, 2026-11-04. Checked against Bot Lobby main `3c33033` (v0.7.9) and DeepSeek Harness (dsh) main `8bd07339` (npm `latest` 0.2.1-rc.5, `alpha` 0.2.2-alpha.3).
 
-This folder is a spec that an AI builder (for example dsh's **Creator** agent preset) can follow step by step to make Bot Lobby run as a dsh plugin. It is written for a builder that does not know Bot Lobby or dsh well. Every phase says exactly which files to read, which files to write, what the code should look like, and how to prove the phase is done.
+This folder is a spec that an AI builder (for example dsh's **Creator** agent preset) follows step by step to turn Bot Lobby into a plugin that runs **only** on dsh. It is written for a builder that does not know Bot Lobby or dsh well. Every phase says which files to read, which files to write, what the code should look like, and how to prove the phase is done.
+
+## What changes from today
+
+| Today | After the port |
+|---|---|
+| A pi extension (`pi.extensions` in `package.json`) | A dsh bundle (`dsh.bundle` + `dsh.client` in `package.json`). No pi code, no pi dependencies |
+| Bot Lobby's own React web app in `webui/` on its own port | Gone. Bot Lobby's screens live inside dsh's web client, built from dsh's slots and components, plus Bot Lobby panels where dsh has nothing |
+| Subagents are `pi --mode rpc` child processes | dsh subagents (`ctx.subagents`, in-process `spawn` backend) |
+| Codex / Claude Code / ACP runners in `src/harness` | dsh's `dsh-subagent-codex`, `dsh-subagent-claude-code`, `dsh-subagent-acp` backends |
+| Bot Lobby's own sessions sidebar, background sessions, session switching | dsh's own sessions |
+| Bot Lobby's questionnaire and `ask_user_question` tool | Kept: same tool, same questionnaire design, shown inside dsh in place of the composer |
+| Data in `~/.pi/bot-lobby` and `<project>/.pi/` | `~/.bot-lobby` and `<project>/.bot-lobby/`, imported once from the old folders |
+
+What stays: the engine. Tasks, roles, the master, the workflow, the classifier, knowledge, state files, delivery, web tools. These folders do not import pi today and keep their logic.
 
 ## How to use this spec
 
-1. Read `00-builder-rules.md` first. It holds the rules for every phase. Do not skip it.
+1. Read `00-builder-rules.md` first. Its rules apply to every phase.
 2. Do the phases in order. Do not start a phase until the previous phase's "Done when" checks all pass.
-3. Each phase ends with a commit. One phase, one commit (or a few small ones), on branch `dsh-port`.
-4. If a check fails and you cannot fix it in the same phase, stop and write what failed into `docs/dsh-migration/STATUS.md`. Do not move on.
-5. Phase 01 is a go / no-go test. If it fails, stop the whole port.
+3. Work on branch `dsh-port`. One commit per phase (or a few small ones).
+4. If a check fails and you cannot fix it inside the phase, write it into `docs/dsh-migration/STATUS.md` and stop.
+5. Phase 01 is a go / no-go test. If it fails, stop the port.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `00-builder-rules.md` | Rules for the builder: what never to do, how to check dsh APIs, how to install, how to test |
-| `01-spike.md` | Phase 01: two-day go / no-go test in a throwaway folder |
-| `02-host-seam.md` | Phase 02: put every pi call behind a `Host` interface (still runs on pi) |
-| `03-bundle-skeleton.md` | Phase 03: empty dsh bundle that loads and serves the web UI at `/lobby` |
-| `04-tools-and-gates.md` | Phase 04: Bot Lobby's 20 tools and its tool gates on dsh |
-| `05-orchestrator-and-lobby.md` | Phase 05: the Lobby chat (orchestrator agent) and the web UI's `LobbyService` on dsh |
-| `06-subagents.md` | Phase 06: workers, planner and QA as in-process dsh agents |
-| `07-classifier-compaction-models.md` | Phase 07: classifier model calls, compaction, model and effort picker |
-| `08-data-keys-grants.md` | Phase 08: data folder, API keys, MCP and skill grants, questionnaire |
-| `09-parity-and-release.md` | Phase 09: test both hosts side by side, package and publish |
-| `mapping.md` | Lookup table: every pi hook and call, and its dsh replacement |
-| `risks.md` | Risks, gaps, and the decisions already made |
-| `sources.md` | What was read to write this |
+| `00-builder-rules.md` | Rules for every phase |
+| `01-spike.md` | Go / no-go test: preset, subagent with custom tools, one UI panel calling the host |
+| `02-restructure.md` | Make the repo a dsh bundle; host and client builds |
+| `03-agents-tools-prompts.md` | Bot Lobby presets, per-agent setup, all tools, tool gates, prompt sections, commands |
+| `04-orchestrator.md` | The Lobby chat is a dsh session; task lifecycle, `start_task`, `orchestrate` |
+| `05-subagents.md` | Workers, scouts, reviewers, QA, planner panel as dsh subagents; harness backends; desk and board |
+| `06-models-compaction-knowledge.md` | Classifier on `ctx.llm`, compaction, model and effort, knowledge learning |
+| `07-client-foundation.md` | Client bundle, host API routes, live updates, locale, theme |
+| `08-ui-panels.md` | Tasks, Plans, Knowledge panels; task dock; tool cards; settings pages; toasts |
+| `09-remove-pi-and-old-ui.md` | Delete every pi file, the old web app and the session code; data import |
+| `10-parity-and-release.md` | Feature checklist against today's Bot Lobby; packaging |
+| `mapping.md` | Lookup tables: every Bot Lobby screen and every pi hook, and what replaces it |
+| `risks.md` | Risks, decisions, accepted losses |
+| `sources.md` | What was read |
 
 ## The big picture
 
-Bot Lobby today is a pi extension. Most of its code (tasks, roles, master, classifier, knowledge, state, workflow, the web UI) never imports pi. Only the "host layer" does: about 34 files, mostly in `src/pi/`, plus `src/lobby/service.ts`, `src/lobby/runtime.ts` and the subagent runner `src/execution/pi-runner.ts`.
-
-The port keeps the engine and the web UI and swaps the host layer:
-
 ```
-          today                                   after the port
-  ┌───────────────────────┐              ┌───────────────────────────────┐
-  │ Bot Lobby web UI      │              │ Bot Lobby web UI (unchanged)  │
-  │ (React, webui/src)    │              │ own port, linked at dsh /lobby│
-  └──────────┬────────────┘              └──────────────┬────────────────┘
-             │ LobbyService (src/lobby/host.ts)         │ same LobbyService
-  ┌──────────┴────────────┐              ┌──────────────┴────────────────┐
-  │ engine (no pi imports)│              │ engine (unchanged)            │
-  └──────────┬────────────┘              └──────────────┬────────────────┘
-             │ pi ExtensionAPI                          │ Host interface (phase 02)
-  ┌──────────┴────────────┐              ┌──────────────┴────────────────┐
-  │ pi + pi RPC children  │              │ dsh plugin + in-process agents│
-  └───────────────────────┘              └───────────────────────────────┘
+                          dsh web client (dsh's UI)
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ left sidebar: dsh sessions + Bot Lobby panels (Tasks, Plans, Knowledge)│
+  │ main: dsh conversation (the Lobby chat) or a Bot Lobby panel page      │
+  │ composer: dsh composer + Bot Lobby task dock                           │
+  │ right sidebar: dsh files / terminal / changes + Bot Lobby plan sheet   │
+  │ settings: dsh settings + Bot Lobby sections                            │
+  └───────────────┬───────────────────────────────────────────────────────┘
+                  │ slots (client plugin)      HTTP routes + events (host plugin)
+  ┌───────────────┴───────────────────────────────────────────────────────┐
+  │ Bot Lobby host plugin: presets, tools, gates, prompts, commands,       │
+  │ orchestrator hooks, subagent runner, API routes                        │
+  ├───────────────────────────────────────────────────────────────────────┤
+  │ Bot Lobby engine (same logic): master, workflow, roles, state,         │
+  │ classifier, knowledge, delivery, web tools                             │
+  ├───────────────────────────────────────────────────────────────────────┤
+  │ dsh: agents, sessions, tools, subagents, llm, compaction, commands,    │
+  │ user questions, worktrees, terminal, files                             │
+  └───────────────────────────────────────────────────────────────────────┘
 ```
 
-Two seams already exist in the code and make this much easier:
+## Decisions (from the owner, 2026-11-04)
 
-- `LobbyService` in `src/lobby/host.ts`: everything the web UI calls. The dev server `src/webui/dev/serve.ts` already runs the UI on a fake `LobbyService`.
-- `ProcessRunner` and `runPiAgent()` in `src/execution/pi-runner.ts`: everything the master uses to run a subagent. A dsh runner with the same result type slots in.
-
-## Decisions already made (from the owner)
-
-- Keep pi working. Ship the dsh bundle side by side. pi stays the default until dsh is 1.0.
-- Keep Bot Lobby's own web UI. Do not rebuild it inside dsh's web client.
+- dsh only. The pi layer goes completely. No dual-host code.
+- Bot Lobby's own web app goes. Use dsh's UI components and slots; build Bot Lobby panels only where dsh has no matching component.
 - Keep Bot Lobby's own `web_search` / `fetch_content` tools (they block private addresses; dsh's fetch does not).
-- Workers run as in-process dsh agents first.
-- No screenshots or GIFs unless asked. UI work: typecheck and build only.
-
-## What you gain, what you don't
-
-Gains: less code to own (dsh already does subagents, Codex/Claude Code/ACP runners, worktrees, compaction, commands, user questions), config hot reload, dsh's desktop app and SDK, first-class DeepSeek models.
-
-Not a gain: speed. dsh publishes no speed numbers.
+- Keep Bot Lobby's questionnaire design (drawer, mockups, notes) and the per-agent working indicators (role word, working mark, live activity and thought lines).
+- No screenshots or GIFs unless asked. UI checks: typecheck and build only.
 
 ## Time
 
-About 29 working days for one builder: phase 01 2 days, 02 4 days, 03 2 days, 04 2 days, 05 5 days, 06 7 days, 07 3 days, 08 2 days, 09 2 days.
+About 40 working days for one builder: 01 2 days, 02 3, 03 5, 04 4, 05 7, 06 3, 07 3, 08 8, 09 2, 10 3.
