@@ -6,7 +6,7 @@
  * refused with the reason, so the agent writes its report with what it has.
  * An agent that keeps calling anyway is stopped after a few refusals.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../host/api.ts";
 
 export const TOOL_BUDGET_ENV = "BOT_LOBBY_TOOL_BUDGET";
 
@@ -46,7 +46,7 @@ export function budgetRefusal(budget: ToolBudget): string {
 }
 
 /** Count the agent's own tool calls (not those a tool made for it), warn once, then refuse. */
-export function registerToolBudget(pi: ExtensionAPI, budget = parseToolBudget(process.env[TOOL_BUDGET_ENV])): void {
+export function registerToolBudget(pi: HostAPI, budget = parseToolBudget(process.env[TOOL_BUDGET_ENV])): void {
   if (!budget) return;
   let used = 0;
   let refused = 0;

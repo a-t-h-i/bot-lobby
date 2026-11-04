@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { ensureProjectStructure } from "../src/state/persistence.ts";
 import { createTask } from "../src/schemas/task.ts";
 import { createTaskDir, saveTask } from "../src/state/persistence.ts";
@@ -60,7 +60,7 @@ test("subscribe hears each bump in order; unsubscribe stops it; onChange hears a
   assert.equal(plain.length, 3);
 });
 
-type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
+type Handler = (event: unknown, ctx: HostContext) => unknown;
 
 function fakePi() {
   const handlers = new Map<string, Handler[]>();
@@ -74,10 +74,10 @@ function fakePi() {
     getThinkingLevel: () => "high",
     getSessionName: () => "my window",
   };
-  const emit = async (event: string, payload: unknown, ctx: ExtensionContext) => {
+  const emit = async (event: string, payload: unknown, ctx: HostContext) => {
     for (const handler of handlers.get(event) ?? []) await handler(payload, ctx);
   };
-  return { pi: pi as unknown as ExtensionAPI, emit };
+  return { pi: pi as unknown as HostAPI, emit };
 }
 
 function fakeUi() {
@@ -110,7 +110,7 @@ function context(root: string, ui: ReturnType<typeof fakeUi>["ui"]) {
     sessionManager: { getSessionId: () => "session-1", getSessionDir: () => join(root, "sessions"), getBranch: () => [] },
     isIdle: () => true,
     abort() {},
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
   return ctx;
 }
 
@@ -134,7 +134,7 @@ async function start(owned: boolean) {
   return { root, fake, ui, ctx };
 }
 
-async function stop(fake: ReturnType<typeof fakePi>, ctx: ExtensionContext): Promise<void> {
+async function stop(fake: ReturnType<typeof fakePi>, ctx: HostContext): Promise<void> {
   await fake.emit("session_shutdown", { type: "session_shutdown" }, ctx);
   clearStatus(ctx);
   setSessionLauncher(undefined);

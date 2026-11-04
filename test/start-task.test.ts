@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { chooseTrack } from "../src/workflow/track.ts";
 import { startTask } from "../src/pi/start-task.ts";
 import { taskName } from "../src/text.ts";
@@ -54,7 +54,7 @@ function fakes(idle = true) {
     setSessionName: () => {},
     appendEntry: () => {},
     setThinkingLevel: () => {},
-  } as unknown as ExtensionAPI;
+  } as unknown as HostAPI;
   const notices: string[] = [];
   const ctx = {
     cwd: root,
@@ -62,7 +62,7 @@ function fakes(idle = true) {
     isIdle: () => idle,
     sessionManager: { getSessionId: () => "session-1" },
     ui: new Proxy({ notify: (text: string) => notices.push(text) } as Record<string, unknown>, { get: (target, key: string) => target[key] ?? (() => undefined) }),
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
   const emit = async (event: string) => {
     for (const handler of handlers.get(event) ?? []) await handler({}, ctx);
   };
@@ -86,11 +86,11 @@ test("starting a task uses its gist for title, ID and session without changing t
   let name = taskName(request);
   pi.getSessionName = () => name;
   pi.setSessionName = (value) => { name = value; };
-  ctx.model = { id: "test", provider: "test" } as NonNullable<ExtensionContext["model"]>;
-  ctx.modelRegistry = { streamSimple: () => {
+  ctx.model = { id: "test", provider: "test" } as NonNullable<HostContext["model"]>;
+  ctx.complete = async () => {
     calls += 1;
-    return { result: async () => ({ stopReason: "stop", content: [{ type: "text", text: "Improve task naming" }] }) };
-  } } as unknown as ExtensionContext["modelRegistry"];
+    return { text: "Improve task naming", model: "test/test" };
+  };
   const task = await startTask(pi, ctx, ".pi", request, { triaged: true, isolation: "off" });
   assert.equal(task?.title, "Improve task naming");
   assert.equal(task?.id, taskName("Improve task naming"));
@@ -101,12 +101,12 @@ test("starting a task uses its gist for title, ID and session without changing t
 
 test("a task started while naming is pending prevents a duplicate owned task", async () => {
   const { root, pi, ctx } = fakes();
-  let finish!: (reply: unknown) => void;
-  ctx.model = { id: "test", provider: "test" } as NonNullable<ExtensionContext["model"]>;
-  ctx.modelRegistry = { streamSimple: () => ({ result: () => new Promise((resolve) => { finish = resolve; }) }) } as unknown as ExtensionContext["modelRegistry"];
+  let finish!: (reply: { text: string; model: string }) => void;
+  ctx.model = { id: "test", provider: "test" } as NonNullable<HostContext["model"]>;
+  ctx.complete = () => new Promise((resolve) => { finish = resolve; });
   const pending = startTask(pi, ctx, ".pi", "first request", { triaged: true, isolation: "off" });
   const task = await startTask(pi, ctx, ".pi", "second request", { title: "Explicit title", triaged: true, isolation: "off" });
-  finish({ stopReason: "stop", content: [{ type: "text", text: "First task" }] });
+  finish({ text: "First task", model: "test/test" });
   assert.equal(await pending, undefined);
   assert.equal(peekTasks(root, ".pi").length, 1);
   assert.equal(peekTasks(root, ".pi")[0]?.id, task?.id);
@@ -114,7 +114,7 @@ test("a task started while naming is pending prevents a duplicate owned task", a
 
 test("an explicit task title bypasses generation and preserves an intentional session name", async () => {
   const { pi, ctx } = fakes();
-  ctx.modelRegistry = { streamSimple: () => { throw new Error("must not be called"); } } as unknown as ExtensionContext["modelRegistry"];
+  ctx.complete = () => { throw new Error("must not be called"); };
   const task = await startTask(pi, ctx, ".pi", "the full agreed plan", { title: "Export report CSV", triaged: true, isolation: "off" });
   assert.equal(task?.title, "Export report CSV");
   assert.equal(task?.id, taskName("Export report CSV"));

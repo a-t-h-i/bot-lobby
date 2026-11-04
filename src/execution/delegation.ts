@@ -2,7 +2,7 @@ import { appendMetrics, avoidedLaunchRecord, metricFromRun } from "../state/metr
 import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME } from "../host/api.ts";
 import type { AgentRun } from "../schemas/findings.ts";
 import type { Domain, Role } from "../schemas/agent.ts";
 import { effortFor } from "../classifier/instance.ts";

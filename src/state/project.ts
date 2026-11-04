@@ -24,9 +24,12 @@ export function detectProjectRoot(cwd: string, configDir = DEFAULT_CONFIG_DIR): 
   }
 }
 
-/** Root of all per-project bot-lobby data: <root>/<configDir>/bot-lobby. Every write targets it. */
+/** Bot Lobby's own folder (bot-herdr): data lives straight in `<project>/.bot-lobby`, not in a pi folder. */
+export const OWN_CONFIG_DIR = ".bot-lobby";
+
+/** Root of all per-project bot-lobby data: <root>/.bot-lobby, or <root>/<configDir>/bot-lobby under pi's folder. Every write targets it. */
 export function dataRoot(root: string, configDir = DEFAULT_CONFIG_DIR): string {
-  return join(root, configDir, DATA_DIR);
+  return configDir === OWN_CONFIG_DIR ? join(root, OWN_CONFIG_DIR) : join(root, configDir, DATA_DIR);
 }
 
 /** One pre-rename per-project root by tree name; read-only. */
@@ -61,7 +64,7 @@ export function firstLegacyDataRoot(root: string, configDir = DEFAULT_CONFIG_DIR
  * `BOT_LOBBY_CONFIG_DIR` at a temp directory.
  */
 export function globalConfigDir(): string {
-  return process.env.BOT_LOBBY_CONFIG_DIR ?? join(homedir(), ".pi", "bot-lobby");
+  return process.env.BOT_LOBBY_CONFIG_DIR ?? join(homedir(), OWN_CONFIG_DIR);
 }
 
 export function globalConfigPath(): string {
@@ -76,7 +79,7 @@ export function globalConfigPath(): string {
  */
 function configSourcePath(): string {
   if (process.env.BOT_LOBBY_CONFIG_DIR !== undefined) return globalConfigPath();
-  const candidates = [globalConfigPath(), ...LEGACY_DATA_DIRS.map((dir) => join(homedir(), ".pi", dir, "config.json"))];
+  const candidates = [globalConfigPath(), ...[DATA_DIR, ...LEGACY_DATA_DIRS].map((dir) => join(homedir(), ".pi", dir, "config.json"))];
   return candidates.find((path) => existsSync(path)) ?? candidates[0]!;
 }
 

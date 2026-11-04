@@ -8,7 +8,7 @@
  */
 import { previewRoot } from "../state/previews.ts";
 import { isAbsolute, join, resolve } from "node:path";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostContext } from "../host/api.ts";
 import { validHtmlPreview, MAX_OPTIONS, MAX_QUESTIONS, type AskQuestion, type AskResult, type Asker } from "./types.ts";
 
 /** Env flag the master sets for a subagent that may ask the user. */
@@ -84,7 +84,7 @@ export function readRelayRequest(title: string | undefined, prefill: string | un
 }
 
 /** Inside a subagent: the questions go to the master as an RPC dialog, and its answers come back. */
-export const relayAsker: Asker = async (questions, ctx: ExtensionContext) => {
+export const relayAsker: Asker = async (questions, ctx: HostContext) => {
   const value = await ctx.ui.editor(RELAY_TITLE, JSON.stringify({ questions: withAbsoluteImages(questions, ctx.cwd) }));
   return readRelayAnswer(value) ?? { answers: [], cancelled: true };
 };

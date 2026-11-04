@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { initTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { initTheme, type HostAPI } from "../src/host/api.ts";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { registerOrchestrateTool } from "../src/pi/tools.ts";
 import { setQuiet } from "../src/pi/quiet.ts";
@@ -13,7 +13,7 @@ function capture() {
   const pi = {
     registerEntryRenderer: (_name: string, render: typeof got.entry) => { got.entry = render; },
     registerTool: (tool: typeof got.tool) => { got.tool = tool; },
-  } as unknown as ExtensionAPI;
+  } as unknown as HostAPI;
   registerOrchestrateTool(pi, ".pi");
   return got;
 }

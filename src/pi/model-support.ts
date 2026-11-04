@@ -1,4 +1,4 @@
-import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model, type ModelThinkingLevel } from "@earendil-works/pi-ai";
+import type { ModelInfo } from "../host/api.ts";
 import {
   agentProfile,
   isThinkingLevel,
@@ -15,19 +15,18 @@ import {
 import type { HarnessRun } from "../schemas/harness.ts";
 
 /** Find a model by `provider/id` (or bare id); undefined when the registry does not know it. */
-export type ModelLookup = (ref: string) => Model<Api> | undefined;
+export type ModelLookup = (ref: string) => ModelInfo | undefined;
 
 export type { ProfileResolver };
 
 /** `provider/id` for a model, the form settings store. */
-export function modelRef(model: Pick<Model<Api>, "provider" | "id">): string {
+export function modelRef(model: Pick<ModelInfo, "provider" | "id">): string {
   return `${model.provider}/${model.id}`;
 }
 
-/** Thinking levels a model supports, in pi's order; every level when the model is unknown. */
-export function supportedThinking(model: Model<Api> | undefined): ThinkingLevelName[] {
-  if (!model) return [...THINKING_LEVELS];
-  return getSupportedThinkingLevels(model).filter((level): level is ThinkingLevelName => isThinkingLevel(level));
+/** Thinking levels a model supports. Harnesses map effort themselves, so every level is offered. */
+export function supportedThinking(_model: ModelInfo | undefined): ThinkingLevelName[] {
+  return [...THINKING_LEVELS];
 }
 
 export interface ThinkingCheck {
@@ -38,11 +37,9 @@ export interface ThinkingCheck {
 }
 
 /** Clamp `level` to what `model` supports, explaining any change; unknown models pass through. */
-export function checkThinking(model: Model<Api> | undefined, level: string): ThinkingCheck {
-  if (!model || !isThinkingLevel(level)) return { level };
-  const clamped = clampThinkingLevel(model, level as ModelThinkingLevel);
-  if (clamped === level) return { level };
-  return { level: clamped, warning: `"${level}" thinking isn't supported by ${modelRef(model)} — using "${clamped}"` };
+export function checkThinking(_model: ModelInfo | undefined, level: string): ThinkingCheck {
+  // Each harness maps the level to its own effort setting (src/harness/catalog.ts), so nothing is clamped here.
+  return { level };
 }
 
 const LABELS: Record<SubagentKind | "master", string> = {

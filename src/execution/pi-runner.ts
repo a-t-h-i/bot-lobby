@@ -17,6 +17,7 @@ import { readRelayRequest } from "../ask/relay.ts";
 import type { AskQuestion, AskResult } from "../ask/types.ts";
 import type { EffortRouter, RunProfileLike } from "../classifier/effort.ts";
 import type { HarnessRun } from "../schemas/harness.ts";
+import { defaultHarness, NO_HARNESS } from "../harness/default.ts";
 import { runHarnessAgent } from "../harness/runner.ts";
 import { assignedSessionFile, openAssignedSession, type AssignedSession } from "./assigned-session.ts";
 
@@ -748,8 +749,22 @@ async function runAssignedAgent(options: PiRunOptions, run: ProcessRunner): Prom
 export async function runPiAgent(given: PiRunOptions, run: ProcessRunner = spawnPiProcess): Promise<PiRunResult> {
   const compactEnv = { ...(given.autoCompact === false ? { [AUTO_COMPACT_ENV]: "0" } : {}), ...(given.compactAt ? { [COMPACT_AT_ENV]: String(given.compactAt) } : {}) };
   const options = Object.keys(compactEnv).length ? { ...given, env: { ...given.env, ...compactEnv } } : given;
-  if (options.assignedSession) return runAssignedAgent(options, run);
-  if (given.harness) return runHarnessAgent({ ...given, harness: given.harness });
+  // bot-herdr: with the real process runner every step runs on a coding agent (pi is gone); a fake runner (tests) keeps the old path.
+  const harness = given.harness ?? (run === spawnPiProcess ? defaultHarness() : undefined);
+  if (run === spawnPiProcess && !harness) return failedRun(NO_HARNESS);
+  if (options.assignedSession && !harness) return runAssignedAgent(options, run);
+  // A structured assignment on a harness: its allowlist is the run's tool list; the harness cannot attest it (gaps.md H5).
+  if (harness) {
+    // The same delegation host a pi worker had: file desk, board and delegate reach the harness through its worker MCP server.
+    const host = await delegationHost(options, run);
+    try {
+      const result = await runHarnessAgent({ ...given, env: host.env, onStart: host.onStart, harness, ...(options.assignedSession && options.assignedTools ? { tools: options.assignedTools } : {}) });
+      await host.close();
+      return host.children.length ? { ...result, children: host.children } : result;
+    } finally {
+      await host.close();
+    }
+  }
   const host = await delegationHost(options, run);
   let prompt: ReturnType<typeof writePromptFile> | undefined;
   try {

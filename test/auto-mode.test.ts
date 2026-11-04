@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext } from "../src/host/api.ts";
 import { DEFAULT_CONFIG } from "../src/schemas/configuration.ts";
 import { createTask, type Task } from "../src/schemas/task.ts";
 import { createTaskDir, ensureProjectStructure, loadTask, saveTask } from "../src/state/persistence.ts";
@@ -131,19 +131,19 @@ test("auto mode nudges an idle oracle, and stops after turns that change nothing
 function fakeSession(root: string, idle = true) {
   const sent: Array<{ text: string; options?: unknown }> = [];
   const notes: string[] = [];
-  const handlers = new Map<string, Array<(event: any, ctx: ExtensionContext) => unknown>>();
+  const handlers = new Map<string, Array<(event: any, ctx: HostContext) => unknown>>();
   const shortcuts: string[] = [];
   const pi = {
-    on: (event: string, handler: (event: any, ctx: ExtensionContext) => unknown) => void handlers.set(event, [...(handlers.get(event) ?? []), handler]),
+    on: (event: string, handler: (event: any, ctx: HostContext) => unknown) => void handlers.set(event, [...(handlers.get(event) ?? []), handler]),
     sendUserMessage: (text: string, options?: unknown) => void sent.push({ text, options }),
     registerShortcut: (key: string) => void shortcuts.push(key),
-  } as unknown as ExtensionAPI;
+  } as unknown as HostAPI;
   const ctx = {
     cwd: root,
     isIdle: () => idle,
     sessionManager: { getSessionId: () => SESSION },
     ui: { notify: (message: string) => void notes.push(message) },
-  } as unknown as ExtensionContext;
+  } as unknown as HostContext;
   return { pi, ctx, sent, notes, handlers, shortcuts };
 }
 

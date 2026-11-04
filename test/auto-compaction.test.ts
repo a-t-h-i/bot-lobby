@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { ExtensionAPI, ExtensionContext, SessionEntry, TurnEndEvent, compact } from "@earendil-works/pi-coding-agent";
+import type { HostAPI, HostContext, SessionEntry, TurnEndEvent, compact } from "@earendil-works/pi-coding-agent";
 import { compactionThreshold, registerAutoCompaction } from "../src/pi/auto-compaction.ts";
 
 test("compaction leaves headroom on large and small windows and honours earlier reserves", () => {
@@ -11,14 +11,14 @@ test("compaction leaves headroom on large and small windows and honours earlier 
 });
 
 function harness(summarize: typeof compact, options: Parameters<typeof registerAutoCompaction>[2] = { enabled: () => true, share: () => "" }) {
-  const handlers = new Map<string, (event: TurnEndEvent, ctx: ExtensionContext) => Promise<unknown>>();
+  const handlers = new Map<string, (event: TurnEndEvent, ctx: HostContext) => Promise<unknown>>();
   const notices: string[] = [];
-  const pi = { on: (name: string, handler: typeof handlers extends Map<string, infer H> ? H : never) => handlers.set(name, handler), getSettings: () => ({ compaction: { reserveTokens: 16_384 }, retry: { enabled: false } }) } as unknown as ExtensionAPI;
+  const pi = { on: (name: string, handler: typeof handlers extends Map<string, infer H> ? H : never) => handlers.set(name, handler), getSettings: () => ({ compaction: { reserveTokens: 16_384 }, retry: { enabled: false } }) } as unknown as HostAPI;
   registerAutoCompaction(pi, summarize, options);
   const entries = Array.from({ length: 50 }, (_, index) => ({ type: "message", id: String(index), parentId: index ? String(index - 1) : null, timestamp: new Date(index).toISOString(), message: { role: index % 2 === 0 ? "user" : "assistant", content: [{ type: "text", text: "x".repeat(5_000) }], timestamp: index } })) as SessionEntry[];
   let tokens = 90_000;
   let leaf = "49";
-  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, getSystemPrompt: () => "", getContextUsage: () => ({ tokens }), compact: () => { throw new Error("Manual compaction must never abort the turn"); }, sessionManager: { getLeafId: () => leaf, getBranch: () => entries, buildContextEntries: () => entries }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as ExtensionContext;
+  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, getSystemPrompt: () => "", getContextUsage: () => ({ tokens }), compact: () => { throw new Error("Manual compaction must never abort the turn"); }, sessionManager: { getLeafId: () => leaf, getBranch: () => entries, buildContextEntries: () => entries }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as HostContext;
   const event = { entries: [], context: { contextMessages: entries.flatMap((entry) => entry.type === "message" ? [entry.message] : []), canContinue: true } } as unknown as TurnEndEvent;
   return { check: () => handlers.get("turn_end")!(event, ctx), notices, entries, setTokens: (value: number) => { tokens = value; }, setLeaf: (value: string) => { leaf = value; } };
 }
@@ -87,14 +87,14 @@ test("the oracle's checkpoint asks for knowledge by agent and shares what it lis
 test("compactions pi starts itself get the checkpoint, with any /compact instructions, from pi's preparation", async () => {
   let instruction = "";
   const shared: unknown[] = [];
-  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<unknown>>();
-  const pi = { on: (name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({ retry: { enabled: false } }) } as unknown as ExtensionAPI;
+  const handlers = new Map<string, (event: unknown, ctx: HostContext) => Promise<unknown>>();
+  const pi = { on: (name: string, handler: (event: unknown, ctx: HostContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({ retry: { enabled: false } }) } as unknown as HostAPI;
   registerAutoCompaction(pi, async (preparation, _model, _key, _headers, custom) => {
     instruction = custom ?? "";
     return { summary: "## Knowledge to share\n- [qa:knowledge] Run the dark project too.", firstKeptEntryId: preparation.firstKeptEntryId, tokensBefore: preparation.tokensBefore };
   }, { enabled: () => true, share: (items) => { shared.push(...items); return "1 for QA"; } });
   const notices: string[] = [];
-  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as ExtensionContext;
+  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as HostContext;
   const preparation = { firstKeptEntryId: "7", messagesToSummarize: [], turnPrefixMessages: [], isSplitTurn: false, tokensBefore: 90_000, fileOps: { read: new Set(), written: new Set(), edited: new Set() }, settings: { enabled: true, reserveTokens: 16_384, keepRecentTokens: 20_000 } };
   const result = await handlers.get("session_before_compact")!({ type: "session_before_compact", preparation, branchEntries: [], customInstructions: "Focus on the API", reason: "threshold", willRetry: false, signal: new AbortController().signal }, ctx) as { compaction: { firstKeptEntryId: string } };
   assert.equal(result.compaction.firstKeptEntryId, "7");
@@ -105,11 +105,11 @@ test("compactions pi starts itself get the checkpoint, with any /compact instruc
 });
 
 test("a checkpoint that fails leaves pi's own summary in place", async () => {
-  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<unknown>>();
-  const pi = { on: (name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({}) } as unknown as ExtensionAPI;
+  const handlers = new Map<string, (event: unknown, ctx: HostContext) => Promise<unknown>>();
+  const pi = { on: (name: string, handler: (event: unknown, ctx: HostContext) => Promise<unknown>) => handlers.set(name, handler), getSettings: () => ({}) } as unknown as HostAPI;
   registerAutoCompaction(pi, async () => { throw new Error("provider unavailable"); }, { enabled: () => true, share: () => "" });
   const notices: string[] = [];
-  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as ExtensionContext;
+  const ctx = { model: { id: "m", provider: "test", contextWindow: 100_000 }, modelRegistry: { getApiKeyAndHeaders: async () => ({ ok: true }) }, ui: { notify: (message: string) => notices.push(message) } } as unknown as HostContext;
   const result = await handlers.get("session_before_compact")!({ type: "session_before_compact", preparation: { firstKeptEntryId: "1" }, branchEntries: [], reason: "overflow", willRetry: true, signal: new AbortController().signal }, ctx);
   assert.equal(result, undefined);
   assert.match(notices[0]!, /using pi's summary: provider unavailable/);

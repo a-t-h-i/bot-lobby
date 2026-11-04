@@ -4,7 +4,7 @@
  * tools all read the same instance, so the breaker and the one-time notices
  * are shared.
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { HostAPI } from "../host/api.ts";
 import { appendMetrics } from "../state/metrics.ts";
 import { detectProjectRoot, loadConfig } from "../state/project.ts";
 import { isSubagentProcess } from "../pi/quiet.ts";
@@ -19,7 +19,7 @@ import { lobbyFeed } from "../lobby/feed.ts";
 import { triageLine, triageWithContext } from "./triage.ts";
 import type { TaskTriage } from "../schemas/task.ts";
 import { effortRouter, type EffortRouter } from "./effort.ts";
-import { engineAnswer, engineClassifiers, splitRef, type EngineAnswer, type EngineModel, type Registry } from "./models.ts";
+import { engineAnswer, engineClassifiers, type EngineAnswer, type EngineModel } from "./models.ts";
 
 interface Binding {
   cwd: string;
@@ -28,7 +28,6 @@ interface Binding {
   keys: KeySource;
   status: (piProvider: string) => KeyStatus | undefined;
   engine: EngineAnswer;
-  registry: Registry;
   notify?: (message: string, level: "info" | "warning" | "error") => void;
 }
 
@@ -43,10 +42,7 @@ export function classifier(): Classifier {
       if (!binding) throw new Error(`${ref} is not reachable before a pi session starts`);
       return binding.engine(ref, request, options);
     },
-    lists: (ref) => {
-      const parts = splitRef(ref);
-      return Boolean(parts && binding?.registry.findOfType("classifier", parts.provider, parts.id));
-    },
+    lists: () => false,
     metrics: (record) => {
       if (binding) appendMetrics(binding.root, binding.configDir, [record]);
     },
@@ -106,7 +102,7 @@ let classifierModels: EngineModel[] = [];
 async function refreshClassifierModels(): Promise<void> {
   if (!binding) return;
   try {
-    classifierModels = await engineClassifiers(binding.registry);
+    classifierModels = await engineClassifiers();
   } catch {
     // Keep the last list: the picker still offers chat models and custom ids.
   }
@@ -119,22 +115,16 @@ export function availableClassifiers(): EngineModel[] {
 }
 
 /** Bind the classifier to each session's key store and model registry. */
-export function registerClassifier(pi: ExtensionAPI, configDir: string): void {
+export function registerClassifier(pi: HostAPI, configDir: string): void {
   pi.on("session_start", (_event, ctx) => {
     binding = {
       cwd: ctx.cwd,
       root: detectProjectRoot(ctx.cwd, configDir),
       configDir,
-      keys: (piProvider) => ctx.modelRegistry.getApiKeyForProvider(piProvider),
-      registry: ctx.modelRegistry,
-      engine: engineAnswer(ctx.modelRegistry),
-      status: (piProvider) => {
-        try {
-          return ctx.modelRegistry.getProviderAuthStatus(piProvider);
-        } catch {
-          return undefined;
-        }
-      },
+      // Jev hosts' keys come from their environment variables (hosts.ts); pi's key store is gone.
+      keys: async () => undefined,
+      engine: engineAnswer(ctx.complete),
+      status: () => undefined,
       // Subagents have nobody to tell; their runs still land in the metrics.
       ...(ctx.hasUI && !isSubagentProcess() ? { notify: (message: string, level: "info" | "warning" | "error") => ctx.ui.notify(message, level) } : {}),
     };
