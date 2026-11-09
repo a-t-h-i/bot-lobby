@@ -44,7 +44,7 @@ Sending uses `hc send` (paste, then Enter), stopping uses `hc interrupt`, and st
 | `mods/bot-composer/icons/` | Lucide icons (ISC licence) and the fillet shapes |
 | `layouts/bot-lobby.json` | herdr's main layout plus a 136px composer block under the panes |
 | `themes/bot-lobby-{light,dark}.json` | the web app's Claude palette for terminals and panels |
-| `test/route.test.mjs` | `node --test herdr/test/` |
+| `test/route.test.mjs` | `npm run test:herdr` |
 
 ## Not checked yet
 
