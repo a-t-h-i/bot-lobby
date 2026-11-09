@@ -45,7 +45,9 @@
     "web:build": "vite build --config webui/vite.config.ts && node webui/scripts/build-info.mjs",
     "web:typecheck": "tsc -p webui --noEmit",
     "web:check": "playwright test",
-    "test": "node --test --test-reporter=dot test/*.test.ts"
+    "test": "node --test --test-reporter=dot test/*.test.ts",
+    "herdr:install": "node herdr/install.mjs",
+    "test:herdr": "node --test herdr/test/"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=1.4.0 <1.5.0",
