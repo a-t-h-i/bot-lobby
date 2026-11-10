@@ -71,7 +71,7 @@ export const MOTION = {
   tool: { duration: 160, easing: "ease-out" },
 };
 
-export const ICON = (name) => `mods/bot-composer/icons/${name}.svg`;
+export const ICON = (name) => `mods/bot-herdr/icons/${name}.svg`;
 
 /** A row's or chip's colour: lobby commands the accent, agents their program's tile. */
 export function tint(c, row) {

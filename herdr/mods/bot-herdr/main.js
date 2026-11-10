@@ -28,7 +28,7 @@ import {
 const PLACEHOLDER = "Write a message, run a command, or ask an agent";
 const CLEAR = "#00000000";
 
-export default class BotComposer extends View {
+export default class BotHerdr extends View {
   init(_props, cx) {
     this.text = "";
     this.trigger = null;
@@ -67,12 +67,12 @@ export default class BotComposer extends View {
     // Keys while the text box has the keyboard. Later bindings win over the text box's own at
     // the same depth, and the menu ones are added last so they win over send.
     cx.bind_keys([
-      { keystroke: "enter", action: "bot_composer_send", context: "BotComposer Input" },
-      { keystroke: "enter", action: "bot_composer_pick", context: "BotComposerMenu Input" },
-      { keystroke: "tab", action: "bot_composer_pick", context: "BotComposerMenu Input" },
-      { keystroke: "up", action: "bot_composer_up", context: "BotComposerMenu Input" },
-      { keystroke: "down", action: "bot_composer_down", context: "BotComposerMenu Input" },
-      { keystroke: "escape", action: "bot_composer_close", context: "BotComposerPane" },
+      { keystroke: "enter", action: "bot_herdr_send", context: "BotHerdr Input" },
+      { keystroke: "enter", action: "bot_herdr_pick", context: "BotHerdrMenu Input" },
+      { keystroke: "tab", action: "bot_herdr_pick", context: "BotHerdrMenu Input" },
+      { keystroke: "up", action: "bot_herdr_up", context: "BotHerdrMenu Input" },
+      { keystroke: "down", action: "bot_herdr_down", context: "BotHerdrMenu Input" },
+      { keystroke: "escape", action: "bot_herdr_close", context: "BotHerdrPane" },
     ]);
 
     this.loadKnown(cx);
@@ -388,18 +388,18 @@ export default class BotComposer extends View {
   }
 
   bubble(c, width) {
-    const contexts = ["BotComposer"];
-    if (this.menuOpen()) contexts.push("BotComposerMenu");
-    if (this.pane) contexts.push("BotComposerPane");
+    const contexts = ["BotHerdr"];
+    if (this.menuOpen()) contexts.push("BotHerdrMenu");
+    if (this.pane) contexts.push("BotHerdrPane");
     const menu = this.paneView(c, width);
     return v_flex()
       .id("bc")
       .key_context(contexts.join(" "))
-      .on_action("bot_composer_send", (_e, cx) => this.send(cx))
-      .on_action("bot_composer_pick", (_e, cx) => this.pick(this.rows()[this.at], cx))
-      .on_action("bot_composer_up", (_e, cx) => this.move(-1, cx))
-      .on_action("bot_composer_down", (_e, cx) => this.move(1, cx))
-      .on_action("bot_composer_close", (_e, cx) => this.close(cx))
+      .on_action("bot_herdr_send", (_e, cx) => this.send(cx))
+      .on_action("bot_herdr_pick", (_e, cx) => this.pick(this.rows()[this.at], cx))
+      .on_action("bot_herdr_up", (_e, cx) => this.move(-1, cx))
+      .on_action("bot_herdr_down", (_e, cx) => this.move(1, cx))
+      .on_action("bot_herdr_close", (_e, cx) => this.close(cx))
       .flex_col_reverse()
       .items_center()
       .w(width)

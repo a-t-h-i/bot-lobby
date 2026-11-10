@@ -46,8 +46,8 @@
     "web:typecheck": "tsc -p webui --noEmit",
     "web:check": "playwright test",
     "test": "node --test --test-reporter=dot test/*.test.ts",
-    "herdr:install": "node herdr/install.mjs",
-    "test:herdr": "node --test herdr/test/*.test.mjs"
+    "bot-herdr:install": "node herdr/install.mjs",
+    "test:bot-herdr": "node --test herdr/test/*.test.mjs"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=1.4.0 <1.5.0",

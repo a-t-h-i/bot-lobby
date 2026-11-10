@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   triggerAt, caretAfterEdit, slashRows, mentionRows, tokenFor, plan, defaultTarget, withoutEnter, messageText,
-} from "../mods/bot-composer/route.js";
+} from "../mods/bot-herdr/route.js";
 
 const claude = { address: "t1", space: "s1", space_name: "app", tab: "a", tab_name: "1", status: "idle", seq: 2, program: { key: "claude", name: "Claude Code", tile: "#d97757" } };
 const codex = { address: "t2", space: "s1", space_name: "app", tab: "b", tab_name: "2", status: "working", seq: 5, program: { key: "codex", name: "Codex" } };

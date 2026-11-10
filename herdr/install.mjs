@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Installs Bot Lobby's herdr pieces into the Herdr app's home: the composer mod, the "bot-lobby"
+// Installs Bot Lobby's herdr pieces into the Herdr app's home: the composer mod, the "bot-herdr"
 // layout (Herdr's main layout with the composer under the panes) and its light and dark themes,
 // and the composer's key (ctrl+shift+m). Then checks the mod with `herdr-app check` if it can.
 //
@@ -24,22 +24,22 @@ if (!existsSync(appHome)) {
 }
 
 // The mod is ours: replace the whole folder.
-const mod = join(appHome, "mods", "bot-composer");
+const mod = join(appHome, "mods", "bot-herdr");
 rmSync(mod, { recursive: true, force: true });
 mkdirSync(dirname(mod), { recursive: true });
-cpSync(join(here, "mods", "bot-composer"), mod, { recursive: true });
+cpSync(join(here, "mods", "bot-herdr"), mod, { recursive: true });
 console.log(`mod      ${mod}`);
 
-for (const name of ["bot-lobby-light.json", "bot-lobby-dark.json"]) {
+for (const name of ["bot-herdr-light.json", "bot-herdr-dark.json"]) {
   mkdirSync(join(appHome, "themes"), { recursive: true });
   cpSync(join(here, "themes", name), join(appHome, "themes", name));
 }
-console.log(`themes   ${join(appHome, "themes")}/bot-lobby-{light,dark}.json`);
+console.log(`themes   ${join(appHome, "themes")}/bot-herdr-{light,dark}.json`);
 
-const layout = join(appHome, "layouts", "bot-lobby.json");
+const layout = join(appHome, "layouts", "bot-herdr.json");
 if (!existsSync(layout) || args.has("--force")) {
   mkdirSync(dirname(layout), { recursive: true });
-  cpSync(join(here, "layouts", "bot-lobby.json"), layout);
+  cpSync(join(here, "layouts", "bot-herdr.json"), layout);
   console.log(`layout   ${layout}`);
 } else {
   console.log(`layout   kept your ${layout} (--force replaces it)`);
@@ -80,5 +80,5 @@ const check = spawnSync("herdr-app", ["check", mod], { stdio: "inherit" });
 if (check.error) console.log("check    herdr-app isn't on PATH; run: herdr-app check " + mod);
 else if (check.status !== 0) process.exit(check.status ?? 1);
 
-if (args.has("--switch")) spawnSync("herdr-app", ["do", "layout.switch", "--name", "bot-lobby"], { stdio: "inherit" });
-else console.log('switch   herdr-app do layout.switch --name bot-lobby   (or ctrl+shift+l)');
+if (args.has("--switch")) spawnSync("herdr-app", ["do", "layout.switch", "--name", "bot-herdr"], { stdio: "inherit" });
+else console.log('switch   herdr-app do layout.switch --name bot-herdr   (or ctrl+shift+l)');

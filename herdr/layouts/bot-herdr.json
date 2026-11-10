@@ -2,8 +2,8 @@
   "id": "root",
   "type": "row",
   "theme": {
-    "light": "bot-lobby-light",
-    "dark": "bot-lobby-dark"
+    "light": "bot-herdr-light",
+    "dark": "bot-herdr-dark"
   },
   "titlebar": "none",
   "traffic_lights": [
@@ -178,7 +178,7 @@
             "px": 136
           },
           "content": {
-            "mod": "bot-composer"
+            "mod": "bot-herdr"
           }
         },
         {

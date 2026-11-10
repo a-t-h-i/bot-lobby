@@ -1,6 +1,8 @@
-# Bot Lobby for herdr
+# bot-herdr
 
 Bot Lobby's interface redrawn as a [herdr](https://github.com/herdrdev/herdr-app) desktop mod, so one Bot Lobby-style window drives every agent herdr runs (Claude Code, Codex, pi, Gemini, any harness and model you set up there).
+
+A separate plugin: it lives on the `bot-herdr` branch and is never merged into main.
 
 herdr mods are JavaScript that describe native GPUI elements. There is no web view, so the React app can't be dropped in. Each piece is redrawn to match the web app's design (`webui/src`, `docs/web-ui/composer-design`).
 
@@ -12,7 +14,7 @@ Round 1 is **the composer**.
 node herdr/install.mjs --switch
 ```
 
-This copies `mods/bot-composer` into herdr's app home (`~/.config/herdr-app`, or `$HERDR_APP_HOME`). It also adds the `bot-lobby` layout and its Claude light and dark themes, and binds **ctrl+shift+m** to the composer. Then it runs `herdr-app check` on the mod and switches the window to the layout. `ctrl+shift+l` cycles layouts, so you can switch back to herdr's own.
+This copies `mods/bot-herdr` into herdr's app home (`~/.config/herdr-app`, or `$HERDR_APP_HOME`). It also adds the `bot-herdr` layout and its Claude light and dark themes, and binds **ctrl+shift+m** to the composer. Then it runs `herdr-app check` on the mod and switches the window to the layout. `ctrl+shift+l` cycles layouts, so you can switch back to herdr's own.
 
 Edits under `herdr/` take effect after another `node herdr/install.mjs`, because herdr hot-reloads the copied mod.
 
@@ -38,13 +40,13 @@ Sending uses `hc send` (paste, then Enter), stopping uses `hc interrupt`, and st
 
 | Path | What |
 |---|---|
-| `mods/bot-composer/main.js` | the view |
-| `mods/bot-composer/route.js` | pure logic: triggers, rows, what a send does (tested) |
-| `mods/bot-composer/look.js` | colours, sizes and motion from the web app's CSS |
-| `mods/bot-composer/icons/` | Lucide icons (ISC licence) and the fillet shapes |
-| `layouts/bot-lobby.json` | herdr's main layout plus a 136px composer block under the panes |
-| `themes/bot-lobby-{light,dark}.json` | the web app's Claude palette for terminals and panels |
-| `test/route.test.mjs` | `npm run test:herdr` |
+| `mods/bot-herdr/main.js` | the view |
+| `mods/bot-herdr/route.js` | pure logic: triggers, rows, what a send does (tested) |
+| `mods/bot-herdr/look.js` | colours, sizes and motion from the web app's CSS |
+| `mods/bot-herdr/icons/` | Lucide icons (ISC licence) and the fillet shapes |
+| `layouts/bot-herdr.json` | herdr's main layout plus a 136px composer block under the panes |
+| `themes/bot-herdr-{light,dark}.json` | the web app's Claude palette for terminals and panels |
+| `test/route.test.mjs` | `npm run test:bot-herdr` |
 
 ## Not checked yet
 
